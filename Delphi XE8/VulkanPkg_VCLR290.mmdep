@@ -1,0 +1,15 @@
+﻿
+[Project]
+DefaultNamespace=
+LDPFile=
+NamespacePrefixes=
+RootFile=D:\X1\Vulkan_Package\Delphi XE8\VulkanPkg_VCLR290.dpk
+SearchPath=D:\X1\Vulkan_Package;D:\X1\Vulkan_Package\RunTime_Src;D:\X1\Vulkan_Package\Design_Src;D:\X1\Vulkan\src
+UnitAliases=WinTypes=Windows;WinProcs=Windows;DbiTypes=BDE;DbiProcs=BDE;DbiErrs=BDE
+
+[Compiler]
+CompilerSwitches={$A8,B-,C+,D+,E-,F-,G+,H+,I+,J-,K-,L+,M-,N+,O+,P+,Q-,R-,S-,T-,U-,V+,W-,X+,YD,Z1}
+CompilerVersion=dcmpDelphi10Win32
+Defines=
+IfExpressions=
+

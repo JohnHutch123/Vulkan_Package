@@ -1,0 +1,174 @@
+﻿unit CommThread;
+(*
+Demonstration 
+Tuesday, February 13, 2018
+Data-driven Multithreading
+About a week ago, Craig Chapman posted a vlog Lockless Multi-Threading in Delphi where he programmed a lockless communication channel which transfers messages between the main thread and a worker thread (or, actually, between any two threads).
+I do like Craig's implementation of a lockless queue. It is small, neat, and working. I also like that he approached multithreading from a communication viewpoint. I do, however, have several issues with how it is integrated into the application. While I whole understand the need for simple demo that viewers can understand, I feel that the Delphi world is full of such examples. That makes it hard for a newcomer to the multithreaded world to find appropriate patterns to copy.
+Hence I decided to rewrite Craig's code with different objectives in mind. Instead of speed I focused on flexibility, ease of use and good multithreaded programming patterns. Before I jump into my solution, however, I must articulate the bad programming practices in the Lockless demo. (That is strictly subjective reasoning. Your mileage may vary. It is, alas, a reasoning supported by many many years of writing bad multithreaded code - and not yet enough years of writing good code.)
+	https://www.thedelphigeek.com/2018/02/data-driven-multithreading.html
+	https://github.com/gabr42/GpDelphiCode/blob/master/CommThreads/CommThread.pas
+	
+	Copyright 	Primož Gabrijelčič  2018
+*)
+(*
+   Modifications by Datavis for Vulkan Graphics
+   //JH MOD identifies modifications/additions
+*)
+interface
+uses
+  System.Classes, 
+  System.SysUtils, 
+  System.SyncObjs, 
+  System.Generics.Collections,
+  Windows;      //VG MOD
+
+type
+  TMessageProc<T> = reference to procedure (const data: T);
+  TMessageQueue<T> = class
+  strict private
+    FEvent   : TEvent;
+    FQueue   : TThreadedQueue<T>;
+    FReceiver: TMessageProc<T>;
+  strict protected
+    procedure DispatchMessages;
+    function  MakeCallback(const value: T): TThreadProcedure;
+  public
+    constructor Create(numItems: integer; const messageReceiver: TMessageProc<T> = nil);
+    destructor Destroy; override;
+    function Receive(var value: T): boolean;
+    function Send(const value: T): boolean;
+    property Event: TEvent read FEvent;
+  end;
+
+  TCommThread<TToThread, TToMain> = class(TThread)
+  strict private
+    FToThread: TMessageQueue<TToThread>;
+    FToMain  : TMessageQueue<TToMain>;
+
+  protected
+    procedure ProcessMessage(const data: TToThread); virtual; abstract;
+    function SendToMain(const value: TToMain): boolean;
+    procedure TerminatedSet; override;
+  public
+    constructor Create(AQueueToThread: TMessageQueue<TToThread>;  AQueueToMain: TMessageQueue<TToMain>; aName:String);
+    procedure Execute; override;
+  //JH MOD Add SendToThread
+    function SendToThread(const value: TToThread): boolean;
+
+  end;
+
+  TSingleCommThread<TToThread, TToMain> = class(TCommThread<TToThread, TToMain>)
+  strict private
+    FToThreadQueue: TMessageQueue<TToThread>;
+    FToMainQueue: TMessageQueue<TToMain>;
+  public
+    constructor Create(numItems: integer; const messageReceiver: TMessageProc<TToMain> = nil);
+    destructor Destroy; override;
+    function SendToThread(const value: TToThread): boolean;
+  end;
+
+implementation
+{ TMessageQueue<T> }
+constructor TMessageQueue<T>.Create(numItems: integer;  const messageReceiver: TMessageProc<T>);
+begin
+  inherited Create;
+  FQueue := TThreadedQueue<T>.Create(numItems, 0, 0);
+  FReceiver := messageReceiver;
+  if not assigned(FReceiver) then
+    FEvent := TEvent.Create;
+end;
+destructor TMessageQueue<T>.Destroy;
+begin
+  FreeAndNil(FQueue);
+  FreeAndNil(FEvent);
+  inherited;
+end;
+procedure TMessageQueue<T>.DispatchMessages;
+var
+  value: T;
+begin
+  while FQueue.PopItem(value) = wrSignaled do
+    TThread.Queue(nil, MakeCallback(value));
+end;
+function TMessageQueue<T>.MakeCallback(const value: T): TThreadProcedure;
+begin
+  Result :=
+    procedure
+    begin
+      FReceiver(value);
+    end;
+end;
+function TMessageQueue<T>.Receive(var value: T): boolean;
+begin
+  Result := (FQueue.PopItem(value) = wrSignaled);
+end;
+function TMessageQueue<T>.Send(const value: T): boolean;
+begin
+  Result := (FQueue.PushItem(value) = wrSignaled);
+  if assigned(FEvent) then
+    FEvent.SetEvent;
+  if assigned(FReceiver) then
+    DispatchMessages;
+end;
+{ TCommThread<TToThread, TToMain> }
+constructor TCommThread<TToThread, TToMain>.Create(AQueueToThread: TMessageQueue<TToThread>;
+      AQueueToMain: TMessageQueue<TToMain>; aName:String);
+begin
+  inherited Create;
+  FToThread       := AQueueToThread;
+  FToMain         := AQueueToMain;
+end;
+
+procedure TCommThread<TToThread, TToMain>.Execute;
+var
+  data: TToThread;
+begin
+
+  while FToThread.Event.WaitFor = wrSignaled do
+  begin
+    if Terminated then
+      break;
+    FToThread.Event.ResetEvent;
+    while FToThread.Receive(data) do
+      ProcessMessage(data);
+  end;
+end;
+
+//VG MOD
+function TCommThread<TToThread, TToMain>.SendToMain( const value: TToMain): boolean;
+begin
+  Result := FToMain.Send(value);
+end;
+//VG MOD
+function TCommThread<TToThread, TToMain>.SendToThread(  const value: TToThread): boolean;
+begin
+  Result := FToThread.Send(value);
+end;
+
+procedure TCommThread<TToThread, TToMain>.TerminatedSet;
+begin
+  FToThread.Event.SetEvent;
+  inherited;
+end;
+
+{ TSingleCommThread<TToThread, TToMain> }
+constructor TSingleCommThread<TToThread, TToMain>.Create(numItems: integer;  const messageReceiver: TMessageProc<TToMain>);
+begin
+  FToThreadQueue := TMessageQueue<TToThread>.Create(numItems);
+  FToMainQueue := TMessageQueue<TToMain>.Create(numItems, messageReceiver);
+  inherited Create(FToThreadQueue, FToMainQueue,'');
+end;
+
+destructor TSingleCommThread<TToThread, TToMain>.Destroy;
+begin
+  inherited;
+  FreeAndNil(FToThreadQueue);
+  FreeAndNil(FToMainQueue);
+end;
+
+function TSingleCommThread<TToThread, TToMain>.SendToThread(const value: TToThread): boolean;
+begin
+  Result := FToThreadQueue.Send(value);
+end;
+end.

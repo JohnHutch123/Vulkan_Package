@@ -1,0 +1,1747 @@
+unit Vulkan_Components_DataStore;
+
+{------------------------------------------------------------------------------
+  Vulkan_Components_DataStore.pas
+  A flexible data store and Vulkan buffer manager for vertex and instance data.
+  Designed for use with the Vulkan API and pasVulkan (github.com/BeRo1985/pasvulkan)
+  This unit uses Vulkan.pas, PasVulkan.pas, and PasVulkan.Framework headers to interface with the Vulkan API.
+
+------------------------------------------------------------------------------}
+
+(*
+A flexible, thread-safe data store and Vulkan buffer manager for vertex,
+  instance, and index data. Designed for use with the Vulkan API and
+  pasVulkan (github.com/BeRo1985/pasvulkan).
+
+  OBJECT MODEL:
+  - Object: Represents a renderable entity
+    - Has ONE instance binding (for per-instance data)
+    - Can have MULTIPLE vertex sets (different vertex buffers)
+    - Can have MULTIPLE index sets (different index buffers)
+
+  USAGE PATTERN:
+    1. Create store: Store := TvgVulkanDataStore.Create;
+    2. Initialize Vulkan: Store.InitializeVulkan(Device, Queue, Pool);
+    3. Add object: ObjIdx := Store.AddObject;
+    4. Add vertex set: VSetIdx := Store.AddObjectVertexSet(ObjIdx);
+    5. Configure attributes: Store.AddVertexAttributes(Binding, Types, Locations);
+    6. Allocate data: Store.Allocate(Binding, Count);
+    7. Set data: Store.SetObjectVertexPosition(ObjIdx, VSetIdx, Idx, X, Y, Z);
+    8. Transfer: Store.TransferToVulkan;
+
+  Thread Safety: All public methods are thread-safe via critical sections.
+*)
+
+Interface
+uses
+  SysUtils,
+  System.classes,
+  System.Math,
+  System.SyncObjs, // For thread-safety
+  Generics.Collections,
+  Generics.Defaults,
+  Vulkan,
+  PasVulkan.Framework,
+  PasVulkan.Types,
+  Vulkan_Assert,
+  Vulkan_Components_Lookups,
+  Vulkan_Components,
+  Vulkan_Components_Resources;
+
+const
+  // Data size constants
+  SIZE_VEC1       = 4;      // 1 * sizeof(Single)
+  SIZE_VEC2       = 8;      // 2 * sizeof(Single)
+  SIZE_VEC3       = 12;     // 3 * sizeof(Single)
+  SIZE_VEC4       = 16;     // 4 * sizeof(Single)
+  SIZE_MAT4       = 64;     // 4 * SIZE_VEC4 for mat4
+
+  SIZE_VECINT1    = 4;      // 1 * sizeof(integer)
+  SIZE_VECINT2    = 8;      // 2 * sizeof(integer)
+
+  SIZE_VECUINT1   = 4;      // 1 * sizeof(Cardinal)  unsigned
+  SIZE_VECUINT2   = 8;      // 2 * sizeof(Cardinal)  unsigned
+
+  SIZE_UINT16     = 2;      // sizeof(Word)
+  SIZE_UINT32     = 4;      // sizeof(Cardinal)
+
+  // Growth factor for dynamic resizing - Use power-of-2 for efficiency
+  MIN_CAPACITY    = 16;
+
+  INVALIDBINDING = High(Cardinal);
+
+type
+  TvgVertexDataType = (vdtPosition,
+                       vdtColor,
+                       vdtNormal,
+                       vdtTexCoord,
+                       vdtTangent,
+                       vdtBiTangent,
+                       vdtIndex);
+  TVertexDataTypes = set of TvgVertexDataType;
+
+  TInstanceDataType = (idtObjID,
+                       idtColor,
+                       idtNormal,
+                       idtTangent,
+                       idtVector,
+                       idtMatrix,
+                       idtIndex);
+  TInstanceDataTypes = set of TInstanceDataType;
+
+  TIndexType = (itUInt16, itUInt32);
+
+  TAttributeKind = (akVertex, akInstance);
+
+  TUploadMode = (umPerBinding, umSingleBlock);
+
+
+  TDataType = record
+  private
+    FKind         : TAttributeKind;
+    FVertexTypes  : TVertexDataTypes;
+    FInstanceTypes: TInstanceDataTypes;
+  public
+
+    class function CreateVertex(ATypes: TVertexDataTypes)    : TDataType; static;
+    class function CreateInstance(ATypes: TInstanceDataTypes): TDataType; static;
+
+    function GetVertexTypes: TVertexDataTypes;
+    function GetInstanceTypes: TInstanceDataTypes;
+    function IsVertex: Boolean;
+    function IsInstance: Boolean;
+
+    property Kind : TAttributeKind read FKind;
+  end;
+
+  TBindingInfo = record
+    Stride     : Cardinal;
+    InputRate  : TVkVertexInputRate;
+  end;
+
+  TAttributeRecord = record
+    DataType           : TDataType;
+    Binding            : Cardinal;
+    Locations          : TDictionary<TvgVertexDataType, Cardinal>;
+    InstanceLocations  : TDictionary<TInstanceDataType, Cardinal>;
+    InputRate          : TVkVertexInputRate;
+  end;
+
+  TAllocationMode = (amClear, amPreserve, amUninitialized);
+
+  TVulkanBufferInfo = record
+    Buffer          : TpvVulkanBuffer;
+    Memory          : TpvVulkanDeviceMemoryBlock;
+    Size            : TVkDeviceSize;
+    Mapped          : Boolean;
+  end;
+
+  TTransferState = (tsIdle, tsTransferring, tsCompleted);
+
+  TGLSLAttributeInfo = record
+    GLSLType     : string;
+    GLSLName     : string;
+  end;
+
+  TvgVulkanObjectRecord = record
+
+    InstanceBinding: Cardinal;       // Instance data binding (auto-managed)
+
+    VertexBindings : TList<Cardinal>; // List of vertex bindings (auto-managed)
+    IndexBindings  : TList<Cardinal>; // List of index bindings (auto-managed)
+
+    VertexStarts   : TList<Integer>;
+    VertexCounts   : TList<Integer>;
+    InstanceStarts : TList<Integer>;
+    InstanceCounts : TList<Integer>;
+    IndexStarts    : TList<Integer>;
+    IndexCounts    : TList<Integer>;
+
+  end;
+
+// Example: Dictionaries for Vertex and Instance Offsets
+  TOffsetDict         = TObjectDictionary<TvgVertexDataType, Cardinal>;
+  TInstanceOffsetDict = TObjectDictionary<TInstanceDataType, Cardinal>;
+  // ... other type aliases as desired
+
+
+  { TVulkanDataStore: Manages vertex/instance/index data and Vulkan buffers }
+
+  /// <summary>
+  /// Manages vertex, instance, and index data with Vulkan buffer integration.
+  /// Thread-safe data store supporting multiple objects with independent
+  /// vertex and index sets.
+  /// </summary>
+
+  TvgVulkanDataStore = class(TvgObjectStore_Base)
+  private
+
+    // Generic helper for type-safe writes
+    procedure SetAttributeDataTyped<T>( ABinding: Cardinal;
+                                        AIndex  : Integer;
+                                        AOffset : Cardinal;
+                                        const AData: T);
+    procedure SetUploadMode(const Value: TUploadMode);
+    procedure SetFrameCount(const Value: Integer);
+
+
+  protected
+    FCriticalSection   : TCriticalSection; // For thread-safety
+
+    FDataObjects       : TList<TvgVulkanObjectRecord>;
+
+    // FIXED: Separate counters for different binding types
+    FNextBinding       : Cardinal;    // For vertex data bindings
+    FNextIndexBinding  : Cardinal;    // For index data bindings
+
+    FMaxBindings       : Cardinal;
+    FMaxIndexBindings  : Cardinal;
+
+    FSharedVertexBinding  : Cardinal;
+    FSharedInstanceBinding: Cardinal;
+    FSharedIndexBinding   : Cardinal;
+
+    // Data management
+
+    FAttributes      : TList<TAttributeRecord>;
+
+    FBindingInfo     : TDictionary<Cardinal, TBindingInfo>;
+
+    FOffsets         : TObjectDictionary<Cardinal, TOffsetDict>;
+    FInstanceOffsets : TObjectDictionary<Cardinal, TInstanceOffsetDict>;
+
+    FData            : TDictionary<Cardinal, TBytes>;   //holds Instance and Vertex data
+    FDataSize        : TDictionary<Cardinal, TvkDeviceSize>;   //holds size of real data in Data array above
+    FCounts          : TDictionary<Cardinal, Integer>;
+    FCapacities      : TDictionary<Cardinal, Integer>;
+
+    FValidateWrites  : Boolean;
+    FCachedBindingDescriptions: TArray<TVkVertexInputBindingDescription>;
+    FLayoutDirty     : Boolean;
+
+    FNextLocation    : Cardinal;  // Global next available location (starts at 0)
+    FMaxAttributes   : Cardinal; // Device limit for maxVertexInputAttributes
+
+// Index buffer support (now per-binding)
+    FIndexDatas      : TDictionary<Cardinal, TBytes>;     // Per-binding index data
+    FIndexCounts     : TDictionary<Cardinal, Integer>;    // Per-binding count
+    FIndexCapacities : TDictionary<Cardinal, Integer>;    // Per-binding capacity
+   // FIndexType       : TIndexType;                        // Global type
+    FIndexTypes: TDictionary<Cardinal, TIndexType>;
+
+    // Vulkan resources
+    FVulkanDevice        : TpvVulkanDevice;
+    FVulkanBuffers       : TDictionary<Cardinal, TArray<TVulkanBufferInfo>>;
+    FIndexBuffers        : TDictionary<Cardinal, TArray<TVulkanBufferInfo>>;  // Per-binding index buffers
+
+    FUploadMode       : TUploadMode;
+
+    // When using single-block upload we keep a single device-local buffer and per-binding offsets:
+    FUnifiedBuffer       : TArray<TVulkanBufferInfo>;
+    FUnifiedOffsets      : TDictionary<Cardinal, TVkDeviceSize>;
+    FUnifiedSize         : TVkDeviceSize;
+
+    FBuffersCreated      : Boolean;
+    FDataDirty           : TArray<Boolean>;
+
+    FTransferState       : TTransferState;
+
+    // Number of frames in flight (buffers per frame)
+    FNumFrames           : Integer;
+
+
+   Procedure SetEnabled;    Override;
+   Procedure SetDisabled;   Override;
+
+
+    procedure UpdateLayout;
+    procedure InvalidateCache;
+    function ValidateBinding(ABinding: Cardinal; const AOperation: string): Boolean;
+    function ValidateIndex(ABinding: Cardinal; AIndex: Integer; const AOperation: string): Boolean;
+
+    function AddInstance(ABinding: Cardinal): Integer; // Simplified, calls AddVertex
+
+    function GetIndexElementSize(AType: TIndexType): Cardinal;
+
+    procedure EnsureCapacity(ABinding: Cardinal; ARequiredCount: Integer);
+    procedure EnsureIndexCapacity(ABinding: Cardinal;ARequiredCount: Integer);
+
+
+    // Helper cleanup routines
+    procedure FreeAttributeRecord(var Attr: TAttributeRecord);
+ //   procedure FreeOffsetDicts<T>(var Dict: TDictionary<Cardinal, TDictionary<T, Cardinal>>);
+
+    procedure InitializeBindingIndex(ABinding: Cardinal);
+
+    // Convenience methods for common operations
+    procedure SetVertexPosition(ABinding: Cardinal; AIndex: Integer; X, Y, Z: Single);
+    procedure SetVertexColor(ABinding: Cardinal; AIndex: Integer; R, G, B, A: Single);
+    procedure SetVertexNormal(ABinding: Cardinal; AIndex: Integer; X, Y, Z: Single);
+    procedure SetVertexTexCoord(ABinding: Cardinal; AIndex: Integer; U, V: Single);
+    procedure SetVertexTangent(ABinding: Cardinal; AIndex: Integer; X, Y, Z: Single);
+    procedure SetVertexBiTangent(ABinding: Cardinal; AIndex: Integer; X, Y, Z: Single);
+    procedure SetVertexIndex(ABinding: Cardinal; AIndex: Integer; I: Cardinal);
+
+    procedure SetInstanceObjID(ABinding: Cardinal; AIndex: Integer; ID1, ID2: Cardinal);
+    procedure SetInstanceColor(ABinding: Cardinal; AIndex: Integer; R, G, B, A: Single);
+    procedure SetInstanceNormal(ABinding: Cardinal; AIndex: Integer; X, Y, Z: Single);
+    procedure SetInstanceTangent(ABinding: Cardinal; AIndex: Integer; X, Y, Z: Single);
+    procedure SetInstanceVector(ABinding: Cardinal; AIndex: Integer; X, Y, Z: Single);
+    procedure SetInstanceMatrix(ABinding: Cardinal; AIndex: Integer; M: TvgMatrix4x4S);
+    procedure SetInstanceIndex(ABinding: Cardinal; AIndex: Integer; I: Cardinal);
+
+    // Vulkan buffer management
+    procedure CreateVulkanBuffer(aDevice:TpvVulkanDevice;
+                                 ASize: TVkDeviceSize;
+                                 AUsage: TVkBufferUsageFlags;
+                                 AMemoryProperties: TVkMemoryPropertyFlags;
+                                 out ABufferInfo: TVulkanBufferInfo);
+
+    procedure DestroyVulkanBuffer(var ABufferInfo: TVulkanBufferInfo);
+
+    procedure CopyBufferToDevice(aTransferPool : TvgCommandBufferPool;
+                                 const ASrcData: TBytes;
+                                 ASize,
+                                 AOffset       : TVkDeviceSize;
+                                 aFrameIndex   : Integer;
+                                 ABuffer       : TpvVulkanBuffer);
+                               //    var ADestBufferInfo: TVulkanBufferInfo);
+
+    procedure FreeUnifiedBuffer;
+
+    procedure TransferToVulkan_PerBinding( aTransferPool:TvgCommandBufferPool; aFrameIndex : Integer);
+    procedure TransferToVulkan_SingleBlock(aTransferPool:TvgCommandBufferPool; aFrameIndex : Integer);
+
+    Procedure SetDataDirty;
+
+    Procedure VulkanDraw (aCommandBuffer: TvgCommandBuffer;
+                          aPipe         : TvgGraphicPipeline;
+                          aFrameIndex   : TvkUint32;
+                        Var CommandCount : Integer); Override;   //final draw calls MUST be called from inside RecordVulkanCommand
+
+
+  public
+    constructor Create;
+    destructor Destroy; override;
+
+    procedure ClearAll(AClearVulkanBuffers: Boolean = True);
+
+    function AddDataObject(IncludeInstance:Boolean): Integer; // No bindings needed
+
+    function AddObjectVertexSet(ObjectIndex: Integer): Integer; // Adds a vertex set, returns vertex set index
+    function AddObjectIndexSet(AObjIndex: Integer; AType: TIndexType = itUInt32): Integer;
+
+    // Instance/vertex/index add methods (specify object, not binding)
+    function AddObjectInstance(ObjectIndex: Integer): Integer;
+    function AddObjectVertex(ObjectIndex, VertexSet: Integer): Integer;
+
+    function AddObjectIndex(ObjectIndex, IndexSet: Integer; IndexValue: Cardinal): Integer;
+    procedure AddObjectTriangle(ObjectIndex, IndexSet: Integer; I1, I2, I3: Cardinal);
+
+    // Fluent interface for chaining
+    function AddVertexAttributes(ABinding: Cardinal;   ADataTypes: TVertexDataTypes; const ALocations: array of Cardinal; AInputRate: TVkVertexInputRate = VK_VERTEX_INPUT_RATE_VERTEX): TvgVulkanDataStore;  Overload;
+    function AddVertexAttributes(ABinding: Cardinal;   ADataTypes: TVertexDataTypes; AInputRate: TVkVertexInputRate = VK_VERTEX_INPUT_RATE_VERTEX): TvgVulkanDataStore; overload;
+
+    function AddInstanceAttributes(ABinding: Cardinal; ADataTypes: TInstanceDataTypes; const ALocations: array of Cardinal; AInputRate: TVkVertexInputRate = VK_VERTEX_INPUT_RATE_INSTANCE): TvgVulkanDataStore; Overload;
+    function AddInstanceAttributes(ABinding: Cardinal; ADataTypes: TInstanceDataTypes; AInputRate: TVkVertexInputRate = VK_VERTEX_INPUT_RATE_INSTANCE): TvgVulkanDataStore;    Overload;
+
+    procedure ResetLocations;
+    procedure Allocate(ABinding: Cardinal; ACount: Integer; AMode: TAllocationMode = amClear);
+    procedure Reserve(ABinding: Cardinal; ACapacity: Integer);
+
+    procedure TrimExcess(ABinding: Cardinal); // Shrink to fit
+
+    // Dynamic vertex/instance addition
+    function AddVertex(ABinding: Cardinal): Integer;
+    function AddVertices(ABinding: Cardinal; ACount: Integer): Integer;
+    Function SetCount(ABinding: Cardinal; ANewUsedCount: Integer):Cardinal;
+
+
+    // Generic data setters
+    procedure SetVertexAttributeData(ABinding: Cardinal; AIndex: Integer; ADataType: TvgVertexDataType; const AData);
+    procedure SetInstanceAttributeData(ABinding: Cardinal; AIndex: Integer; ADataType: TInstanceDataType; const AData);
+
+    // Generic data getters
+    function GetVertexAttributeData(ABinding: Cardinal; AIndex: Integer; ADataType: TvgVertexDataType; out AData): Boolean;
+    function GetInstanceAttributeData(ABinding: Cardinal; AIndex: Integer; ADataType: TInstanceDataType; out AData): Boolean;
+
+    // object-reference based setters for vertices (automatically manage binding)
+    Function GetObjectBindingIndexData(aObjectIndex, aVertexSet, aIndex : Integer ; Out aBinding:Cardinal; Out aGlobalIndex:Integer):Boolean;
+
+    procedure SetObjectVertexPosition(ObjectIndex, VertexSet, AIndex: Integer; X, Y, Z: Single);
+    procedure SetObjectVertexColor(ObjectIndex, VertexSet, AIndex: Integer; R, G, B :Single; A: Single = 1.0);
+    procedure SetObjectVertexNormal(ObjectIndex, VertexSet, AIndex: Integer; X, Y, Z: Single);
+    procedure SetObjectVertexTexCoord(ObjectIndex, VertexSet, AIndex: Integer; U, V: Single);
+    procedure SetObjectVertexTangent(ObjectIndex, VertexSet, AIndex: Integer; X, Y, Z: Single);
+    procedure SetObjectVertexBiTangent(ObjectIndex, VertexSet, AIndex: Integer; X, Y, Z: Single);
+    procedure SetObjectVertexIndex(ObjectIndex, VertexSet, AIndex: Integer; I: Cardinal);
+
+    //  object-reference based setters for instances (automatically manage binding)
+    procedure SetObjectInstanceObjID(ObjectIndex, AIndex: Integer; ID1, ID2: Cardinal);
+    procedure SetObjectInstanceColor(ObjectIndex, AIndex: Integer; R, G, B, A: Single);
+    procedure SetObjectInstanceNormal(ObjectIndex, AIndex: Integer; X, Y, Z: Single);
+    procedure SetObjectInstanceTangent(ObjectIndex, AIndex: Integer; X, Y, Z: Single);
+    procedure SetObjectInstanceVector(ObjectIndex, AIndex: Integer; X, Y, Z: Single);
+    procedure SetObjectInstanceMatrix(ObjectIndex, AIndex: Integer; M: TvgMatrix4x4S);
+    procedure SetObjectInstanceIndex(ObjectIndex, AIndex: Integer; I: Cardinal);
+
+    procedure SetObjectIndex(ObjectIndex, IndexSet, AIndexPos: Integer; AValue: Cardinal);
+    procedure SetObjectTriangle(ObjectIndex, IndexSet, ATriangleIndex: Integer; I1, I2, I3: Cardinal);
+
+    // Index buffer methods
+
+    procedure InitializeIndexBuffer(AIndexType: TIndexType = itUInt32);
+    procedure AllocateIndices(ABinding: Cardinal;ACount: Integer);
+    procedure ReserveIndices(ABinding: Cardinal;ACapacity: Integer);
+
+    function AddIndex(ABinding: Cardinal;AIndex: Cardinal): Integer; overload;
+    function AddIndex(ABinding: Cardinal;I1, I2, I3: Cardinal): Integer; overload;
+    function AddIndices(ABinding: Cardinal;const AIndices: array of Cardinal): Integer;
+
+    procedure SetIndexType(ABinding: Cardinal; AType: TIndexType);
+    procedure SetIndex(ABinding: Cardinal;AIndexPos: Integer; AValue: Cardinal);
+    procedure SetTriangle(ABinding: Cardinal;ATriangleIndex: Integer; I1, I2, I3: Cardinal);
+
+    function GetIndex(ABinding: Cardinal; AIndexPos: Integer): Cardinal;
+    function GetIndexCount(ABinding: Cardinal): Integer;
+    function GetIndexBuffer(ABinding: Cardinal): TBytes;
+
+
+    // Getters
+    function GetIndexType(ABinding: Cardinal): TIndexType;
+
+    function GetBindingDescriptions: TArray<TVkVertexInputBindingDescription>;
+    function GetAttributeDescriptions: TArray<TVkVertexInputAttributeDescription>;
+    function GetStride(ABinding: Cardinal): Cardinal;
+    function GetDataBuffer(ABinding: Cardinal): TBytes;
+
+    function GetVertexOffset(ABinding: Cardinal; ADataType: TvgVertexDataType): Cardinal;
+    function GetInstanceOffset(ABinding: Cardinal; ADataType: TInstanceDataType): Cardinal;
+
+    function GetCount(ABinding: Cardinal): Integer;        //count of vertex/instance
+    function GetCapacity(ABinding: Cardinal): Integer;
+
+    Function GetMaxDataSize : Integer;
+
+
+// Internal getter for binding from object
+    function GetVertexBinding(ObjectIndex, VertexSet: Integer): Cardinal;
+    function GetInstanceBinding(ObjectIndex: Integer): Cardinal;
+    function GetIndexBinding(ObjectIndex, IndexSet: Integer): Cardinal;
+
+  //Procedures to manage Upload to Vulkan .  Will create Buffers and store references
+
+    Procedure CreateVulkanDataBuffers;        Override ;
+    Procedure DeleteVulkanDataBuffers;        Override ;
+
+    Procedure UploadAllData(aTransferPool:TvgCommandBufferPool; aFrameIndex : Integer);  Override;
+    Procedure UploadResourceDataToVulkan(aPool:TvgCommandBufferPool;aFrameIndex, aSubPassIndex : Integer);  Override;
+
+    Procedure BindObjectResources(aCommandBuf: TvgCommandBuffer;  aWorkerIndex, aSubPassIndex, aSetValue: TvkUint32); Override;
+
+    Function GetDataDirty(aFrameIndex:Integer):Boolean;  Override;
+
+
+    // Vulkan buffer access
+    function GetVulkanBuffer(ABinding: Cardinal; AFrameIndex: Integer): TpvVulkanBuffer;
+    function GetVulkanIndexBuffer(ABinding: Cardinal; AFrameIndex: Integer): TpvVulkanBuffer;
+    function GetDeviceOffsetForBinding(ABinding: Cardinal; AFrameIndex: Integer): TVkDeviceSize;
+
+
+ //   procedure TransferToVulkan(aTransferPool:TvgCommandBufferPool; aFrameIndex : Integer);
+
+    procedure TransferBindingToVulkan(aTransferPool:TvgCommandBufferPool; ABinding: Cardinal; aFrameIndex : Integer);
+    procedure TransferIndicesToVulkan(aTransferPool:TvgCommandBufferPool; aBinding: Cardinal; aFrameIndex : Integer);
+
+    procedure UpdateVulkanBuffer(aTransferPool:TvgCommandBufferPool; ABinding: Cardinal; AOffset: TVkDeviceSize; const AData: TBytes; ASize: TVkDeviceSize; aFrameIndex : Integer);
+
+    // NEW: Per-frame update method (called from UploadResourceDataToVulkan)
+    procedure UpdateFrameBuffer(aTransferPool: TvgCommandBufferPool; AFrameIndex: Integer);
+
+
+    // GLSL Header Strings
+    function WriteGLSLHeader: string;
+
+    //update the pipelines for changes to Attributes
+    Procedure UpdateGraphicPipelines;                            Override;
+    Procedure UpdateGraphicPipeline(aPipe:TvgGraphicPipeline);   Override;
+
+    Procedure SetBaseScene(aBaseScene : TvgScene_Base);  Override;
+
+
+    // Properties
+    property ValidateWrites: Boolean read FValidateWrites write FValidateWrites;
+//    property IndexCount: Integer read GetIndexCount;
+//    property IndexType: TIndexType read FIndexType;
+    property TransferState: TTransferState read FTransferState;
+
+    property BuffersCreated: Boolean read fBuffersCreated;
+    property UploadMode: TUploadMode read FUploadMode write SetUploadMode;
+
+    // NEW: Property for number of frames
+    property NumFrames: Integer read FNumFrames write SetFrameCount;
+
+
+  end;
+
+  EVulkanDataStoreException = class(Exception);
+
+function GetVertexFormat(ADataType: TvgVertexDataType)           : TVkFormat;
+function GetInstanceFormat(ADataType: TInstanceDataType)         : TVkFormat;
+
+function GetVertexSize(ADataType: TvgVertexDataType)             : Cardinal;
+function GetInstanceSize(ADataType: TInstanceDataType)           : Cardinal;
+
+function CountVertexDataTypes(const ASet: TVertexDataTypes)      : Integer;
+function CountInstanceDataTypes(const ASet: TInstanceDataTypes)  : Integer;
+
+function GetVertexDataType(ADataType: TvgVertexDataType)         : TvgDataType;
+
+function GetVulkanIndexBufferForBinding(DS: TvgVulkanDataStore;
+                                        AIndexBinding: Cardinal;
+                                        AFrameIndex: Integer): TpvVulkanBuffer;
+
+function GetGLSLVertexType(ADataType: TvgVertexDataType): TGLSLAttributeInfo;
+function GetGLSLInstanceType(ADataType: TInstanceDataType): TGLSLAttributeInfo;
+
+(*
+procedure DrawObject_PerBinding(DS: TvgVulkanDataStore;
+                                CmdBuffer: TvgCommandBuffer;
+                                ObjectIndex: Integer;
+                                AFrameIndex: Integer;
+                                VertexSetIndex: Integer = 0;
+                                IndexSetIndex: Integer = 0);
+
+procedure DrawObject_SingleBlock(DS: TvgVulkanDataStore;
+                                 CmdBuffer: TvgCommandBuffer;
+                                 ObjectIndex: Integer;
+                                 AFrameIndex: Integer;
+                                 VertexSetIndex: Integer = 0;
+                                 IndexSetIndex: Integer = 0);
+ *)
+// Helper stub you must implement to retrieve index buffer handle created by TransferIndicesToVulkan.
+// Replace with your concrete accessor to FIndexBuffers[bind].Buffer or similar.
+
+
+implementation
+
+{ ===== Helper stub: implement this in your project to return the index buffer handle ===== }
+
+function GetVulkanIndexBufferForBinding(DS: TvgVulkanDataStore; AIndexBinding: Cardinal; AFrameIndex: Integer): TpvVulkanBuffer;
+begin
+
+  If assigned(DS) then
+     Result :=  DS.GetVulkanIndexBuffer(aIndexBinding, AFrameIndex)
+  else
+     Result := Nil;
+end;
+
+
+procedure BindVertexAndInstanceBuffers(DS: TvgVulkanDataStore; CmdBuffer: TvgCommandBuffer;
+                                             VertexBinding, InstanceBinding: Cardinal; AFrameIndex: Integer);
+
+var
+  VB, IB: TpvVulkanBuffer;
+  OffV, OffI: TVkDeviceSize;
+
+  VBArray : Array of TVkBuffer;
+  OFFArray: Array of TVkDeviceSize;
+  VK_TransferToVertexArray  : Array Of TVkBufferMemoryBarrier  ;
+
+  ArraySize, aCount:Integer;
+
+  Procedure SetUpBarrier(aIndex:Integer; aBuffer: TpvVulkanBuffer;  aOffset:Integer);
+  Begin
+    (*   need to set up the renderpass correctly to use a Barrier
+
+      VK_TransferToVertexArray[aIndex] := Default( TVkBufferMemoryBarrier);
+
+      VK_TransferToVertexArray[aIndex].sType               := VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+      VK_TransferToVertexArray[aIndex].pNext               := nil;
+      VK_TransferToVertexArray[aIndex].srcAccessMask       := TVkAccessFlags(VK_ACCESS_TRANSFER_WRITE_BIT);
+      VK_TransferToVertexArray[aIndex].dstAccessMask       := TVkAccessFlags(VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT);
+      VK_TransferToVertexArray[aIndex].srcQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
+      VK_TransferToVertexArray[aIndex].dstQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
+      VK_TransferToVertexArray[aIndex].buffer              := aBuffer.Handle;
+      VK_TransferToVertexArray[aIndex].offset              := aOffset;
+      VK_TransferToVertexArray[aIndex].size                := aBuffer.Size;
+    *)
+  End;
+
+begin
+
+
+  if not Assigned(DS) then
+    raise EVulkanDataStoreException.Create('Data store cannot be nil');
+  if not Assigned(CmdBuffer) then
+    raise EVulkanDataStoreException.Create('Command buffer cannot be nil');
+
+  ArraySize := 0  ;
+
+  // Get vertex buffer and offset
+  VB   := DS.GetVulkanBuffer(VertexBinding, AFrameIndex);
+  OffV := DS.GetDeviceOffsetForBinding(VertexBinding, AFrameIndex);
+
+  if Assigned(VB) and (VB.Handle<>VK_NULL_HANDLE) then
+    Inc(ArraySize);
+
+  // Get instance buffer and offset if valid
+  if InstanceBinding <> INVALIDBINDING then
+  begin
+    IB   := DS.GetVulkanBuffer(InstanceBinding, AFrameIndex);
+    OffI := DS.GetDeviceOffsetForBinding(InstanceBinding, AFrameIndex);
+    If Assigned(IB) and (IB.Handle<>VK_NULL_HANDLE) then
+       Inc(ArraySize);
+  end
+  else
+  begin
+    IB   := nil;
+    OffI := 0;
+  end;
+
+  If arraySize>0 then
+  Begin
+    SetLength(VBArray,  ArraySize);
+    SetLength(OFFArray, ArraySize);
+    SetLength(VK_TransferToVertexArray, ArraySize);
+
+    aCount := 0;
+
+    If VertexBinding < InstanceBinding then
+    Begin
+        // Bind vertex buffer if assigned
+        if Assigned(VB) and (VB.Handle<>VK_NULL_HANDLE) then
+        Begin
+           VBArray[aCount] := VB.Handle;
+           OFFArray[aCount]:= OffV;
+           SetUpBarrier(aCount, VB, OffV);
+           inc(aCount);
+        end;
+        // Bind instance buffer if valid and assigned
+        if Assigned(IB) and (IB.Handle<>VK_NULL_HANDLE) then
+        Begin
+           VBArray[aCount] := IB.Handle;
+           OFFArray[aCount]:= OffI;
+           SetUpBarrier(aCount, IB, OffI);
+        end;
+
+
+    end else
+    Begin
+        // Bind instance buffer if valid and assigned
+        if Assigned(IB) and (IB.Handle<>VK_NULL_HANDLE) then
+        Begin
+           VBArray[aCount] := IB.Handle;
+           OFFArray[aCount]:= OffI;
+           SetUpBarrier(aCount, IB, OffI);
+           inc(aCount);
+        end;
+
+        if Assigned(VB) and (VB.Handle<>VK_NULL_HANDLE) then
+        Begin
+           VBArray[aCount] := VB.Handle;
+           OFFArray[aCount]:= OffV;
+           SetUpBarrier(aCount, VB, OffV);
+        end;
+
+    End;
+
+
+// Pipeline barrier (vkCmdPipelineBarrier from Vulkan.pas) to transition updated range for vertex attribute reads, essential in Delphi Pascal Vulkan apps using PasVulkan headers
+
+  //  FillChar(VK_TransferToVertex,SizeOf(TVkBufferMemoryBarrier),#0);
+     (*
+     CmdBuffer.CmdPipelineBarrier(
+                        TVkPipelineStageFlags(VK_PIPELINE_STAGE_TRANSFER_BIT),   //srcStageMask:TVkPipelineStageFlags;
+                        TVkPipelineStageFlags(VK_PIPELINE_STAGE_VERTEX_INPUT_BIT),   //dstStageMask:TVkPipelineStageFlags;
+                        0,   //dependencyFlags:TVkDependencyFlags;
+                        0,   //memoryBarrierCount:TvkUint32;
+                        nil, //aMemoryBarriers:PVkMemoryBarrier;
+                        aCount,   //bufferMemoryBarrierCount:TvkUint32
+                        @VK_TransferToVertexArray[0], //aBufferMemoryBarriers:PVkBufferMemoryBarrier
+                        0,     //imageMemoryBarrierCount:TvkUint32
+                        nil);  // aImageMemoryBarriers:PVkImageMemoryBarrier
+    *)
+
+    CmdBuffer.CmdBindVertexBuffers(0, arraySize, @VBArray[0], @OFFArray[0]);
+
+    SetLength(VBArray,0);
+    SetLength(OFFArray,0);
+  End;
+
+
+
+end;
+
+procedure DrawObject_PerBinding(DS: TvgVulkanDataStore; CmdBuffer: TvgCommandBuffer;
+                                ObjectIndex: Integer;     AFrameIndex: Integer;
+                                 VertexSetIndex: Integer = 0; IndexSetIndex: Integer = 0);
+
+var
+  VertexBinding, InstanceBinding, IndexBinding: Cardinal;
+  VertexCount, InstanceCount, IndexCount: Integer;
+  IndexBuffer: TpvVulkanBuffer;
+  IndexOffset: TVkDeviceSize;
+  IndexTypeVk: TVkIndexType;
+begin
+  if not Assigned(DS) then
+    raise EVulkanDataStoreException.Create('Data store cannot be nil');
+  if not Assigned(CmdBuffer) then
+    raise EVulkanDataStoreException.Create('Command buffer cannot be nil');
+
+  // Resolve bindings for this object (thread-safe via DS methods)
+  VertexBinding   := DS.GetVertexBinding(ObjectIndex, VertexSetIndex);
+  InstanceBinding := DS.GetInstanceBinding(ObjectIndex);
+  IndexBinding    := DS.GetIndexBinding(ObjectIndex, IndexSetIndex);
+
+  // Bind vertex + instance buffers (per-binding mode uses per-binding buffers, offsets = 0)
+  BindVertexAndInstanceBuffers(DS, CmdBuffer, VertexBinding, InstanceBinding, AFrameIndex);
+
+  // Bind index buffer - assumes per-binding uploads with offset 0
+  IndexBuffer := GetVulkanIndexBufferForBinding(DS, IndexBinding, AFrameIndex);
+  IndexOffset := 0;  // Per-binding mode: offsets are 0
+
+  // Choose VkIndexType from DS.IndexType
+  case DS.GetIndexType(IndexBinding) of
+    itUInt16: IndexTypeVk := VK_INDEX_TYPE_UINT16;
+    itUInt32: IndexTypeVk := VK_INDEX_TYPE_UINT32;
+  else
+    raise EVulkanDataStoreException.Create('Unsupported index type');
+  end;
+
+  // Bind index buffer if assigned
+  if Assigned(IndexBuffer) then
+    CmdBuffer.CmdBindIndexBuffer(IndexBuffer.Handle, IndexOffset, IndexTypeVk);
+
+  // Get counts
+  IndexCount      := DS.GetIndexCount(IndexBinding);
+  VertexCount     := DS.GetCount(VertexBinding);
+  if InstanceBinding <> INVALIDBINDING then
+    InstanceCount := DS.GetCount(InstanceBinding)
+  else
+    InstanceCount := 1;
+
+  // Issue draw: indexed if indices exist, else non-indexed
+  if IndexCount > 0 then
+    CmdBuffer.CmdDrawIndexed(IndexCount, InstanceCount, 0, 0, 0)
+  else
+    CmdBuffer.CmdDraw(VertexCount, InstanceCount, 0, 0);
+
+
+end;
+
+procedure DrawObject_SingleBlock(DS: TvgVulkanDataStore; CmdBuffer: TvgCommandBuffer;
+  ObjectIndex: Integer; AFrameIndex: Integer; VertexSetIndex: Integer = 0; IndexSetIndex: Integer = 0);
+
+var
+  VertexBinding, InstanceBinding, IndexBinding: Cardinal;
+  VertexCount, InstanceCount, IndexCount: Integer;
+  UnifiedBuf, IndexBuf: TpvVulkanBuffer;
+  VertexOffset, InstanceOffset, IndexOffset: TVkDeviceSize;
+  IndexTypeVk: TVkIndexType;
+
+begin
+  if not Assigned(DS) then
+    raise EVulkanDataStoreException.Create('Data store cannot be nil');
+  if not Assigned(CmdBuffer) then
+    raise EVulkanDataStoreException.Create('Command buffer cannot be nil');
+
+  // Resolve bindings
+  VertexBinding   := DS.GetVertexBinding(ObjectIndex, VertexSetIndex);
+  InstanceBinding := DS.GetInstanceBinding(ObjectIndex);
+  IndexBinding    := DS.GetIndexBinding(ObjectIndex, IndexSetIndex);
+
+  // Unified buffer for vertex/instance (same buffer for all, with offsets)
+  UnifiedBuf   := DS.GetVulkanBuffer(VertexBinding, AFrameIndex);  // All bindings share the unified buffer in this mode
+  VertexOffset := DS.GetDeviceOffsetForBinding(VertexBinding, AFrameIndex);
+
+  if InstanceBinding <> INVALIDBINDING then
+    InstanceOffset := DS.GetDeviceOffsetForBinding(InstanceBinding, AFrameIndex)
+  else
+    InstanceOffset := 0;
+
+  // Bind unified buffer to each binding slot with per-binding offsets
+  if Assigned(UnifiedBuf) then
+  begin
+    CmdBuffer.CmdBindVertexBuffers(VertexBinding, 1, @UnifiedBuf.Handle, @VertexOffset);
+    if InstanceBinding <> INVALIDBINDING then
+      CmdBuffer.CmdBindVertexBuffers(InstanceBinding, 1, @UnifiedBuf.Handle, @InstanceOffset);
+  end;
+
+  // Index buffer (per-binding, not unified in the provided code)
+  IndexBuf := GetVulkanIndexBufferForBinding(DS, IndexBinding, AFrameIndex);
+  IndexOffset := 0;  // Indices are per-binding, not packed into unified buffer
+
+  // Choose VkIndexType
+  case DS.GetIndexType(IndexBinding) of
+    itUInt16: IndexTypeVk := VK_INDEX_TYPE_UINT16;
+    itUInt32: IndexTypeVk := VK_INDEX_TYPE_UINT32;
+  else
+    raise EVulkanDataStoreException.Create('Unsupported index type');
+  end;
+
+  // Bind index buffer if assigned
+  if Assigned(IndexBuf) then
+    CmdBuffer.CmdBindIndexBuffer(IndexBuf.Handle, IndexOffset, IndexTypeVk);
+
+  // Get counts
+  IndexCount := DS.GetIndexCount(IndexBinding);
+  VertexCount := DS.GetCount(VertexBinding);
+  if InstanceBinding <> INVALIDBINDING then
+    InstanceCount := DS.GetCount(InstanceBinding)
+  else
+    InstanceCount := 1;
+
+  // Issue draw
+  if IndexCount > 0 then
+    CmdBuffer.CmdDrawIndexed(IndexCount, InstanceCount, 0, 0, 0)
+  else
+    CmdBuffer.CmdDraw(VertexCount, InstanceCount, 0, 0);
+end;
+
+function GetVertexAttributeType(ADataType: TvgVertexDataType): TvgAttributeType;
+begin
+  case ADataType of
+    vdtPosition: Result := AT_POSITION;
+    vdtColor:    Result := AT_COLOR;
+    vdtNormal:   Result := AT_NORMAL;
+    vdtTexCoord: Result := AT_TEXTURE;
+    vdtTangent:  Result := AT_TANGENT;
+    vdtBiTangent:Result := AT_BITANGENT;
+    vdtIndex:    Result := AT_INDEX;
+  else
+    raise EVulkanDataStoreException.CreateFmt('Unknown vertex data type: %d', [Ord(ADataType)]);
+  end;
+end;
+
+function GetInstanceAttributeType(ADataType: TInstanceDataType): TvgAttributeType;
+begin
+  case ADataType of
+    idtObjID:    Result := AT_OBJID;
+    idtColor:    Result := AT_COLOR;
+    idtNormal:   Result := AT_NORMAL;
+    idtTangent:  Result := AT_TANGENT;
+    idtVector:   Result := AT_VECTOR;
+    idtIndex:    Result := AT_INDEX;
+    idtMatrix:   Result := AT_MATRIX; // Per column; handle as 4 attributes
+  else
+    raise EVulkanDataStoreException.CreateFmt('Unknown instance data type: %d', [Ord(ADataType)]);
+  end;
+end;
+
+
+function GetVertexDataType(ADataType: TvgVertexDataType): TvgDataType;
+begin
+  case ADataType of
+    vdtPosition: Result := DT_VEC3;
+    vdtColor:    Result := DT_VEC4;
+    vdtNormal:   Result := DT_VEC3;
+    vdtTexCoord: Result := DT_VEC2;
+    vdtTangent:  Result := DT_VEC3;
+    vdtBiTangent:Result := DT_VEC3;
+    vdtIndex:    Result := DT_UVEC1;
+  else
+    raise EVulkanDataStoreException.CreateFmt('Unknown vertex data type: %d', [Ord(ADataType)]);
+  end;
+end;
+
+function GetInstanceDataType(ADataType: TInstanceDataType): TvgDataType;
+begin
+  case ADataType of
+    idtObjID:    Result := DT_UVEC2;    //unsigned integer pair
+    idtColor:    Result := DT_VEC4;
+    idtNormal:   Result := DT_VEC3;
+    idtTangent:  Result := DT_VEC3;
+    idtVector:   Result := DT_VEC3;
+    idtIndex:    Result := DT_UVEC1;
+    idtMatrix:   Result := DT_MAT4; // Per column; handle as 4 attributes
+  else
+    raise EVulkanDataStoreException.CreateFmt('Unknown instance data type: %d', [Ord(ADataType)]);
+  end;
+end;
+
+
+function GetVertexFormat(ADataType: TvgVertexDataType): TVkFormat;
+begin
+  case ADataType of
+    vdtPosition: Result := VK_FORMAT_R32G32B32_SFLOAT;
+    vdtColor:    Result := VK_FORMAT_R32G32B32A32_SFLOAT;
+    vdtNormal:   Result := VK_FORMAT_R32G32B32_SFLOAT;
+    vdtTexCoord: Result := VK_FORMAT_R32G32_SFLOAT;
+    vdtTangent:  Result := VK_FORMAT_R32G32B32_SFLOAT;
+    vdtBiTangent:Result := VK_FORMAT_R32G32B32_SFLOAT;
+    vdtIndex:    Result := VK_FORMAT_R32_UINT;
+  else
+    raise EVulkanDataStoreException.CreateFmt('Unknown vertex data type: %d', [Ord(ADataType)]);
+  end;
+end;
+
+function GetInstanceFormat(ADataType: TInstanceDataType): TVkFormat;
+begin
+  case ADataType of
+    idtObjID:    Result := VK_FORMAT_R32G32_UINT;
+    idtColor:    Result := VK_FORMAT_R32G32B32A32_SFLOAT;
+    idtNormal:   Result := VK_FORMAT_R32G32B32_SFLOAT;
+    idtTangent:  Result := VK_FORMAT_R32G32B32_SFLOAT;
+    idtVector:   Result := VK_FORMAT_R32G32B32_SFLOAT;
+    idtIndex:    Result := VK_FORMAT_R32_UINT;
+    idtMatrix:   Result := VK_FORMAT_R32G32B32A32_SFLOAT; // Per column; handle as 4 attributes
+  else
+    raise EVulkanDataStoreException.CreateFmt('Unknown instance data type: %d', [Ord(ADataType)]);
+  end;
+end;
+
+function GetVertexSize(ADataType: TvgVertexDataType): Cardinal;
+begin
+  case ADataType of
+    vdtPosition: Result := SIZE_VEC3;
+    vdtColor:    Result := SIZE_VEC4;
+    vdtNormal:   Result := SIZE_VEC3;
+    vdtTexCoord: Result := SIZE_VEC2;
+    vdtTangent:  Result := SIZE_VEC3;
+    vdtBiTangent:Result := SIZE_VEC3;
+    vdtIndex:    Result := SIZE_VECUINT1;
+  else
+    raise EVulkanDataStoreException.CreateFmt('Unknown vertex data type: %d', [Ord(ADataType)]);
+  end;
+end;
+
+function GetInstanceSize(ADataType: TInstanceDataType): Cardinal;
+begin
+  case ADataType of
+    idtObjID:    Result := SIZE_VECUINT2; // 8 bytes
+    idtColor:    Result := SIZE_VEC4;     // 16 bytes
+    idtNormal:   Result := SIZE_VEC3;     // 12 bytes
+    idtTangent:  Result := SIZE_VEC3;
+    idtVector:   Result := SIZE_VEC3;
+    idtIndex:    Result := SIZE_UINT32;   // 4 bytes
+    idtMatrix:   Result := SIZE_MAT4;     // 64 bytes, split into 4 vec4
+  else
+    raise EVulkanDataStoreException.CreateFmt('Unknown instance data type: %d', [Ord(ADataType)]);
+  end;
+end;
+
+function CountVertexDataTypes(const ASet: TVertexDataTypes): Integer;
+var
+  VType: TvgVertexDataType;
+begin
+  Result := 0;
+  for VType in ASet do
+    Inc(Result);
+end;
+
+function CountInstanceDataTypes(const ASet: TInstanceDataTypes): Integer;
+var
+  IType: TInstanceDataType;
+begin
+  Result := 0;
+  for IType in ASet do
+    Inc(Result);
+end;
+
+function GetGLSLVertexType(ADataType: TvgVertexDataType): TGLSLAttributeInfo;
+begin
+  case ADataType of
+    vdtPosition: begin Result.GLSLType := 'vec3'; Result.GLSLName := 'inPosition'; end;
+    vdtColor:    begin Result.GLSLType := 'vec4'; Result.GLSLName := 'inColor'; end;
+    vdtNormal:   begin Result.GLSLType := 'vec3'; Result.GLSLName := 'inNormal'; end;
+    vdtTexCoord: begin Result.GLSLType := 'vec2'; Result.GLSLName := 'inTexCoord'; end;
+    vdtTangent:  begin Result.GLSLType := 'vec3'; Result.GLSLName := 'inTangent'; end;
+    vdtBiTangent:begin Result.GLSLType := 'vec3'; Result.GLSLName := 'inBiTangent'; end;
+    vdtIndex:    begin Result.GLSLType := 'uint'; Result.GLSLName := 'inIndex'; end;
+  else
+    raise Exception.Create('Unknown vertex attribute for GLSL');
+  end;
+end;
+
+function GetGLSLInstanceType(ADataType: TInstanceDataType): TGLSLAttributeInfo;
+begin
+  case ADataType of
+    idtObjID:    begin Result.GLSLType := 'uvec2'; Result.GLSLName := 'inObjID'; end;
+    idtColor:    begin Result.GLSLType := 'vec4';  Result.GLSLName := 'inInstanceColor'; end;
+    idtNormal:   begin Result.GLSLType := 'vec3';  Result.GLSLName := 'inInstanceNormal'; end;
+    idtTangent:  begin Result.GLSLType := 'vec3';  Result.GLSLName := 'inInstanceTangent'; end;
+    idtVector:   begin Result.GLSLType := 'vec3';  Result.GLSLName := 'inInstanceVector'; end;
+    idtIndex:    begin Result.GLSLType := 'uint';  Result.GLSLName := 'inInstanceIndex'; end;
+    idtMatrix:   begin Result.GLSLType := 'mat4';  Result.GLSLName := 'inInstanceMatrix'; end;
+  else
+    raise Exception.Create('Unknown instance attribute for GLSL');
+  end;
+end;
+
+class function TDataType.CreateVertex(ATypes: TVertexDataTypes): TDataType;
+begin
+  Result.FKind          := akVertex;
+  Result.FVertexTypes   := ATypes;
+  Result.FInstanceTypes := [];
+end;
+
+class function TDataType.CreateInstance(ATypes: TInstanceDataTypes): TDataType;
+begin
+  Result.FKind := akInstance;
+  Result.FVertexTypes := [];
+  Result.FInstanceTypes := ATypes;
+end;
+
+function TDataType.GetVertexTypes: TVertexDataTypes;
+begin
+  if FKind <> akVertex then
+    raise Exception.Create('DataType is not vertex type');
+  Result := FVertexTypes;
+end;
+
+function TDataType.GetInstanceTypes: TInstanceDataTypes;
+begin
+  if FKind <> akInstance then
+    raise Exception.Create('DataType is not instance type');
+  Result := FInstanceTypes;
+end;
+
+function TDataType.IsVertex: Boolean;
+begin
+  Result := FKind = akVertex;
+end;
+
+function TDataType.IsInstance: Boolean;
+begin
+  Result := FKind = akInstance;
+end;
+
+
+{ TvgVulkanDataStore }
+
+constructor TvgVulkanDataStore.Create;
+begin
+  Inherited;
+
+  FCriticalSection   := TCriticalSection.Create;
+
+  FDataObjects := TList<TvgVulkanObjectRecord>.Create;
+  // FIXED: Initialize separate counters
+  FNextBinding      := 0;
+  FNextIndexBinding := 0;
+
+  // Will be set from device limits in InitializeVulkan
+  FMaxBindings      := 16;
+  FMaxIndexBindings := 16;
+
+  FSharedVertexBinding  := INVALIDBINDING;
+  FSharedInstanceBinding:= INVALIDBINDING;
+  FSharedIndexBinding   := INVALIDBINDING;
+
+
+  FAttributes       := TList<TAttributeRecord>.Create;
+  FBindingInfo      := TDictionary<Cardinal, TBindingInfo>.Create;
+
+  FOffsets          := TObjectDictionary<Cardinal, TOffsetDict>.Create([doOwnsValues]);
+  FInstanceOffsets  := TObjectDictionary<Cardinal, TInstanceOffsetDict>.Create([doOwnsValues]);
+
+  FData             := TDictionary<Cardinal, TBytes>.Create;
+  FDataSize         := TDictionary<Cardinal, TvkDeviceSize>.Create;
+  FCounts           := TDictionary<Cardinal, Integer>.Create;
+  FCapacities       := TDictionary<Cardinal, Integer>.Create;
+  FValidateWrites   := True;
+  FLayoutDirty      := False;
+
+  SetLength(FCachedBindingDescriptions, 0);
+
+  FNextLocation     := 0;
+  FMaxAttributes    := 16;  //check
+
+// Index Data
+
+  FIndexDatas       := TDictionary<Cardinal, TBytes>.Create;
+  FIndexCounts      := TDictionary<Cardinal, Integer>.Create;
+  FIndexCapacities  := TDictionary<Cardinal, Integer>.Create;
+  FIndexTypes       := TDictionary<Cardinal, TIndexType>.Create;
+
+ // FIndexType        := itUInt32;
+
+  // Vulkan resources
+  FVulkanDevice     := nil;
+  FVulkanBuffers    := TDictionary<Cardinal, TArray<TVulkanBufferInfo>>.Create;
+  FIndexBuffers     := TDictionary<Cardinal, TArray<TVulkanBufferInfo>>.Create;
+
+//  FTransferFence    := nil;
+  FTransferState    := tsIdle;
+
+  FBuffersCreated   := False;
+
+  FNumFrames        := 2;
+  SetLength(  FDataDirty, FNumFrames);
+
+
+end;
+
+Procedure TvgVulkanDataStore.CreateVulkanDataBuffers;
+var
+  Binding: Cardinal;
+  Frame: Integer;
+  BufInfo: TVulkanBufferInfo;
+  Data: TBytes;
+  Size: TVkDeviceSize;
+  IndexSize: TVkDeviceSize;
+  TotalSize: TVkDeviceSize;
+  Offset: TVkDeviceSize;
+  Usage: TVkBufferUsageFlags;
+  MemProps: TVkMemoryPropertyFlags;
+  BindingBuffers: TArray<TVulkanBufferInfo>;
+begin
+  if fBuffersCreated then Exit; // Prevent recreation if already done
+
+  CustomAssert(Assigned(FVulkanDevice), 'Vulkan device must be assigned before creating buffers');
+
+  // Common flags
+
+  Usage   := TVkBufferUsageFlags(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT) or
+             TVkBufferUsageFlags(VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+
+  MemProps:=TVkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+//  Usage := VK_BUFFER_USAGE_TRANSFER_DST_BIT or VK_BUFFER_USAGE_VERTEX_BUFFER_BIT; // Adjust for instance if needed
+//  MemProps := VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+  if FUploadMode = umSingleBlock then
+  begin
+    // Compute total size: Sum all vertex/instance + index data
+    TotalSize := 0;
+    FUnifiedOffsets.Clear;
+
+    // Vertex/Instance data
+    for Binding in FData.Keys do
+    begin
+      if (FData.TryGetValue(Binding, Data)) and
+         (FDataSize.TryGetValue(Binding, Size)) then
+      begin
+       // Size := Length(Data); { MODIFIED: No longer fallback to Length(Data); rely on fDataSize for real used size }
+        FUnifiedOffsets.Add(Binding, TotalSize);
+        Inc(TotalSize, Size);
+      end;
+    end;
+
+    // Index data
+    for Binding in FIndexDatas.Keys do
+    begin
+      if FIndexDatas.TryGetValue(Binding, Data) and
+        (FDataSize.TryGetValue(Binding, IndexSize)) then
+      begin
+        FUnifiedOffsets.Add(Binding, TotalSize); // Use same offsets dict, assume bindings don't overlap
+        Inc(TotalSize, IndexSize);
+      end;
+    end;
+
+    FUnifiedSize := TotalSize;
+    SetLength(FUnifiedBuffer, FNumFrames);
+
+    for Frame := 0 to FNumFrames - 1 do
+    begin
+      CreateVulkanBuffer(FVulkanDevice, FUnifiedSize,
+                                      Usage + TVkBufferUsageFlags( VK_BUFFER_USAGE_INDEX_BUFFER_BIT),
+                                      MemProps,
+                                      FUnifiedBuffer[Frame]);
+    end;
+  end
+  else // umPerBinding
+  begin
+    // Vertex/Instance buffers
+    for Binding in FData.Keys do
+    begin
+      if not FData.TryGetValue(Binding, Data) then Continue;
+      if not FDataSize.TryGetValue(Binding, Size) then Continue; { MODIFIED: Rely on fDataSize }
+
+      SetLength(BindingBuffers, FNumFrames);
+      for Frame := 0 to FNumFrames - 1 do
+      begin
+        CreateVulkanBuffer(FVulkanDevice, Size, Usage, MemProps, BufInfo);
+        BindingBuffers[Frame] := BufInfo;
+      end;
+      FVulkanBuffers.AddOrSetValue(Binding, BindingBuffers);
+    end;
+
+    // Index buffers
+    for Binding in FIndexDatas.Keys do
+    begin
+      if not FIndexDatas.TryGetValue(Binding, Data) then Continue;
+      if not FDataSize.TryGetValue(Binding, IndexSize) then Continue; { MODIFIED: Rely on fDataSize }
+
+      SetLength(BindingBuffers, FNumFrames);
+      for Frame := 0 to FNumFrames - 1 do
+      begin
+        CreateVulkanBuffer(FVulkanDevice, IndexSize, TVkBufferUsageFlags(VK_BUFFER_USAGE_TRANSFER_DST_BIT) +
+                                                     TVkBufferUsageFlags(VK_BUFFER_USAGE_INDEX_BUFFER_BIT), MemProps, BufInfo);
+        BindingBuffers[Frame] := BufInfo;
+      end;
+      FIndexBuffers.AddOrSetValue(Binding, BindingBuffers);
+    end;
+  end;
+
+  fBuffersCreated := True;
+end;
+
+Procedure TvgVulkanDataStore.DeleteVulkanDataBuffers;
+var
+  Binding: Cardinal;
+  Frame: Integer;
+  BindingBuffers: TArray<TVulkanBufferInfo>;
+begin
+  if not fBuffersCreated then Exit;
+
+  if FUploadMode = umSingleBlock then
+  begin
+    for Frame := 0 to High(FUnifiedBuffer) do
+      DestroyVulkanBuffer(FUnifiedBuffer[Frame]);
+    SetLength(FUnifiedBuffer, 0);
+    FUnifiedOffsets.Clear;
+    FUnifiedSize := 0;
+  end
+  else // umPerBinding
+  begin
+    // Vertex/Instance buffers
+    for Binding in FVulkanBuffers.Keys do
+    begin
+      if FVulkanBuffers.TryGetValue(Binding, BindingBuffers) then
+      begin
+        for Frame := 0 to High(BindingBuffers) do
+          DestroyVulkanBuffer(BindingBuffers[Frame]);
+        SetLength(BindingBuffers, 0);
+      end;
+    end;
+    FVulkanBuffers.Clear;
+
+    // Index buffers
+    for Binding in FIndexBuffers.Keys do
+    begin
+      if FIndexBuffers.TryGetValue(Binding, BindingBuffers) then
+      begin
+        for Frame := 0 to High(BindingBuffers) do
+          DestroyVulkanBuffer(BindingBuffers[Frame]);
+        SetLength(BindingBuffers, 0);
+      end;
+    end;
+    FIndexBuffers.Clear;
+  end;
+
+  fBuffersCreated := False;
+end;
+
+(*
+procedure TvgVulkanDataStore.DeleteVulkanDataBuffers;
+ Var
+    Binding   : Cardinal;
+    FrameIndex: Integer;
+    Buffers   : TArray<TVulkanBufferInfo>;
+begin
+
+      // MODIFIED: Clear per-frame buffers
+      If assigned(FVulkanBuffers) and (FVulkanBuffers.Count>0) then
+        Begin
+          for Binding in FVulkanBuffers.Keys do
+          begin
+            Buffers := FVulkanBuffers[Binding];
+            for FrameIndex := 0 to High(Buffers) do
+              DestroyVulkanBuffer(Buffers[FrameIndex]);
+          end;
+          FVulkanBuffers.Clear;
+        End;
+
+      If assigned(FIndexBuffers) and (FIndexBuffers.Count>0) then
+        Begin
+          for Binding in FIndexBuffers.Keys do
+          begin
+            Buffers := FIndexBuffers[Binding];
+            for FrameIndex := 0 to High(Buffers) do
+              DestroyVulkanBuffer(Buffers[FrameIndex]);
+          end;
+          FIndexBuffers.Clear;
+        End;
+
+      // MODIFIED: Clear unified per-frame
+      If  Length(FUnifiedBuffer) >0 then
+      Begin
+        for FrameIndex := 0 to High(FUnifiedBuffer) do
+          DestroyVulkanBuffer(FUnifiedBuffer[FrameIndex]);
+        SetLength(FUnifiedBuffer, 0);
+      End;
+
+end;
+*)
+
+procedure TvgVulkanDataStore.Allocate(ABinding: Cardinal; ACount: Integer; AMode: TAllocationMode = amClear);
+var
+  Stride: Cardinal;
+  Data: TBytes;
+  RequiredBytes: NativeInt;
+  CurrentCapacity: Integer;
+begin
+  FCriticalSection.Enter;
+  try
+    if ACount < 0 then
+      raise EVulkanDataStoreException.CreateFmt('Count cannot be negative: %d', [ACount]);
+
+    if not ValidateBinding(ABinding, 'Allocate') then Exit;
+
+    Stride := GetStride(ABinding);
+
+    // Ensure bookkeeping entries exist { MODIFIED: Ensure fDataSize exists too }
+    if not FCapacities.ContainsKey(ABinding) then
+      FCapacities.Add(ABinding, 0);
+    if not FData.ContainsKey(ABinding) then
+      FData.Add(ABinding, nil);
+    if not FCounts.ContainsKey(ABinding) then
+      FCounts.Add(ABinding, 0);
+    if not FDataSize.ContainsKey(ABinding) then
+      FDataSize.Add(ABinding, 0);
+
+    CurrentCapacity := FCapacities[ABinding];
+
+    RequiredBytes := NativeInt(ACount) * NativeInt(Stride);
+
+    // If preserving and new count < current, just update count/size (trim later if needed)
+    if (AMode = amPreserve) and (ACount < CurrentCapacity) then
+    begin
+      FCounts[ABinding] := ACount;
+      FDataSize[ABinding] := TVkDeviceSize(RequiredBytes); { ADDED: Update fDataSize to new used bytes }
+      SetDataDirty;
+      Exit;
+    end;
+
+    // Ensure capacity (grows if needed)
+    EnsureCapacity(ABinding, ACount);
+
+    Data := FData[ABinding];
+
+    case AMode of
+      amClear:
+        FillChar(Data[0], RequiredBytes, 0);
+      amPreserve:
+        // If growing, clear new area
+        if ACount > CurrentCapacity then
+          FillChar(Data[CurrentCapacity * Stride], (ACount - CurrentCapacity) * Stride, 0);
+      amUninitialized:
+        // No action; garbage OK
+    end;
+
+    FData[ABinding] := Data;
+    FCounts[ABinding] := ACount;
+    FDataSize[ABinding] := TVkDeviceSize(RequiredBytes); { ADDED: Set fDataSize to used bytes (real data) }
+    SetDataDirty;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+procedure TvgVulkanDataStore.EnsureCapacity(ABinding: Cardinal; ARequiredCount: Integer);
+var
+  Stride, NewCapacity, CurrentCapacity: Integer;
+  Data: TBytes;
+begin
+  FCriticalSection.Enter;
+  try
+    if not FCapacities.TryGetValue(ABinding, CurrentCapacity) then
+      CurrentCapacity := 0;
+
+    if ARequiredCount <= CurrentCapacity then Exit;
+
+    Stride := GetStride(ABinding);
+
+    NewCapacity := Max(MIN_CAPACITY, Max(ARequiredCount, CurrentCapacity * 2)); // Power-of-2 growth
+
+    Data := FData[ABinding];
+    SetLength(Data, NewCapacity * Stride);
+
+    FData[ABinding] := Data;
+    FCapacities[ABinding] := NewCapacity;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+function TvgVulkanDataStore.AddVertex(ABinding: Cardinal): Integer;
+var
+  Count: Integer;
+  Stride: Cardinal;
+begin
+  FCriticalSection.Enter;
+  try
+    if not FCounts.TryGetValue(ABinding, Count) then
+      Count := 0;
+
+    EnsureCapacity(ABinding, Count + 1);
+
+    Inc(Count);
+    FCounts[ABinding] := Count;
+
+    Stride := GetStride(ABinding);
+    FDataSize[ABinding] := TVkDeviceSize(Count) * Stride; { ADDED: Update fDataSize to new used bytes }
+
+    SetDataDirty;
+    Result := Count - 1;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+function TvgVulkanDataStore.AddVertices(ABinding: Cardinal; ACount: Integer): Integer;
+var
+  OldCount: Integer;
+  Stride: Cardinal;
+begin
+  FCriticalSection.Enter;
+  try
+    if ACount <= 0 then Exit(0);
+
+    if not FCounts.TryGetValue(ABinding, OldCount) then
+      OldCount := 0;
+
+    EnsureCapacity(ABinding, OldCount + ACount);
+
+    Inc(OldCount, ACount);
+    FCounts[ABinding] := OldCount;
+
+    Stride := GetStride(ABinding);
+    FDataSize[ABinding] := TVkDeviceSize(OldCount) * Stride; { ADDED: Update fDataSize to new used bytes }
+
+    SetDataDirty;
+    Result := OldCount - ACount; // Starting index of added vertices
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+function TvgVulkanDataStore.SetCount(ABinding: Cardinal; ANewUsedCount: Integer): Cardinal;
+var
+  Stride: Integer;
+begin
+  FCriticalSection.Enter;
+  try
+    if ANewUsedCount < 0 then
+      raise EVulkanDataStoreException.CreateFmt('Count cannot be negative: %d', [ANewUsedCount]);
+
+    if not FCapacities.ContainsKey(ABinding) then
+      raise EVulkanDataStoreException.CreateFmt('Binding %d not allocated', [ABinding]);
+
+    if ANewUsedCount > FCapacities[ABinding] then
+      EnsureCapacity(ABinding, ANewUsedCount); { MODIFIED: Grow capacity if needed }
+
+    FCounts[ABinding] := ANewUsedCount;
+
+    Stride := GetStride(ABinding);
+    FDataSize[ABinding] := TVkDeviceSize(ANewUsedCount) * Stride; { ADDED: Update fDataSize to new used bytes }
+
+    SetDataDirty;
+    Result := ANewUsedCount;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+procedure TvgVulkanDataStore.TrimExcess(ABinding: Cardinal);
+var
+  Count: Integer;
+  Stride: Cardinal;
+  Data: TBytes;
+begin
+  FCriticalSection.Enter;
+  try
+    if not FCounts.TryGetValue(ABinding, Count) then Exit;
+
+    Stride := GetStride(ABinding);
+    Data := FData[ABinding];
+    SetLength(Data, Count * Stride);
+
+    FData[ABinding] := Data;
+    FCapacities[ABinding] := Count;
+    // fDataSize remains unchanged (already Count * Stride)
+    SetDataDirty;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+procedure TvgVulkanDataStore.InitializeBindingIndex(ABinding: Cardinal);
+var
+  Data: TBytes;
+begin
+  FCriticalSection.Enter;
+  try
+    // If already initialized, do nothing
+    if FIndexDatas.ContainsKey(ABinding) then
+      Exit;
+
+    SetLength(Data, 0); // Initialize as empty array
+    FIndexDatas.AddOrSetValue(ABinding, Data);
+    FIndexCounts.AddOrSetValue(ABinding, 0);
+    FIndexCapacities.AddOrSetValue(ABinding, 0);
+    FIndexTypes.AddOrSetValue(ABinding, itUInt32); // Default
+    FDataSize.AddOrSetValue(ABinding, 0); { ADDED: Initialize fDataSize for index binding }
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+procedure TvgVulkanDataStore.AllocateIndices(ABinding: Cardinal; ACount: Integer);
+var
+  IndexSize: Cardinal;
+  Data: TBytes;
+  RequiredBytes: NativeInt;
+begin
+  FCriticalSection.Enter;
+  try
+    if ACount < 0 then
+      raise EVulkanDataStoreException.CreateFmt('Index count cannot be negative: %d', [ACount]);
+
+    IndexSize := GetIndexElementSize(GetIndexType(ABinding));
+
+    // Ensure bookkeeping entries exist { MODIFIED: Ensure fDataSize exists }
+    if not FIndexCapacities.ContainsKey(ABinding) then
+      FIndexCapacities.AddOrSetValue(ABinding, 0);
+    if not FIndexDatas.ContainsKey(ABinding) then
+      FIndexDatas.AddOrSetValue(ABinding, nil);
+    if not FIndexCounts.ContainsKey(ABinding) then
+      FIndexCounts.AddOrSetValue(ABinding, 0); // used count remains unchanged
+    if not FDataSize.ContainsKey(ABinding) then
+      FDataSize.AddOrSetValue(ABinding, 0);
+
+    // Ensure capacity for indices (in elements)
+    EnsureIndexCapacity(ABinding, ACount);
+
+    // Optionally clear the first ACount indices (but do not alter FIndexCounts or fDataSize here; that's for add/set)
+    Data := FIndexDatas[ABinding];
+    RequiredBytes := NativeInt(ACount) * NativeInt(IndexSize);
+    if RequiredBytes > 0 then
+    begin
+      if Length(Data) < RequiredBytes then
+        SetLength(Data, RequiredBytes);
+      FillChar(Data[0], RequiredBytes, 0);
+      FIndexDatas[ABinding] := Data;
+    end;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+procedure TvgVulkanDataStore.EnsureIndexCapacity(ABinding: Cardinal; ARequiredCount: Integer);
+var
+  IndexSize, NewCapacity, CurrentCapacity: Integer;
+  Data: TBytes;
+begin
+  FCriticalSection.Enter;
+  try
+    if not FIndexCapacities.TryGetValue(ABinding, CurrentCapacity) then
+      CurrentCapacity := 0;
+
+    if ARequiredCount <= CurrentCapacity then Exit;
+
+    IndexSize := GetIndexElementSize(GetIndexType(ABinding));
+
+    NewCapacity := Max(MIN_CAPACITY, Max(ARequiredCount, CurrentCapacity * 2));
+
+    Data := FIndexDatas[ABinding];
+    SetLength(Data, NewCapacity * IndexSize);
+
+    FIndexDatas[ABinding] := Data;
+    FIndexCapacities[ABinding] := NewCapacity;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+function TvgVulkanDataStore.AddIndex(ABinding: Cardinal; AIndex: Cardinal): Integer;
+var
+  Count: Integer;
+  ElementSize: Cardinal;
+begin
+  FCriticalSection.Enter;
+  try
+    if not FIndexCounts.TryGetValue(ABinding, Count) then
+      Count := 0;
+
+    EnsureIndexCapacity(ABinding, Count + 1);
+    SetIndex(ABinding, Count, AIndex);
+
+    Inc(Count);
+    FIndexCounts[ABinding] := Count;
+
+    ElementSize := GetIndexElementSize(GetIndexType(ABinding));
+    FDataSize[ABinding] := TVkDeviceSize(Count) * ElementSize; { ADDED: Update fDataSize to new used bytes for index }
+
+    SetDataDirty;
+    Result := Count - 1;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+function TvgVulkanDataStore.AddIndex(ABinding: Cardinal; I1, I2, I3: Cardinal): Integer;
+begin
+  Result := AddIndex(ABinding, I1);
+  AddIndex(ABinding, I2);
+  AddIndex(ABinding, I3);
+  // fDataSize updated in each AddIndex call
+end;
+
+function TvgVulkanDataStore.AddIndices(ABinding: Cardinal; const AIndices: array of Cardinal): Integer;
+var
+  I, OldCount: Integer;
+  ElementSize: Cardinal;
+begin
+  FCriticalSection.Enter;
+  try
+    Result := Length(AIndices);
+    if Result = 0 then Exit;
+
+    if not FIndexCounts.TryGetValue(ABinding, OldCount) then
+      OldCount := 0;
+
+    EnsureIndexCapacity(ABinding, OldCount + Result);
+
+    for I := 0 to Result - 1 do
+      SetIndex(ABinding, OldCount + I, AIndices[I]);
+
+    Inc(OldCount, Result);
+    FIndexCounts[ABinding] := OldCount;
+
+    ElementSize := GetIndexElementSize(GetIndexType(ABinding));
+    FDataSize[ABinding] := TVkDeviceSize(OldCount) * ElementSize; { ADDED: Update fDataSize to new used bytes for index }
+
+    SetDataDirty;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+procedure TvgVulkanDataStore.UploadAllData(aTransferPool: TvgCommandBufferPool; aFrameIndex: Integer);
+var
+  Binding: Cardinal;
+  NeedRecreate: Boolean;
+  BufferSize: TVkDeviceSize;
+begin
+  if not GetDataDirty(aFrameIndex) then Exit;
+
+  FCriticalSection.Enter;
+  try
+    NeedRecreate := False;
+
+    if FUploadMode = umPerBinding then
+    begin
+      // Check vertex/instance bindings
+      for Binding in FVulkanBuffers.Keys do
+      begin
+        if not FDataSize.TryGetValue(Binding, BufferSize) then Continue;
+        if (Length(FVulkanBuffers[Binding]) > 0) and (BufferSize > FVulkanBuffers[Binding][0].Size) then
+        begin
+          NeedRecreate := True;
+          Break;
+        end;
+      end;
+
+      // Check index bindings
+      for Binding in FIndexBuffers.Keys do
+      begin
+        if not FDataSize.TryGetValue(Binding, BufferSize) then Continue;
+        if (Length(FIndexBuffers[Binding]) > 0) and (BufferSize > FIndexBuffers[Binding][0].Size) then
+        begin
+          NeedRecreate := True;
+          Break;
+        end;
+      end;
+    end
+    else // umSingleBlock
+    begin
+      // Compute current total used size
+      BufferSize := 0;
+      for Binding in FDataSize.Keys do
+        Inc(BufferSize, FDataSize[Binding]);
+      if BufferSize > FUnifiedSize then
+        NeedRecreate := True;
+    end;
+
+    if NeedRecreate or not fBuffersCreated then
+    begin
+      DeleteVulkanDataBuffers;
+      CreateVulkanDataBuffers;
+    end;
+
+    // Perform transfer
+    if FUploadMode = umPerBinding then
+      TransferToVulkan_PerBinding(aTransferPool, aFrameIndex)
+    else
+      TransferToVulkan_SingleBlock(aTransferPool, aFrameIndex);
+
+    FDataDirty[aFrameIndex] := False;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+procedure TvgVulkanDataStore.TransferToVulkan_PerBinding(aTransferPool: TvgCommandBufferPool; aFrameIndex: Integer);
+var
+  Binding: Cardinal;
+  Data: TBytes;
+  Size: TVkDeviceSize;
+  Buffer: TpvVulkanBuffer;
+begin
+  // Vertex/Instance data
+  for Binding in FData.Keys do
+  begin
+    Data := FData[Binding];
+    if not FDataSize.TryGetValue(Binding, Size) then Continue; { MODIFIED: Use fDataSize instead of Length(Data) }
+    Buffer := FVulkanBuffers[Binding][aFrameIndex].Buffer;
+    CopyBufferToDevice(aTransferPool, Data, Size, 0, aFrameIndex, Buffer);
+  end;
+
+  // Index data
+  for Binding in FIndexDatas.Keys do
+  begin
+    Data := FIndexDatas[Binding];
+    if not FDataSize.TryGetValue(Binding, Size) then Continue; { MODIFIED: Use fDataSize }
+    Buffer := FIndexBuffers[Binding][aFrameIndex].Buffer;
+    CopyBufferToDevice(aTransferPool, Data, Size, 0, aFrameIndex, Buffer);
+  end;
+end;
+
+procedure TvgVulkanDataStore.TransferToVulkan_SingleBlock(aTransferPool: TvgCommandBufferPool; aFrameIndex: Integer);
+var
+  Binding: Cardinal;
+  Data: TBytes;
+  Size, Offset: TVkDeviceSize;
+  UnifiedBuf: TpvVulkanBuffer;
+begin
+  UnifiedBuf := FUnifiedBuffer[aFrameIndex].Buffer;
+
+  // Vertex/Instance data
+  for Binding in FData.Keys do
+  begin
+    Data := FData[Binding];
+    if not FDataSize.TryGetValue(Binding, Size) then Continue; { MODIFIED: Use fDataSize }
+    if not FUnifiedOffsets.TryGetValue(Binding, Offset) then Continue;
+    CopyBufferToDevice(aTransferPool, Data, Size, Offset, aFrameIndex, UnifiedBuf);
+  end;
+
+  // Index data
+  for Binding in FIndexDatas.Keys do
+  begin
+    Data := FIndexDatas[Binding];
+    if not FDataSize.TryGetValue(Binding, Size) then Continue; { MODIFIED: Use fDataSize }
+    if not FUnifiedOffsets.TryGetValue(Binding, Offset) then Continue;
+    CopyBufferToDevice(aTransferPool, Data, Size, Offset, aFrameIndex, UnifiedBuf);
+  end;
+end;
+
+procedure TvgVulkanDataStore.AddObjectVertexSet(ObjectIndex: Integer): Integer;
+begin
+  // ... (existing code)
+  // { ADDED: After adding binding }
+  FDataSize.AddOrSetValue(NewBinding, 0);
+end;
+
+procedure TvgVulkanDataStore.AddObjectIndexSet(AObjIndex: Integer; AType: TIndexType = itUInt32): Integer;
+begin
+  // ... (existing code)
+  // { ADDED: After adding index binding }
+  FDataSize.AddOrSetValue(NewIndexBinding, 0);
+end;
+
+// ... (rest of the unit remains as-is, with similar updates to fDataSize in other count-changing methods like SetObjectIndex, etc., if needed)
+
+end.

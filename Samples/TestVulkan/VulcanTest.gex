@@ -1,0 +1,8 @@
+[General]
+Name=VulcanTest
+BaseDir=D:\X1\Vulkan_Package\Samples\TestVulkan\
+Project=1
+[Classes]
+Count=2
+Class0="TFastMM_FreedObject","TObject","FastMM5","1392","D:\X1\FastMM5\FastMM5.pas"
+Class1="TForm8","TForm","VulkanTestMF","13","D:\X1\Vulkan_Package\Samples\TestVulkan\VulkanTestMF.pas"
