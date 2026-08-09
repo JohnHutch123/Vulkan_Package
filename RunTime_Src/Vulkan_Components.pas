@@ -255,10 +255,9 @@ TvgBaseComponent = class(TComponent)
   private
     fState          : TvgComponentState;
     fStateChanging  : Boolean;
-    fRequestedState : TvgComponentState;
 
     function GetActive: Boolean;
-    function GetDesigning: Boolean; // optional: last requested
+    function GetDesigning: Boolean;
 
 
   protected
@@ -6102,6 +6101,7 @@ end;
 procedure TvgBaseCollectionItem.SetActiveState(aValue: Boolean);
 begin
   If fActive = aValue then exit;
+  If fActiveChanging then exit;   //reentrancy guard
 
   fActiveChanging := True;
   Try
@@ -6142,6 +6142,7 @@ end;
 procedure TvgBaseObject.SetActiveState(aValue: Boolean);
 begin
   If fActive = aValue then exit;
+  If fActiveChanging then exit;   //reentrancy guard
 
   fActiveChanging := True;
 
@@ -6195,7 +6196,6 @@ begin
     Exit(False);
 
   fStateChanging := True;
-  fRequestedState := ANewState;
 
   try
     DoStateChanging(OldState, ANewState);
@@ -6303,7 +6303,11 @@ begin
         begin
           Result := DisableDesigning;
           if Result then
+          begin
             Result := SetEnabled;
+            if not Result then
+              fState := vgcsInactive;  //design resources already released; keep state truthful
+          end;
         end;
       end;
 
@@ -6316,7 +6320,11 @@ begin
         begin
           Result := SetDisabled;
           if Result then
+          begin
             Result := EnableDesigning;
+            if not Result then
+              fState := vgcsInactive;  //active resources already released; keep state truthful
+          end;
         end;
       end;
 
@@ -7471,7 +7479,7 @@ begin
      FreeAndNil(fAllocationManager) ;
 
   Result := Inherited;
-  CustomAssert(Result,Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,Format('%s : inherited state change failed',[self.ClassName]),self);
 
 end;
 
@@ -7530,9 +7538,14 @@ Function TvgInstance.SetEnabled:Boolean;
   //Var I:Integer;
 begin
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 
   //need to start from scratch
+    fPhysicalDeviceList.Clear;
+
+    If assigned(fVulkanInstance) then      //free stale instance from a failed/partial prior transition
+       FreeAndNil(fVulkanInstance);
+
     SetUpMemoryAllocation;
 
     fVulkanInstance:= TpvVulkanInstance.create(fApplicationName,
@@ -7545,6 +7558,7 @@ begin
     VulkanDllsLoaded := True;
 
     CustomAssert( assigned(fVulkanInstance) , 'Vulkan Instance creation failed.',Self);
+    If not assigned(fVulkanInstance) then Exit(False);   //release-safe guard
 
     SetAPIVersion(fVulkanInstance.APIVersion);
 
@@ -8523,7 +8537,7 @@ Function TvgFeatures.EnableDesigning: Boolean;
       B1,B2, B3:Boolean;
 begin
   Result := Inherited;
-  CustomAssert(Result,Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,Format('%s : inherited state change failed',[self.ClassName]),self);
 
   if fReadFeatures then Exit(True);
 
@@ -8727,7 +8741,7 @@ begin
 
 
   Result := Inherited;
-  CustomAssert(Result,Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,Format('%s : inherited state change failed',[self.ClassName]),self);
 
 
 end;
@@ -8737,7 +8751,7 @@ Function TvgFeatures.SetEnabled:Boolean;
     //  Ver : TvkUint32;
 Begin
   Result := Inherited;
-  CustomAssert(Result,Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,Format('%s : inherited state change failed',[self.ClassName]),self);
 
   If not fReadFeatures then
     QuerySupportedFeatures;
@@ -9143,7 +9157,7 @@ begin
    ClearPhysicalDevice ;
 
   Result := Inherited;
-  CustomAssert(Result,Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,Format('%s : inherited state change failed',[self.ClassName]),self);
 
 end;
 
@@ -9151,15 +9165,18 @@ Function TvgPhysicalDevice.SetEnabled:Boolean;
   //Var I:Integer;
 begin
   Result := Inherited;
-  CustomAssert(Result,Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,Format('%s : inherited state change failed',[self.ClassName]),self);
 
   CustomAssert(assigned(fInstance) , 'Vulkan Graphics Instance not connected.',Self);
+  If not assigned(fInstance) then Exit(False);   //release-safe guard
 
   CustomAssert(Assigned(fInstance.VulkanInstance) , 'Unable to create Vulkan Graphics Instance.',Self);
+  If not assigned(fInstance.VulkanInstance) then Exit(False);   //release-safe guard
 
   SelectBestPhysicalDevice;
 
   CustomAssert(assigned(fVulkanPhysicalDevice)  ,   'Physical Vulkan Device not available.'  ,Self);
+  If not assigned(fVulkanPhysicalDevice) then Exit(False);   //release-safe guard
 
   Result :=  True;
 
@@ -9756,7 +9773,7 @@ begin
      FreeAndNil(fVulkanDevice);
 
   Result := Inherited;
-  CustomAssert(Result,Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,Format('%s : inherited state change failed',[self.ClassName]),self);
 
 end;
 
@@ -9768,13 +9785,19 @@ end;
 Function TvgLogicalDevice.SetEnabled : Boolean;
 begin
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 
   CustomAssert(assigned(fInstance),'Instance not connected',Self);
+  If not assigned(fInstance) then Exit(False);   //release-safe guard
+
   CustomAssert(assigned(fInstance.VulkanInstance),'Instance not Active',Self);
+  If not assigned(fInstance.VulkanInstance) then Exit(False);   //release-safe guard
 
   CustomAssert(assigned(fPhysicalDevice),'Physical Device not connected',Self);
+  If not assigned(fPhysicalDevice) then Exit(False);   //release-safe guard
+
   CustomAssert(assigned(fPhysicalDevice.VulkanPhysicalDevice),'Physical Device not ACTIVE',Self);
+  If not assigned(fPhysicalDevice.VulkanPhysicalDevice) then Exit(False);   //release-safe guard
 
 
   fVulkanDevice       := TpvVulkanDevice.create(fPhysicalDevice.Instance.VulkanInstance,
@@ -10403,19 +10426,26 @@ begin
   fModInstance:=0;
 
   Result := Inherited;
-  CustomAssert(Result,Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,Format('%s : inherited state change failed',[self.ClassName]),self);
 end;
 
 Function TvgSurface.SetEnabled : Boolean;
   Var SF : TVkSurfaceKHR;
 begin
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 
   CustomAssert( assigned(fWindowIntf),'Surface Window not connected.',Self);
+  If not assigned(fWindowIntf) then Exit(False);   //release-safe guard
+
   CustomAssert( assigned(fPhysicalDevice), 'Vulkan Device not connected.',Self );
+  If not assigned(fPhysicalDevice) then Exit(False);   //release-safe guard
+
   CustomAssert( assigned(fPhysicalDevice.fInstance), 'Vulkan Instance not connected to Device.' ,Self);
+  If not assigned(fPhysicalDevice.fInstance) then Exit(False);   //release-safe guard
+
   CustomAssert( assigned(fPhysicalDevice.fInstance.VulkanInstance) , 'Vulkan Instance creation failed.',Self );
+  If not assigned(fPhysicalDevice.fInstance.VulkanInstance) then Exit(False);   //release-safe guard
 
   Try
      If (fWindowIntf.vgWindowGetSurface(SF)) then
@@ -10441,6 +10471,7 @@ begin
 
             CustomAssert((fWinInstance<>0) , 'Window Handle is not defined.',Self);
             CustomAssert((fModInstance<>0) , 'Module Handle is not defined.',Self);
+            If (fWinInstance=0) or (fModInstance=0) then Exit(False);   //release-safe guard
             fVulkanSurface  := TpvVulkanSurface.CreateWin32(fPhysicalDevice.fInstance.VulkanInstance, fModInstance, fWinInstance );
           {$ifend}
           {$if defined(XCB) and defined(Unix)}
@@ -10459,13 +10490,13 @@ begin
           {$ifend}
           {$if defined(MoltenVK_IOS) and defined(Darwin)}
             CustomAssert(assigned(fVulkanWindow) , 'Window not connected',Self);
-            If  then  fVulkanWindow.SurfaceWinPlatformCallback(fView );
+            fVulkanWindow.SurfaceWinPlatformCallback(fView );
             CustomAssert(fView<>0 , 'View not defined',Self);
-            fVulkanSurface := TpvVulkanSurface.CreateMoltenVK_IOS(fPhysicalDevice.fInstance,VulkanInstance,fView);
+            fVulkanSurface := TpvVulkanSurface.CreateMoltenVK_IOS(fPhysicalDevice.fInstance.VulkanInstance,fView);
           {$ifend}
           {$if defined(MoltenVK_MacOS) and defined(Darwin)}
             CustomAssert(assigned(fVulkanWindow) , 'Window not connected',Self);
-            If  then  fVulkanWindow.SurfaceWinPlatformCallback(fView );
+            fVulkanWindow.SurfaceWinPlatformCallback(fView );
             CustomAssert(fView<>0 , 'View not defined',Self);
             fVulkanSurface := TpvVulkanSurface.CreateMoltenVK_MacOS(fPhysicalDevice.fInstance.VulkanInstance,fView);
           {$ifend}
@@ -11400,7 +11431,7 @@ begin
     FreeAndNil(fVulkanSwapChain);
 
   Result := Inherited;
-  CustomAssert(Result,Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,Format('%s : inherited state change failed',[self.ClassName]),self);
 end;
 
 Function TvgSwapChain.SetEnabled: Boolean;
@@ -11627,7 +11658,7 @@ Function TvgSwapChain.SetEnabled: Boolean;
 begin
 
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 
     CustomAssert(Assigned(fScreenDevice),'ScreenDevice not assigned',Self);
     CustomAssert(Assigned(fScreenDevice.fVulkanDevice),'Screen Device not active',Self);
@@ -12612,7 +12643,7 @@ begin
     fRenderPass.Active := False;
 
   Result := Inherited;
-  CustomAssert(Result,Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,Format('%s : inherited state change failed',[self.ClassName]),self);
 end;
 
 
@@ -12628,12 +12659,17 @@ var
  // EC : TvkUint32;
 begin
   Result := Inherited;
-  CustomAssert(Result,Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,Format('%s : inherited state change failed',[self.ClassName]),self);
 
   // ... existing asserts ...
   CustomAssert(Assigned(fLinker), 'Window Link not assigned', Self);
+  If not assigned(fLinker) then Exit(False);   //release-safe guard
+
   CustomAssert(Assigned(fLinker.SwapChain), 'Swap Chain not assigned', Self);
+  If not assigned(fLinker.SwapChain) then Exit(False);   //release-safe guard
+
   CustomAssert(Assigned(fRenderPass), 'RenderPass NOT created', Self);
+  If not assigned(fRenderPass) then Exit(False);   //release-safe guard
 
   // Device consistency: verify this renderer matches the scene's device.
   if Assigned(fBaseScene) then
@@ -12646,7 +12682,10 @@ begin
  // BuildAndSetUpGlobalResources;  this needs to be fixed.   should happen at Create NOT enabled;
 
   If assigned(fRenderPass) then
+  Begin
      fRenderPass.Active := True;
+     If not fRenderPass.Active then Exit(False);   //RenderPass failed to activate
+  End;
 
   If fRenderWorkerCount=0 then
       fRenderWorkerCount := 1;
@@ -12655,6 +12694,12 @@ begin
   Begin
       fGlobalRes.Linker := fLinker;
       fGlobalRes.active := True;
+
+      If not fGlobalRes.Active then
+      Begin
+        SetDisabled;   //unwind partial activation
+        Exit(False);
+      End;
 
    //   fGlobalRes.active := False;
    //   fGlobalRes.active := True;
@@ -12672,6 +12717,12 @@ begin
 
      If Not fBaseScene.active then
         fBaseScene.Active := True;
+
+     If not fBaseScene.Active then
+     Begin
+       SetDisabled;   //unwind partial activation
+       Exit(False);
+     End;
   end;
 
 end;
@@ -13198,7 +13249,7 @@ begin
   DestroyVulkanPool;
 
   Result := Inherited;
-  CustomAssert(Result,Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,Format('%s : inherited state change failed',[self.ClassName]),self);
 end;
 
 Function TvgCommandBufferPool.SetEnabled:Boolean;
@@ -13206,7 +13257,7 @@ Function TvgCommandBufferPool.SetEnabled:Boolean;
     //  B:Boolean;
 begin
   Result := Inherited;
-  CustomAssert(Result,Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,Format('%s : inherited state change failed',[self.ClassName]),self);
 
   CustomAssert(assigned(fLogicalDevice), 'Device must be assigned before activating TvgCommandBufferPool', Self);
   CustomAssert(assigned(fLogicalDevice.VulkanDevice), 'VulkanDevice must be active', Self);
@@ -15267,7 +15318,7 @@ begin
   SetLength(fDynamicStateArray ,0);
 
   Result := Inherited;
-  CustomAssert(Result,Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,Format('%s : inherited state change failed',[self.ClassName]),self);
 end;
 
 procedure TvgGraphicPipeline.SetDynamicStates(const Value: TvgDynamicStates);
@@ -15291,7 +15342,7 @@ Function TvgGraphicPipeline.SetEnabled:Boolean;
       Width,Height : TvkUint32;
 begin
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 
     CustomAssert( assigned(fRenderEngine),'Renderer not assigned',Self);
     CustomAssert( assigned(fRenderEngine.RenderPass),'Renderer Renderpass not assigned',Self);
@@ -18482,7 +18533,7 @@ begin
  end;
 
   Result := Inherited;
-  CustomAssert(Result,Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,Format('%s : inherited state change failed',[self.ClassName]),self);
 
 end;
 
@@ -18692,7 +18743,7 @@ Function TvgRenderPass.SetEnabled:Boolean;
 begin
 
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 
   CustomAssert(Assigned(fLinker),'VulkanLink not assigned.',Self);
   CustomAssert(Assigned(fLinker.ScreenDevice),'Screen Device not created in VulkanLink',Self);
@@ -20657,7 +20708,7 @@ begin
   end;
 
   Result := Inherited;
-  CustomAssert(Result=True, System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]) ,self);
+  CustomAssert(Result=True, System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]) ,self);
 end;
 
 Function TvgResourceImageBuffer.SetEnabled : Boolean;
@@ -20714,7 +20765,7 @@ Function TvgResourceImageBuffer.SetEnabled : Boolean;
 begin
 
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 
    CustomAssert(assigned(fLinker),'VulkanLink connection not set',Self);
    CustomAssert(assigned(fLinker.SwapChain),'VulkanLink swapchain not set',Self);
@@ -21625,13 +21676,13 @@ begin
 
 
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 end;
 
 Function TvgDepthStencilImageBufferAsset.SetEnabled : Boolean;
 begin
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 end;
 
 procedure TvgDepthStencilImageBufferAsset.SetFormat(const Value: TvgDepthBufferFormat);
@@ -22141,7 +22192,7 @@ begin
   fLinkRenderLock := False;
 
   Result := Inherited;
-  CustomAssert(Result,Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,Format('%s : inherited state change failed',[self.ClassName]),self);
 
 //  TriggerWindowRepaint;
 
@@ -22151,23 +22202,33 @@ Function TvgLinker.SetEnabled:Boolean;
    Var I:Integer;
 begin
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 
 
    Try
     CustomAssert(assigned(fScreenDevice) , 'Vulkan Graphics Device not connected.' ,Self);
+    If not assigned(fScreenDevice) then Exit(False);   //release-safe guard
+
     CustomAssert(assigned(fScreenDevice.fVulkanDevice) , 'Vulkan Device not connected.' ,Self);
+    If not assigned(fScreenDevice.fVulkanDevice) then Exit(False);   //release-safe guard
+
+    CustomAssert(assigned(fScreenDevice.Instance), 'Vulkan Instance not connected.',Self);
+    If not assigned(fScreenDevice.Instance) then Exit(False);   //release-safe guard
 
     CustomAssert(assigned(fScreenDevice.Instance.VulkanInstance), 'Vulkan Instance not Active.',Self);
+    If not assigned(fScreenDevice.Instance.VulkanInstance) then Exit(False);   //release-safe guard
 
     CustomAssert(assigned(fSurface) , 'Internal Surface not attached.',Self);
+    If not assigned(fSurface) then Exit(False);   //release-safe guard
 
     If not assigned(fSurface.VulkanSurface) then
       fSurface.Active := True;
 
     CustomAssert(assigned(fSurface.VulkanSurface), 'Vulkan Surface not Active.',Self);
+    If not assigned(fSurface.VulkanSurface) then Exit(False);   //release-safe guard
 
     CustomAssert(assigned(fSwapChain) , 'Internal Swap Chain not created.',Self);
+    If not assigned(fSwapChain) then Exit(False);   //release-safe guard
 
     UpdateWindowSize;
     UpdateConnections;
@@ -22181,6 +22242,11 @@ begin
 
     fSwapChain.Active:=True;
     CustomAssert(assigned(fSwapChain.VulkanSwapChain) , 'Vulkan Swap Chain not created.',Self);
+    If not assigned(fSwapChain.VulkanSwapChain) then
+    Begin
+      SetDisabled;   //unwind partial activation
+      Exit(False);
+    End;
 
     UpdateFormats;
 
@@ -22217,6 +22283,11 @@ begin
     If assigned(fRenderer) then
     Begin
        fRenderer.Active := True;
+       If not fRenderer.Active then
+       Begin
+         SetDisabled;   //unwind partial activation
+         Exit(False);
+       End;
        fRenderRequested := True;
     End;
 
@@ -22232,11 +22303,8 @@ begin
     TriggerWindowRepaint;
 
    Except
-       On E:Exception do
-       Begin
-        // Result:=False;
-         Raise;
-       End;
+     SetDisabled;   //unwind partial activation before propagating
+     Raise;
    End;
 
 end;
@@ -22804,7 +22872,7 @@ Begin
 
 
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 end;
 
 Function TvgStencilOp.SetEnabled : Boolean;
@@ -22812,7 +22880,7 @@ Begin
 
 
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 end;
 
 procedure TvgStencilOp.SetFailOp(const Value: TvgStencilOpBit);
@@ -23081,7 +23149,7 @@ begin
      fscene.Active := False;
 
   Result := Inherited;      //MUST Stay here
-  CustomAssert(Result,Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,Format('%s : inherited state change failed',[self.ClassName]),self);
 end;
 
 Function TvgScreenRenderDevice.SetEnabled : Boolean;
@@ -23122,7 +23190,7 @@ Begin
   end ;
 
   Result := Inherited;         //IMPORTANT Stay Here
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 
 
   If Assigned(fVulkanDevice) then
@@ -23643,7 +23711,7 @@ begin
   End;
 
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 
 end;
 
@@ -23714,7 +23782,7 @@ Function TvgShaderModule.SetEnabled : Boolean;
 
 begin
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 
   fShaderModuleHandle := VK_NULL_HANDLE;
 
@@ -24468,7 +24536,7 @@ begin
   fFramePrepareCommandBuffer := Nil;
 
   Result := Inherited;
-  CustomAssert(Result,Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,Format('%s : inherited state change failed',[self.ClassName]),self);
 end;
 
 Function TvgFrame.SetEnabled : Boolean;
@@ -24494,7 +24562,7 @@ Function TvgFrame.SetEnabled : Boolean;
 
 begin
   Result := Inherited;
-  CustomAssert(Result,Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,Format('%s : inherited state change failed',[self.ClassName]),self);
 
 
   CustomAssert(assigned(fLinker),'Vulkan Link not assigned',Self);
@@ -24648,7 +24716,7 @@ begin
   SetLength(fAttributeDesc,0);
 
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 
 end;
 
@@ -24692,7 +24760,7 @@ Function TvgVertexInputState.SetEnabled : Boolean;
    End;
 begin
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 
 
   FillChar(fvertexInputInfo,SizeOf( TVkPipelineVertexInputStateCreateInfo),#0);
@@ -24772,13 +24840,13 @@ begin
 
 
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 end;
 
 Function TvgTessellationState.SetEnabled : Boolean;
 begin
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 end;
 
 procedure TvgTessellationState.SetPatchControlPoints(const Value: TvkUint32);
@@ -24921,7 +24989,7 @@ begin
 
 
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 end;
 
 Function TvgRasterizerState.SetEnabled : Boolean;
@@ -24934,7 +25002,7 @@ Function TvgRasterizerState.SetEnabled : Boolean;
    End;
 begin
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 
 
    FillChar(frastCreateInfo,SizeOf(frastCreateInfo),#0);
@@ -25049,7 +25117,7 @@ begin
 
 
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 end;
 
 Function TvgMultisamplingState.SetEnabled :Boolean;
@@ -25062,7 +25130,7 @@ Function TvgMultisamplingState.SetEnabled :Boolean;
   End;
 begin
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 
 
 
@@ -25216,7 +25284,7 @@ Function TvgDepthStencilState.SetDisabled : Boolean;
 begin
 
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 
 end;
 
@@ -25231,7 +25299,7 @@ Function TvgDepthStencilState.SetEnabled: Boolean;
 
 begin
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 
      CustomAssert(assigned(fFrontOp),'Front Op not assigned',Self);
      CustomAssert(assigned(fBackOp),'Back Op not assigned',Self);
@@ -25446,7 +25514,7 @@ procedure TvgColorBlendAttachment.SetDisabled;
 begin
   Inherited;
   fActive := True;
-//  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+//  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 end;
 
 procedure TvgColorBlendAttachment.SetDstAlphaBlendFactor( const Value: TvgBlendFactor);
@@ -25596,7 +25664,7 @@ begin
 
   SetLength(fBlendAttachState,0);
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 end;
 
 Function TvgColorBlendingState.SetEnabled : Boolean;
@@ -25613,7 +25681,7 @@ Function TvgColorBlendingState.SetEnabled : Boolean;
 
 begin
   Result := Inherited;
-  CustomAssert(Result,Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,Format('%s : inherited state change failed',[self.ClassName]),self);
 
      CustomAssert(assigned(fColorAttachments),'Color Attachments not assigned.',Self);
 
@@ -25704,7 +25772,7 @@ begin
 
 
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 
 end;
 
@@ -25719,7 +25787,7 @@ Function TvgInputAssemblyState.SetEnabled:Boolean;
 
 begin
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 
    FillChar(fpipelineIACreateInfo,SizeOf(fpipelineIACreateInfo),#0);
    fpipelineIACreateInfo.sType := VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -27227,7 +27295,7 @@ begin
 
 
   Result := Inherited;
-  CustomAssert(Result,Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,Format('%s : inherited state change failed',[self.ClassName]),self);
 
 end;
 
@@ -27246,7 +27314,7 @@ begin
   CustomAssert(Assigned(fVulkanDescriptorSetLayout), 'Descriptor Set Layout not created', Self);
 
   Result := Inherited;
-  CustomAssert(Result,Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,Format('%s : inherited state change failed',[self.ClassName]),self);
 
   if fDescriptorCol.Count = 0 then
   begin
@@ -27988,7 +28056,7 @@ Function TvgDescriptorArray.SetEnabled : Boolean;
 
 begin
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 
   CustomAssert(assigned(fDevice), 'Logical Device NOT assigned',self);
   CustomAssert(assigned(fDevice.Features), 'Logical Device Features NOT assigned',self);
@@ -29479,14 +29547,14 @@ begin
   SetLength(fVulkanSampler,0) ;
 
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 end;
 
 Function TvgSampler.SetEnabled:Boolean;
   Var I:Integer;
 begin
   Result := Inherited;
-  CustomAssert(Result,Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,Format('%s : inherited state change failed',[self.ClassName]),self);
 
   CustomAssert(assigned(fDevice),'Device NOT assigned',Self);
   CustomAssert(assigned(fDevice.VulkanDevice ),'Vulkan Device NOT assigned',Self);
@@ -29909,13 +29977,13 @@ begin
 
 
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 end;
 
 Function TvgPushConstant.SetEnabled:Boolean;
 begin
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 
   If fFrameCount = 0 then
      fFrameCount:= MaxFramesInFlight;
@@ -30194,7 +30262,7 @@ Begin
 
 
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 
   CustomAssert(assigned(fSceneRes),'Scene Resources NOT assigned',self);
 
@@ -30206,7 +30274,7 @@ end;
 Function TvgBaseScene.SetEnabled:Boolean;
 Begin
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 
 
   CustomAssert(assigned(fSceneRes),'Scene Resources NOT assigned',self);
@@ -30697,13 +30765,13 @@ begin
   fIsDragging   := False;
   fMouseButtons := [];
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 end;
 
 Function TvgBaseToolManager.SetEnabled:Boolean;
 begin
   Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
+  CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 end;
 
 procedure TvgBaseToolManager.SetLinker(const Value: TvgLinker);
