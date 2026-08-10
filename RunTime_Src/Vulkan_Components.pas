@@ -2287,6 +2287,7 @@ TvgBaseComponent = class(TComponent)
                                           aWriteMode: TvgDescriptorWriteMode = vgdmWriteWholeBinding  );
 
     Function AddDescriptorDataToArray(aDescriptorData:TvgDescriptorData):Boolean;
+    Function IndexOfDescriptorData(aDescriptorData:TvgDescriptorData):Integer;
     Function RemoveAndFreeDescriptor(saDescriptor:TvgDescriptorData):Boolean;
     Function GetDescriptorDataForGLSLIndex(aGLSLIndex:TvkUint32): TvgDescriptorData;  //slow
 
@@ -27486,26 +27487,52 @@ begin
 end;
 
 function TvgDescriptorArray.AddDescriptorDataToArray(  aDescriptorData: TvgDescriptorData): Boolean;
-  Var L:Integer;
+  Var I,L:Integer;
+
+  procedure PlaceAt(aIndex: Integer);
+  begin
+    fDescriptorArray[aIndex]             := aDescriptorData;
+    fDescriptorArray[aIndex].fDescriptor := Self;
+    fDescriptorArray[aIndex].FrameCount  := self.fFrameCount;
+    fDescriptorArray[aIndex].SetGLSLIndex(fNextGLSLIndex);
+    Inc(fNextGLSLIndex);
+    Result := True;
+  end;
+
 begin
   Result := False;
   If not assigned(aDescriptorData) then exit;
 
-// For FixedArray we never grow beyond BindingCount
+// Fill the first vacant slot (EnsureDescriptorArraySize pre-sizes the
+// array with nil slots) so slot 0 is never left permanently unwritten.
+  For I:=0 to High(fDescriptorArray) do
+    If not assigned(fDescriptorArray[I]) then
+    Begin
+      PlaceAt(I);
+      Exit;
+    End;
+
+// No vacancy. For FixedArray we never grow beyond BindingCount
   if (fBindingMode = vgdbmFixedArray) and
      (TvkUint32(Length(fDescriptorArray)) >= fBindingCount) then
     Exit;
 
   L:=Length(fDescriptorArray);
   SetLength(fDescriptorArray, L+1);
-  fDescriptorArray[L]:= aDescriptorData;
+  PlaceAt(L);
+end;
 
-  fDescriptorArray[L].fDescriptor := Self;
-  fDescriptorArray[L].FrameCount  := self.fFrameCount;
-  fDescriptorArray[L].SetGLSLIndex(fNextGLSLIndex);
-  Inc(fNextGLSLIndex);
-
-  Result := True;
+function TvgDescriptorArray.IndexOfDescriptorData(  aDescriptorData: TvgDescriptorData): Integer;
+  Var I:Integer;
+begin
+  Result := -1;
+  If not assigned(aDescriptorData) then exit;
+  For I:=0 to High(fDescriptorArray) do
+    If fDescriptorArray[I] = aDescriptorData then
+    Begin
+      Result := I;
+      Exit;
+    End;
 end;
 
 { TvgShaderData }

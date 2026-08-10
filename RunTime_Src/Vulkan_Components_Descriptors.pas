@@ -1322,7 +1322,9 @@ begin
 
   TD:= TvgDescriptor_Data_Texture.Create;
   If AddDescriptorDataToArray(TD) then
-     Result := Length(fDescriptorArray)-1;
+     Result := IndexOfDescriptorData(TD)
+  else
+     TD.Free;
 
 
  // TD.
@@ -3793,7 +3795,7 @@ begin
      aDescriptorData:= TvgDescriptor_Data_UniformBuffer<T>.Create;
 
   If AddDescriptorDataToArray(aDescriptorData) then
-    Result := Length(fDescriptorArray)-1;
+    Result := IndexOfDescriptorData(aDescriptorData);
 
 end;
 
@@ -4458,7 +4460,7 @@ begin
      aData_SB := TvgDescriptor_Data_StorageBuffer<T>.Create;
 
   If AddDescriptorDataToArray(aData_SB) then
-    Result := Length(fDescriptorArray)-1;
+    Result := IndexOfDescriptorData(aData_SB);
 end;
 
 constructor TvgDescriptorArray_StorageBuffer<T>.Create(AOwner: TComponent);
@@ -4513,7 +4515,7 @@ Result := -1;
   if not Assigned(aStorageImageData) then
     Exit;
   if AddDescriptorDataToArray(aStorageImageData) then
-    Result := Length(fDescriptorArray) - 1;
+    Result := IndexOfDescriptorData(aStorageImageData);
 end;
 
 constructor TvgDescriptorArray_StorageImage.Create(AOwner: TComponent);
