@@ -5486,9 +5486,13 @@ TvgBaseComponent = class(TComponent)
   private
     procedure SetSceneState(const Value: TvgSceneState);
     procedure SetScreenDevice(const Value: TvgScreenRenderDevice);
+    procedure SetLinker(const Value: TvgLinker);
 
   protected
+  //connected
+    fLinker       : TvgLinker;
     fScreenDevice : TvgScreenRenderDevice;
+
     fSceneState   : TvgSceneState;
     fRendererList : TvgRendererList;
 
@@ -5546,14 +5550,13 @@ TvgBaseComponent = class(TComponent)
 
    Property RendererList : TvgRendererList read fRendererList;
    Property SceneRes     : TvgDescriptorSet read fSceneRes;
-
+   Property ScreenDevice : TvgScreenRenderDevice Read fScreenDevice write SetScreenDevice;
 
 
   Published
 
     Property SceneState : TvgSceneState read fSceneState write SetSceneState;
-//   Property Linker      : TvgLinker Read fLinker write SetLinker;
-    Property ScreenDevice : TvgScreenRenderDevice Read fScreenDevice write SetScreenDevice;
+    Property Linker      : TvgLinker Read fLinker write SetLinker;
   End;
 
   // provides low overhead class to hold node data and carry out Vulkan Draw for object
@@ -26428,8 +26431,8 @@ var
 begin
   fSetCurrent := False;
 
-  CustomAssert(Assigned(fLinker), 'Logical Device NOT assigned', Self);
-  CustomAssert(Assigned(fLinker.ScreenDevice), 'Screen Device NOT assigned', Self);
+  CustomAssert(Assigned(fLinker), 'Linker NOT assigned', Self);
+  CustomAssert(Assigned(fLinker.ScreenDevice), 'Linker Screen Device NOT assigned', Self);
   CustomAssert(Assigned(fLinker.ScreenDevice.VulkanDevice), 'Vulkan Logical Device NOT assigned', Self);
 
   if fDescriptorCol.Count = 0 then
@@ -30087,6 +30090,8 @@ begin
   fRendererList := TvgRendererList.Create;
 
   fSceneRes     := TvgDescriptorSet.Create(self);
+
+
 end;
 
 destructor TvgBaseScene.Destroy;
@@ -30240,6 +30245,9 @@ begin
                   If (aComponent is TvgBaseRenderEngine) and (Not assigned(TvgBaseRenderEngine(aComponent).fBaseScene)) then
                      ConnectRenderEngine(TvgBaseRenderEngine(aComponent)) ;
 
+                  If (aComponent is TvgLinker) and not assigned(fLinker) then
+                     SetLinker(TvgLinker(aComponent));
+
                   If (aComponent is TvgScreenRenderDevice) and not assigned(fScreenDevice) then
                      SetScreenDevice(TvgScreenRenderDevice(aComponent));
 
@@ -30253,6 +30261,9 @@ begin
                     DisConnectDataFromRenderer(R);
                     DisConnectRenderEngine(R);
                   End;
+
+                  If (aComponent is TvgLinker) and assigned(fLinker) and (fLinker=aComponent) then
+                     SetLinker(Nil);
 
                   If (aComponent is TvgScreenRenderDevice) and assigned(fScreenDevice) and (fScreenDevice=aComponent) then
                      SetScreenDevice(Nil);
@@ -30303,10 +30314,22 @@ Begin
   Result := Inherited;
   CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 
-
   CustomAssert(assigned(fSceneRes),'Scene Resources NOT assigned',self);
+//  If fSceneRes.fscscr
 
   fSceneRes.SetActiveState(True) ;
+end;
+
+procedure TvgBaseScene.SetLinker(const Value: TvgLinker);
+begin
+  If fLinker=Value then exit;
+  SetActiveState(False)  ;
+  fLinker := Value;
+
+  If assigned(fSceneRes) then
+     fSceneRes.Linker:=fLinker;
+
+  SetScreenDevice(fLinker.ScreenDevice);
 end;
 
 procedure TvgBaseScene.SetSceneState(const Value: TvgSceneState);
