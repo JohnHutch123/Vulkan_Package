@@ -26435,8 +26435,7 @@ begin
   CustomAssert(Assigned(fLinker.ScreenDevice), 'Linker Screen Device NOT assigned', Self);
   CustomAssert(Assigned(fLinker.ScreenDevice.VulkanDevice), 'Vulkan Logical Device NOT assigned', Self);
 
-  if fDescriptorCol.Count = 0 then
-    Exit;
+  if fDescriptorCol.Count = 0 then  Exit;
 
   ValidateDescriptorBindings;
   ValidateDescriptorIndexingSupport;
@@ -27303,8 +27302,6 @@ begin
 
 end;
 
-
-
 function TvgDescriptorSet.SetEnabled: Boolean;
 var
   I, L: Integer;
@@ -27314,15 +27311,15 @@ var
 begin
   Result := False;
 
-  If fDescriptorCol.Count=0 then exit;
-
   BuildDescriptorSetLayout;  //will caryy out all checks and fail on exception if not OK
-  CustomAssert(Assigned(fVulkanDescriptorSetLayout), 'Descriptor Set Layout not created', Self);
 
   Result := Inherited;
   CustomAssert(Result,Format('%s : inherited state change failed',[self.ClassName]),self);
 
-  if fDescriptorCol.Count = 0 then
+  If fDescriptorCol.Count>0 then
+     CustomAssert(Assigned(fVulkanDescriptorSetLayout), 'Descriptor Set Layout not created', Self)
+  else
+  If (fDescriptorCol.Count=0) or not fSetCurrent then
   begin
     Result := True;
     Exit;
