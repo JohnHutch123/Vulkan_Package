@@ -161,6 +161,8 @@ begin
 
          End;
      1 : Begin
+
+
             ObjStore.Topology        := TRIANGLE_LIST;
             ObjStore.InstanceDataON  := true;
             ObjStore.ObjectSelectON  := True;

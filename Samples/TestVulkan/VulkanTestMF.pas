@@ -650,7 +650,8 @@ begin
 
 
     fScene        := TvgScene.Create(self);
-    fScene.ScreenDevice := fScreenDevice;
+    fScene.Linker := fLinker;
+ //   fScene.ScreenDevice := fScreenDevice;
 
     fScene.ConnectRenderEngine(fRenderer) ;
 

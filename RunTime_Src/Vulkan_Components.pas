@@ -27314,6 +27314,8 @@ var
 begin
   Result := False;
 
+  If fDescriptorCol.Count=0 then exit;
+
   BuildDescriptorSetLayout;  //will caryy out all checks and fail on exception if not OK
   CustomAssert(Assigned(fVulkanDescriptorSetLayout), 'Descriptor Set Layout not created', Self);
 
@@ -30315,7 +30317,6 @@ Begin
   CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 
   CustomAssert(assigned(fSceneRes),'Scene Resources NOT assigned',self);
-//  If fSceneRes.fscscr
 
   fSceneRes.SetActiveState(True) ;
 end;
