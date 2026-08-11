@@ -268,7 +268,8 @@ type
     function GetVulkanIndexBuffer(AFrameIndex: Integer): TpvVulkanBuffer;
 
     // GLSL generation
-    function WriteGLSLHeader: string;
+    function WriteGLSLHeader: string; Override;
+    function GetShaderVertexPositionExpression( const aPositionName: String): String; Override;
 
     // Pipeline updates
 
@@ -382,6 +383,57 @@ begin
     idtMatrix: begin Result.GLSLType := 'mat4'; Result.GLSLName := 'inInstanceMatrix'; end;
   else
     raise Exception.Create('Unknown instance attribute for GLSL');
+  end;
+end;
+
+function GetVertexAttributeType(ADataType: TvgVertexDataType): TvgAttributeType;
+begin
+  case ADataType of
+    vdtPosition:  Result := AT_POSITION;
+    vdtColor:     Result := AT_COLOR;
+    vdtNormal:    Result := AT_NORMAL;
+    vdtTexCoord:  Result := AT_TEXTURE;
+    vdtTangent:   Result := AT_TANGENT;
+    vdtBiTangent: Result := AT_BITANGENT;
+    vdtIndex:     Result := AT_INDEX;
+  else
+    raise EVulkanDataStoreException.CreateFmt(
+      'Unknown vertex attribute semantic: %d', [Ord(ADataType)]);
+  end;
+end;
+
+function GetInstanceAttributeType(ADataType: TInstanceDataType): TvgAttributeType;
+begin
+  case ADataType of
+    idtObjID:   Result := AT_OBJID;
+    idtColor:   Result := AT_COLOR;
+    idtNormal:  Result := AT_NORMAL;
+    idtTangent: Result := AT_TANGENT;
+    idtVector:  Result := AT_VECTOR;
+    idtMatrix:  Result := AT_MATRIX;
+    idtIndex:   Result := AT_INDEX;
+  else
+    raise EVulkanDataStoreException.CreateFmt(
+      'Unknown instance attribute semantic: %d', [Ord(ADataType)]);
+  end;
+end;
+
+function GetDataTypeForFormat(AFormat: TVkFormat): TvgDataType;
+begin
+  case AFormat of
+    VK_FORMAT_R32_SINT:             Result := DT_IVEC1;
+    VK_FORMAT_R32G32_SINT:          Result := DT_IVEC2;
+    VK_FORMAT_R32G32B32_SINT:       Result := DT_IVEC3;
+    VK_FORMAT_R32_UINT:             Result := DT_UVEC1;
+    VK_FORMAT_R32G32_UINT:          Result := DT_UVEC2;
+    VK_FORMAT_R32G32B32_UINT:       Result := DT_UVEC3;
+    VK_FORMAT_R32_SFLOAT:           Result := DT_VEC1;
+    VK_FORMAT_R32G32_SFLOAT:        Result := DT_VEC2;
+    VK_FORMAT_R32G32B32_SFLOAT:     Result := DT_VEC3;
+    VK_FORMAT_R32G32B32A32_SFLOAT:  Result := DT_VEC4;
+  else
+    raise EVulkanDataStoreException.CreateFmt(
+      'Unsupported shader attribute format: %d', [Ord(AFormat)]);
   end;
 end;
 
@@ -2434,6 +2486,7 @@ begin
         Lines.Add(Format('layout(location = %d) in %s %s;  // per-vertex',
           [Location, Info.GLSLType, Info.GLSLName]));
       end;
+
     end;
     
     // Instance attributes
@@ -2463,6 +2516,15 @@ begin
   end;
 end;
 
+function TvgVulkanDataStore.GetShaderVertexPositionExpression(
+  const aPositionName: String): String;
+begin
+  if idtMatrix in FInstanceTypes then
+    Result := 'inInstanceMatrix * vec4(' + aPositionName + ', 1.0)'
+  else
+    Result := inherited GetShaderVertexPositionExpression(aPositionName);
+end;
+
 { Pipeline Updates }
 
 procedure TvgVulkanDataStore.UpdateGraphicPipeBindingAndAttributeDescriptions( aPipe: TvgGraphicPipeline);
@@ -2472,7 +2534,8 @@ procedure TvgVulkanDataStore.UpdateGraphicPipeBindingAndAttributeDescriptions( a
 
       VA : TvgVertexAttributeDesc;
       VB : TvgVertexBindingDesc;
-        MatrixCol: Integer;
+      MatrixCol: Integer;
+      AttributeInfo: TGLSLAttributeInfo;
 
 
 begin
@@ -2506,11 +2569,15 @@ begin
   begin
     if VType in FVertexTypes then
     begin
+      AttributeInfo := GetGLSLVertexType(VType);
       VA          := aPipe.VertexInput.Attributes.Add;
       VA.location := FVertexLocations[VType];
       VA.binding  := BINDING_VERTEX;
       VA.AttFormat:= GetVGFormat(GetVertexFormat(VType));
       VA.offset   := FVertexOffsets[VType];
+      VA.Name     := AttributeInfo.GLSLName;
+      VA.DataType := GetDataTypeForFormat(GetVertexFormat(VType));
+      VA.AttType  := GetVertexAttributeType(VType);
     end;
   end;
 
@@ -2519,6 +2586,7 @@ begin
   begin
     if IType in FInstanceTypes then
     begin
+      AttributeInfo := GetGLSLInstanceType(IType);
       if IType = idtMatrix then
       begin
         // Matrix splits into 4 vec4 columns
@@ -2529,6 +2597,13 @@ begin
           VA.binding  := BINDING_INSTANCE;
           VA.AttFormat:= GetVGFormat(VK_FORMAT_R32G32B32A32_SFLOAT);
           VA.offset   := Integer(FInstanceOffsets[IType]) + (MatrixCol * SIZE_VEC4);
+          if MatrixCol = 0 then
+            VA.Name := AttributeInfo.GLSLName
+          else
+            VA.Name := AttributeInfo.GLSLName +
+              'Column' + IntToStr(MatrixCol);
+          VA.DataType := DT_VEC4;
+          VA.AttType  := AT_MATRIX;
         end;
       end
       else
@@ -2538,6 +2613,9 @@ begin
         VA.binding  := BINDING_INSTANCE;
         VA.AttFormat:= GetVGFormat(GetInstanceFormat(IType));
         VA.offset   := FInstanceOffsets[IType];
+        VA.Name     := AttributeInfo.GLSLName;
+        VA.DataType := GetDataTypeForFormat(GetInstanceFormat(IType));
+        VA.AttType  := GetInstanceAttributeType(IType);
       end;
     end;
   end;

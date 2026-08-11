@@ -2170,6 +2170,7 @@ TvgBaseComponent = class(TComponent)
 
     Property Descriptor : TvgDescriptorArray Read fDescriptor write fDescriptor;
     Property GLSLIndex : TvkUint32 read fGLSLIndex;
+    Property GLSLBaseTypeName: String read GetGLSLBaseTypeName;
 
     function GetGLSLDeclarationString(const aDescriptorIndex: TvkUint32): String; virtual;
     function GetActiveDescriptorCount: TvkUint32; virtual;
@@ -2271,6 +2272,7 @@ TvgBaseComponent = class(TComponent)
     function GetHasMultipleDescriptors: Boolean; virtual;
 
     function GetGLSLDeclarationBody: String; Virtual; Abstract;
+    function GetGLSLLayoutQualifier: String; virtual;
 
     function GetUploadNeeded(aFrameIndex, aDescriptorIndex: Integer): Boolean;       Virtual;
     procedure SetUploadNeeded(aFrameIndex, aDescriptorIndex: Integer; const Value: Boolean);   Virtual;
@@ -2334,6 +2336,7 @@ TvgBaseComponent = class(TComponent)
     property BindingFlags: TVkDescriptorBindingFlags read GetBindingFlags;
     property LayoutFlags: TVkDescriptorSetLayoutCreateFlags read GetLayoutFlags;
     property UsesDescriptorIndexing: Boolean read GetUsesDescriptorIndexing;
+    property StageFlags: TVkShaderStageFlags read fStageFlags;
 
     Property DescriptorData[Index:Integer]:TvgDescriptorData read GetDescriptorData ;
 
@@ -5237,6 +5240,10 @@ TvgBaseComponent = class(TComponent)
                                   aFrameIndex      : TvkUint32;
                               Var CommandCount     : Integer);  Virtual;
 
+    function WriteGLSLHeader: String; virtual;
+    function GetShaderVertexPositionExpression(const aPositionName: String): String; virtual;
+    function GetShaderFragmentColorExpression(const aSamplerName,
+      aTexCoordName, aColorName: String): String; virtual;
 
     Property Active        : Boolean Read GetActive write SetActiveState Stored False;
 
@@ -5253,6 +5260,7 @@ TvgBaseComponent = class(TComponent)
 
    Property ResourceUse    : TvgResourceUse Read fResourceUse write SetResourceUse;
    Property ObjectStoreRes : TvgDescriptorSet read fObjectStoreRes;  //SET=2
+   Property ObjectModelRes : TvgDescriptorSet read fObjectModelRes;
 
 
   End;
@@ -16092,6 +16100,8 @@ begin
     self.fBinding  := L.fBinding;
     self.fFormat   := L.fFormat;
     self.fOffset   := L.fOffset;
+    self.fType     := L.fType;
+    self.fAttributeType := L.fAttributeType;
   end
   else
   inherited Assign(Source);
@@ -20182,7 +20192,7 @@ begin
 
   fCommandBuffer.Reset;
 
-  fimageBarrier.image := fSourceBuffer.FrameBufferAttachment.Image.Handle;
+  fimageBarrier.image := fSourceBuffer.Image.Handle;
 
   // Calculate starting position (top-left corner of sample area)
   HalfSize := fSampleSize div 2;
@@ -20212,13 +20222,13 @@ begin
 
 
   // --- Transition TO transfer src ---
-  fimageBarrier.image   := fSourceBuffer.FrameBufferAttachment.Image.Handle;
+  fimageBarrier.image   := fSourceBuffer.Image.Handle;
   fCommandBuffer.CmdPipelineBarrier(TVkPipelineStageFlags(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT),
                                     TVkPipelineStageFlags(VK_PIPELINE_STAGE_TRANSFER_BIT),
                                     0, 0, nil, 0, nil, 1, @fimageBarrier);
 
   // --- Copy to staging buffer ---
-  fCommandBuffer.CmdCopyImageToBuffer( fSourceBuffer.FrameBufferAttachment.Image.Handle,
+  fCommandBuffer.CmdCopyImageToBuffer( fSourceBuffer.Image.Handle,
                                       VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                                       FStagingBuffer.Handle,
                                       1, @fcopyRegion);
@@ -20233,7 +20243,8 @@ begin
   fCommandBuffer.EndRecording;
 
   // Execute and wait
-  fCommandBuffer.ExecuteCommand(  fSourceBuffer.Linker.ScreenDevice.VulkanDevice.TransferQueue,
+  fCommandBuffer.ExecuteCommand(
+                                  fSourceBuffer.Linker.ScreenDevice.VulkanDevice.GraphicsQueue,
                                   TVkPipelineStageFlags(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT),
                                   nil, nil, true, true);
 end;
@@ -20388,7 +20399,7 @@ begin
 
   fCommandPool                  := TvgCommandBufferPool.Create(nil);
   fCommandPool.Device           := fSourceBuffer.Linker.ScreenDevice;
-  fCommandPool.QueueFamilyType  := VGT_TRANSFER;
+  fCommandPool.QueueFamilyType  := VGT_GRAPHIC;
   fCommandPool.QueueCreateFlags := [CP_RESET_COMMAND_BUFFER];
   fCommandPool.SetUpBufferArrays(1);//ok
   fCommandPool.Active           := True;
@@ -21363,7 +21374,7 @@ begin
                         fFinalLayout    := VK_IMAGE_LAYOUT_GENERAL ;                         //OK
 
                         fMemoryProperty := TvkFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) ;
-                        fMemoryType     := TpvVulkanDeviceMemoryAllocationType.Buffer;        //CHECK
+                        fMemoryType     := TpvVulkanDeviceMemoryAllocationType.ImageOptimal;
 
                         fImageViewType      := VK_IMAGE_VIEW_TYPE_2D;
                         fComponentRed       := VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -21533,6 +21544,7 @@ begin
     fDescriptor.SetSubComponent(True);
     fDescriptor.DescriptorItem := Self;
     fDescriptor.Device         := Device;
+    fDescriptor.Name           := fName;
     If assigned(DescriptorSet) then
       fDescriptor.FrameCount   := DescriptorSet.FrameCount;
 
@@ -21580,6 +21592,7 @@ begin
      fDescriptor.SetSubComponent(True);
      fDescriptor.DescriptorItem := Self;  //important
      fDescriptor.fDevice        := fDevice;
+     fDescriptor.Name           := fName;
 
      fDescriptor.Binding        := Index;
 
@@ -25825,6 +25838,28 @@ begin
 
 end;
 
+function TvgBaseObjectStore.WriteGLSLHeader: String;
+begin
+  Result := '';
+end;
+
+function TvgBaseObjectStore.GetShaderVertexPositionExpression(
+  const aPositionName: String): String;
+begin
+  Result := 'vec4(' + aPositionName + ', 1.0)';
+end;
+
+function TvgBaseObjectStore.GetShaderFragmentColorExpression(
+  const aSamplerName, aTexCoordName, aColorName: String): String;
+begin
+  if (aSamplerName <> '') and (aTexCoordName <> '') then
+    Result := 'texture(' + aSamplerName + ', ' + aTexCoordName + ')'
+  else if aColorName <> '' then
+    Result := aColorName
+  else
+    Result := 'vec4(1.0)';
+end;
+
 function TvgBaseObjectStore.BuildAGraphicPipeline( aRenderer: TvgBaseRenderEngine; aSubPass: TvgSubPass): TvgGraphicPipeline;
 var
   GP  : TvgGraphicPipeline;
@@ -27795,6 +27830,7 @@ function TvgDescriptorArray.GetShaderDescriptorStringTemplate_Vertex(aSet, aBind
 var
   Suffix : String;
   Body   : String;
+  Qualifier: String;
 begin
   Body := GetGLSLDeclarationBody;
 
@@ -27813,11 +27849,18 @@ begin
     Suffix := '';
   end;
 
-  Result := 'layout(set='     + IntToStr(aSet)     +  sLineBreak+
-            ', binding='      + IntToStr(aBinding)  + sLineBreak+
-            ') '              + Body                + sLineBreak+
-            ' '               + Name + Suffix + ';' +
-            sLineBreak;
+  Qualifier := GetGLSLLayoutQualifier;
+  if Qualifier <> '' then
+    Qualifier := ', ' + Qualifier;
+
+  Result := 'layout(set = ' + IntToStr(aSet) +
+            ', binding = ' + IntToStr(aBinding) + Qualifier + ') ' +
+            Body + ' ' + Name + Suffix + ';' + sLineBreak;
+end;
+
+function TvgDescriptorArray.GetGLSLLayoutQualifier: String;
+begin
+  Result := '';
 end;
 
 function TvgDescriptorArray.GetUpdateAfterBind: Boolean;

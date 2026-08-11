@@ -41,6 +41,7 @@ uses
   Vulkan_Components_DataStore,
   Vulkan_Components_Nodes,
   Vulkan_Components_Camera,
+  Vulkan_Components_PointerValidation,
   Vulkan_PixelInfo;
 
 type
@@ -283,7 +284,7 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
     fSelectON,
     fModelViewON            : Boolean;
 
-    fObjectIDBuffer         : TvgDescriptorArray_SB_2UI;    //Storage Image for Object ID data
+    fObjectIDImage          : TvgDescriptorArray_StorageImage;
 
     Function SetDisabled :Boolean; Override;
     Function SetEnabled  :Boolean; Override;
@@ -1074,6 +1075,8 @@ begin
 end;
 
 procedure TvgObjectStore.ConfigureGraphicPipeline(GP: TvgGraphicPipeline);
+var
+  SHS: TvgShaderSpecialisationItem;
 begin
 
 
@@ -1086,6 +1089,15 @@ begin
 
     // Topology — ObjectStore owns this
     GP.InputAssembly.Topology := GetVGPrimitiveTopology(fTopology);
+
+    if GP.InputAssembly.Topology = POINT_LIST then
+    begin
+      SHS := GP.VertexS.SpecialConst.Add;
+      SHS.Name := 'POINT_SIZE_ON';
+      SHS.SpecType := TS_BOOLEAN;
+      SHS.SpecTValue := 'TRUE';
+      SHS.ConstantID := CI_POINT_SIZE_ON;
+    end;
 
     // Rasterizer — ObjectStore owns these (new properties)
     GP.Rasterizer.PolygonMode := GetVGPolygonMode(fPolygonMode);   // default POLYGON_FILL
@@ -2023,14 +2035,20 @@ procedure TvgRenderEngine.BuildAndSetUpGlobalResources;
 //called in Create
  var     DI   : TvgDescriptorItem;
            DA  :TvgDescriptorArray;
-          SB  : TvgDescriptorArray_SB_2UI;
+          SI  : TvgDescriptorArray_StorageImage;
+          SID : TvgDescriptor_Data_StorageImage;
 
           Mat4: TvgDescriptorArray_UBO_4x4MatrixD;
-          I,L,J, BI:Integer;
+          I: Integer;
           FC :Integer;
           M:TvgMatrix4x4D;
 begin
   CustomAssert(assigned(fGlobalRes),'Global Resource not assigned',Self);
+
+  DI := fGlobalRes.GetDescriptorItem(GlobalObjectIDDescriptor);
+  if Assigned(DI) and
+     (DI.Descriptor is TvgDescriptorArray_StorageImage) then
+    fObjectIDImage := TvgDescriptorArray_StorageImage(DI.Descriptor);
 
 //  CustomAssert(assigned(fLinker),'Linker not assigned',Self);
 
@@ -2090,8 +2108,6 @@ begin
   If (fSelectON) and (fGlobalRes.GetDescriptorItem(GlobalObjectIDDescriptor)=nil)  then     //all OK
   Begin
 
-  //StorageBuffer
-
     DI:=fGlobalRes.Descriptors.Add ;
     If assigned(DI) then
     Begin
@@ -2100,33 +2116,32 @@ begin
       If assigned(fLinker) then
           DI.Device    := fLinker.ScreenDevice;
 
-      DI.DescriptorName :=TvgDescriptorArray_SB_2UI.GetPropertyName;
+      DI.DescriptorName := TvgDescriptorArray_StorageImage.GetPropertyName;
       DA:= DI.Descriptor;
 
       If assigned(DA) then
       Begin
 
-        DA.ResourceType := RT_SELECTVEC2;
+        DA.ResourceType := RT_STORAGEIMAGE;
         DA.DataFlow     := [DF_DOWN, DF_SAMPLING];
+        DA.FrameCount   := FC;
+        DA.SetStageFlags(TVkShaderStageFlags(VK_SHADER_STAGE_FRAGMENT_BIT));
 
-
-        If  (DA is TvgDescriptorArray_SB_2UI) then
+        If DA is TvgDescriptorArray_StorageImage then
         Begin
-          SB              := TvgDescriptorArray_SB_2UI(DA);
-
-          BI:=SB.AddBuffer(Linker.SwapChain.ImageWidth * Linker.SwapChain.ImageHeight , Linker.SwapChain.ImageWidth, True);
-
-          If BI>-1 then
+          SI := TvgDescriptorArray_StorageImage(DA);
+          SI.ImageFormat := R32G32_UINT;
+          SID := TvgDescriptor_Data_StorageImage.Create;
+          SID.PixelSample := True;
+          SID.PixRadius := psr_1x1;
+          if SI.AddStorageImage(SID) < 0 then
           Begin
-
-
+            SID.Free;
+            raise EInvalidOperation.Create(
+              'Unable to create the global ObjectID storage image descriptor');
           End;
-
+          fObjectIDImage := SI;
         End;
-
-      // IMPORTANT: force upload for all frames
-       // D.SetUploadFlags;
-
       end;
     End;
 
@@ -2281,70 +2296,46 @@ begin
 end;
 
 function TvgRenderEngine.GetObjectAtLocation(aFrameIndex: TvkUint32; Shift: TShiftState; X, Y: Integer): TvgObject;
-
-
-  Var  DI  : TvgDescriptorItem;
-       D   : TvgDescriptorArray_SB_2UI;
-       DD  : TvgDescriptor_Data_StorageBuffer<TvgVector2I> ;
-       Data : Pointer;
-       DataSize:TvkUint32;
-       ObjID : TvgVector2I;
-
-
-     //  High,Low: Cardinal;
-       Obj : TvgBaseObject;
-       P   : Uint64;
-
+var
+  DD: TvgDescriptor_Data_StorageImage;
+  Pixel: TvgPixelData;
+  ObjectAddress: UInt64;
+  Candidate: TObject;
+  SampleX, SampleY: Integer;
 begin
   Result := Nil;
 
   If State = vgcsInactive then exit;
   if not fSelectON then exit;
-  If not assigned(fScene) or (fScene.GetObjectCount=0) then exit;
+ If not assigned(fScene) or (fScene.GetObjectCount=0) then exit;
 
-  CustomAssert(Assigned(fScene),'Scene NOT connected',self);
-  CustomAssert(Assigned(self.fObjectIDBuffer),'Object Select buffer NOT created',self);
+ CustomAssert(Assigned(fScene),'Scene NOT connected',self);
+ CustomAssert(Assigned(fObjectIDImage),
+   'Object Select image NOT created', self);
 
-  D :=  fObjectIDBuffer;
+ SampleX := X;
+ SampleY := Y;
+ if Assigned(fLinker) and (fLinker.RenderTarget = RT_FRAME) then
+ begin
+   SampleX := (X * Integer(fLinker.FrameResolution)) +
+     (Integer(fLinker.FrameResolution) div 2);
+   SampleY := (Y * Integer(fLinker.FrameResolution)) +
+     (Integer(fLinker.FrameResolution) div 2);
+ end;
 
-  If assigned(D.DescriptorData[0]) and (D.DescriptorData[0] is TvgDescriptor_Data_StorageBuffer<TvgVector2I>) then
-  Begin
-    DD:= TvgDescriptor_Data_StorageBuffer<TvgVector2I>(D.DescriptorData[0])  ;
+ DD := fObjectIDImage.StorageImageData[0];
+ if not Assigned(DD) or
+    not DD.GetPixelData(aFrameIndex, Shift, SampleX, SampleY, Pixel) then
+   Exit;
 
-    DD.GetElementData2D(aFrameIndex,X,Y, Data, DataSize);
-    If assigned(Data) and (DataSize=SizeOf(TvgVector2I)) then
-    Begin
-      ObjID := TvgVector2I(Data^);
+ ObjectAddress := (UInt64(Pixel.R32G32_UINT.G) shl 32) or
+   UInt64(Pixel.R32G32_UINT.R);
+ if ObjectAddress = 0 then
+   Exit;
 
-
-
-    End;
-
-  End;
-
- (*
-  PS :=  D.PixelSampler[aFrameIndex] ;
-
-  if assigned(PS) and PS.SamplePixelArea(X, Y) then
-  begin
-    // Get most frequent non-background ID with center priority
-    PSR := TvgObjectIDAnalyzer.FindMostFrequentID_Weighted( PS.PixelDataArray,
-                                                            PS.PixelInfo,
-                                                            PS.SampleSize,
-                                                            3);  // Center weight = 3
-
-    If (PSR.MostFrequentID > 0) then
-    Begin
-      Result := Pointer(PSR.MostFrequentID);
-        Try
-          If not IsValidObject(Result) then exit;
-        Except
-            Result := nil;
-        End;
-    End;
-  end;
-  *)
-
+ Candidate := TObject(Pointer(NativeUInt(ObjectAddress)));
+ if IsValidObjectOfClass(Candidate, TvgObject) then
+   Result := TvgObject(Candidate);
 end;
 
 function TvgRenderEngine.GetSelectON: Boolean;
@@ -2413,6 +2404,8 @@ begin
   SetActiveState(False);
 
   fSelectON := Value;
+  if fSelectON and Assigned(fGlobalRes) then
+    BuildAndSetUpGlobalResources;
 end;
 
 end.

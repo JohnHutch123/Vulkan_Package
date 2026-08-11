@@ -316,7 +316,6 @@ object TestVulkan: TTestVulkan
     Height = 25
     Caption = 'get Shader Template'
     TabOrder = 29
-    OnClick = BitBtn4Click
   end
   object OpenDialog1: TOpenDialog
     Left = 256

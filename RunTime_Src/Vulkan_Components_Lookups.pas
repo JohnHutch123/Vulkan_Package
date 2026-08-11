@@ -69,7 +69,7 @@ Var
   ShadersUseDouble : Boolean   = True;
 
   GlobalViewProjectDescriptor : String = 'ModelViewProj';
-  GlobalObjectIDDescriptor    : String = 'ObjectID';
+  GlobalObjectIDDescriptor    : String = 'outBuffer';
   GlobalObjectScreenSize      : String = 'ScreenSize';
 
 Const
@@ -1807,7 +1807,7 @@ begin
         blockWidth := 4; blockHeight := 4; bytesPerBlock := 16;
       end;
 
-    // ASTC formats — always 16 bytes per block
+    // ASTC formats ï¿½ always 16 bytes per block
     VK_FORMAT_ASTC_4x4_UNORM_BLOCK, VK_FORMAT_ASTC_4x4_SRGB_BLOCK:
       begin blockWidth := 4; blockHeight := 4; bytesPerBlock := 16; end;
     VK_FORMAT_ASTC_5x4_UNORM_BLOCK, VK_FORMAT_ASTC_5x4_SRGB_BLOCK:
@@ -1883,11 +1883,17 @@ end;
   Function GetDataTypeAsString(aType: TvgDataType):String;
   Begin
     Case  aType of
-      DT_VEC1 : Result := 'vec1';
+      DT_IVEC1: Result := 'int';
+      DT_IVEC2: Result := 'ivec2';
+      DT_IVEC3: Result := 'ivec3';
+      DT_UVEC1: Result := 'uint';
+      DT_UVEC2: Result := 'uvec2';
+      DT_UVEC3: Result := 'uvec3';
+      DT_VEC1 : Result := 'float';
       DT_VEC2 : Result := 'vec2';
       DT_VEC3 : Result := 'vec3';
       DT_VEC4 : Result := 'vec4';
-      DT_MAT1 : Result := 'mat1';
+      DT_MAT1 : Result := 'float';
       DT_MAT2 : Result := 'mat2';
       DT_MAT3 : Result := 'mat3';
       DT_MAT4 : Result := 'mat4';

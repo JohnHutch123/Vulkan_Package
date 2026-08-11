@@ -76,7 +76,6 @@ type
     procedure BitBtn3Click(Sender: TObject);
     procedure Panel1MouseMove(Sender: TObject; Shift: TShiftState; X,
       Y: Integer);
-    procedure BitBtn4Click(Sender: TObject);
   private
     { Private declarations }
     fInstance : TvgInstance;
@@ -429,21 +428,6 @@ Case TestRead.ItemIndex of
 
 end;
 
-
-procedure TTestVulkan.BitBtn4Click(Sender: TObject);
-begin
-
-
-
-(*
-  If not assigned(fScene) then exit;
-
-  If fScene.Active then
-     fScene.Active := False
-  else
-     fScene.Active := True;
- *)
-end;
 
 procedure TTestVulkan.BuildShaders;
   Var I,J:Integer;

@@ -276,6 +276,7 @@ Type
   Protected
 
     function GetGLSLDeclarationBody: String; Override;
+    function GetGLSLLayoutQualifier: String; Override;
 
   Public
     constructor Create(AOwner: TComponent); override;
@@ -592,6 +593,7 @@ TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
   Protected
 
     function GetGLSLDeclarationBody: String; Override;
+    function GetGLSLLayoutQualifier: String; Override;
 
   Public
     constructor Create(AOwner: TComponent); override;
@@ -686,16 +688,24 @@ TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
   TvgDescriptorArray_StorageImage = class(TvgDescriptorArray)
   private
     function GetDescriptorDataStorageImage(Index: Integer): TvgDescriptor_Data_StorageImage;
+    function GetImageFormat: TvgFormat;
+    procedure SetImageFormat(const Value: TvgFormat);
   protected
 
     function GetGLSLDeclarationBody: String; override;
+    function GetGLSLLayoutQualifier: String; override;
 
   public
+    class function GetPropertyName: String; override;
     constructor Create(AOwner: TComponent); override;
+    procedure ClearDescriptor(aCommandBuffer: TvgCommandBuffer); override;
     function AddStorageImage(aStorageImageData: TvgDescriptor_Data_StorageImage): Integer;
     function RemoveStorageImage(aStorageImageData: TvgDescriptor_Data_StorageImage): Boolean;
 
     property StorageImageData[Index: Integer]: TvgDescriptor_Data_StorageImage read GetDescriptorDataStorageImage;
+
+  published
+    property ImageFormat: TvgFormat read GetImageFormat write SetImageFormat;
   end;
 
 
@@ -3110,43 +3120,45 @@ end;
 { TvgDescriptor_PerFrame_StorageImage }
 
 procedure TvgDescriptor_PerFrame_StorageImage.ClearDescriptor(aCommandBuffer: TvgCommandBuffer);
-  Var DD:TvgDescriptor_Data_StorageImage  ;
+var
+ DD: TvgDescriptor_Data_StorageImage;
+ Barrier: TVkImageMemoryBarrier;
 begin
- // If not fPixelSamplingON then exit;
+ if not Assigned(aCommandBuffer) or not Active or
+    not Assigned(fStorageImageBuffer) or
+    not (DescriptorData is TvgDescriptor_Data_StorageImage) then
+   Exit;
 
- If not assigned(aCommandBuffer) then exit;
-//  CustomAssert(assigned(fStorageImageBuffer[fCurrentFrameIndex]),   'Storage Buffer NOT created', self);
+ DD := TvgDescriptor_Data_StorageImage(DescriptorData);
+ Barrier := Default(TVkImageMemoryBarrier);
+ Barrier.sType := VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+ Barrier.srcAccessMask := TVkAccessFlags(VK_ACCESS_SHADER_WRITE_BIT);
+ Barrier.dstAccessMask := TVkAccessFlags(VK_ACCESS_TRANSFER_WRITE_BIT);
+ Barrier.oldLayout := VK_IMAGE_LAYOUT_GENERAL;
+ Barrier.newLayout := VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+ Barrier.srcQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
+ Barrier.dstQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
+ Barrier.image := fStorageImageBuffer.Image.Handle;
+ Barrier.subresourceRange := DD.fSubRange;
+ aCommandBuffer.CmdPipelineBarrier(
+   TVkPipelineStageFlags(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT),
+   TVkPipelineStageFlags(VK_PIPELINE_STAGE_TRANSFER_BIT),
+   0, 0, nil, 0, nil, 1, @Barrier);
 
-  If not (Active) then exit;
-//  If (fCurrentFrameIndex >= TvkUint32(Length(fStorageImageBuffer))) then exit;
+ aCommandBuffer.CmdClearColorImage(
+   fStorageImageBuffer.Image.Handle,
+   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+   @DD.fClearCol,
+   1, @DD.fSubRange);
 
-  // fInitialBarrier block is REMOVED — transition now done once in SetEnabled
-
-//  fPreBarrier.image  := fStorageImageBuffer[fCurrentFrameIndex].Image.Handle;
-//  fPostBarrier.image := fStorageImageBuffer[fCurrentFrameIndex].Image.Handle;
-
-  // GENERAL → TRANSFER_DST_OPTIMAL for the clear
-  aCommandBuffer.CmdPipelineBarrier(
-                                    TVkPipelineStageFlags(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) or
-                                    TVkPipelineStageFlags(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
-                                    TVkPipelineStageFlags(VK_PIPELINE_STAGE_TRANSFER_BIT),
-                                    0, 0, nil, 0, nil,
-                                    1, @TvgDescriptor_Data_StorageImage(DescriptorData).fPreBarrier);
-(*
-  aCommandBuffer.CmdClearColorImage(
-                                    fStorageImageBuffer[fCurrentFrameIndex].Image.Handle,
-                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                    @fClearCol,
-                                    1, @fSubRange);
-
-  // TRANSFER_DST_OPTIMAL → GENERAL, ready for shader again
-  aCommandBuffer.CmdPipelineBarrier(
-                                      TVkPipelineStageFlags(VK_PIPELINE_STAGE_TRANSFER_BIT),
-                                      TVkPipelineStageFlags(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) or
-                                      TVkPipelineStageFlags(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
-                                      0, 0, nil, 0, nil,
-                                      1, @fPostBarrier);
- *)
+ Barrier.srcAccessMask := TVkAccessFlags(VK_ACCESS_TRANSFER_WRITE_BIT);
+ Barrier.dstAccessMask := TVkAccessFlags(VK_ACCESS_SHADER_WRITE_BIT);
+ Barrier.oldLayout := VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+ Barrier.newLayout := VK_IMAGE_LAYOUT_GENERAL;
+ aCommandBuffer.CmdPipelineBarrier(
+   TVkPipelineStageFlags(VK_PIPELINE_STAGE_TRANSFER_BIT),
+   TVkPipelineStageFlags(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT),
+   0, 0, nil, 0, nil, 1, @Barrier);
 end;
 
 constructor TvgDescriptor_PerFrame_StorageImage.Create;
@@ -3316,6 +3328,15 @@ begin
   CustomAssert(assigned( DescriptorData),'Descriptor Data Not assigned');
   CustomAssert(( DescriptorData is TvgDescriptor_Data_StorageImage),'Descriptor Data Not correct type');
   DD:= TvgDescriptor_Data_StorageImage(DescriptorData);
+  CustomAssert(Assigned(DescriptorData.Descriptor),
+    'Storage image descriptor array not assigned');
+  CustomAssert(Assigned(DescriptorData.Descriptor.DescriptorItem),
+    'Storage image descriptor item not assigned');
+  CustomAssert(Assigned(
+    DescriptorData.Descriptor.DescriptorItem.DescriptorSet),
+    'Storage image descriptor set not assigned');
+  Linker := DescriptorData.Descriptor.DescriptorItem.DescriptorSet.Linker;
+  CustomAssert(Assigned(Linker), 'Storage image linker not assigned');
 
   (*
   CustomAssert(assigned( fDescriptorItem.Device),'Descriptor Item Device Not assigned',Self);
@@ -3328,7 +3349,12 @@ begin
  //  Linker  := TvgDescriptorCol(fDescriptorItem.Collection).DescriptorSet.Linker;
 
    DD.ImageWidth := Linker.SwapChain.ImageWidth;
-   DD.ImageHeight:= Linker.SwapChain.ImageHeight;
+   DD.ImageHeight := Linker.SwapChain.ImageHeight;
+   if Linker.RenderTarget = RT_FRAME then
+   begin
+     DD.ImageWidth := DD.ImageWidth * Linker.FrameResolution;
+     DD.ImageHeight := DD.ImageHeight * Linker.FrameResolution;
+   end;
 
 
    If assigned(fStorageImageBuffer) then
@@ -3341,7 +3367,7 @@ begin
 // ── NEW: transition every image UNDEFINED → GENERAL before first shader use ──
   CmdPool                   := TvgCommandBufferPool.Create(nil);
   CmdPool.Device            := Device;
-  CmdPool.QueueFamilyType   := VGT_TRANSFER;
+  CmdPool.QueueFamilyType   := VGT_GRAPHIC;
   CmdPool.QueueCreateFlags  := [CP_RESET_COMMAND_BUFFER];
   CmdPool.SetUpBufferArrays(1);
   CmdPool.Active            := True;
@@ -3375,7 +3401,7 @@ begin
         1, @Barrier);
 
     Cmd.EndRecording;
-    Cmd.ExecuteCommand(Device.VulkanDevice.TransferQueue,
+    Cmd.ExecuteCommand(Device.VulkanDevice.GraphicsQueue,
                        TVkPipelineStageFlags(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT),
                        nil, nil,
                        True,   // wait fence
@@ -3615,7 +3641,11 @@ end;
 constructor TvgDescriptor_Data_StorageImage.Create;
 begin
   inherited;
-
+  fPixelSampleRadius := psr_1x1;
+  fSubRange := Default(TVkImageSubresourceRange);
+  fSubRange.aspectMask := TVkImageAspectFlags(VK_IMAGE_ASPECT_COLOR_BIT);
+  fSubRange.levelCount := 1;
+  fSubRange.layerCount := 1;
 end;
 
 destructor TvgDescriptor_Data_StorageImage.Destroy;
@@ -3658,31 +3688,37 @@ begin
 end;
  *)
 function TvgDescriptor_Data_StorageImage.GetPixelData(aFrameIndex: TvkUint32; Shift: TShiftState; X, Y: Integer; out Data: TvgPixelData): Boolean;
-  Var   PS  : TvgPixelSampler;
+var
+  PS: TvgPixelSampler;
 begin
   Result := False;
+  Data := Default(TvgPixelData);
+  if not fPixelSamplingON then
+    Exit;
 
-// If NOT fPixelSamplingON then exit;
-
-//  If (Integer(aFrameIndex)>=Length(fStorageImageBuffer)) then exit;
-
-//  PS := fStorageImageBuffer[aFrameIndex].PixelSampler ;
- (*
-  If PS.SamplePixel(X,Y) then
+  PS := GetPixelSampler(aFrameIndex);
+  if Assigned(PS) and PS.SamplePixel(X, Y) then
   Begin
     Data   := PS.PixelData;
     Result := True;
   end;
-  *)
 end;
 
 function TvgDescriptor_Data_StorageImage.GetPixelSampler(  FrameIndex: Integer): TvgPixelSampler;
+var
+  FrameData: TvgDescriptor_PerFrame_StorageImage;
 begin
   Result := Nil;
   If not (Active) then exit;
- // If (FrameIndex<0) or (FrameIndex>=Length(fStorageImageBuffer)) then exit;
+  if (FrameIndex < 0) or (FrameIndex >= Length(fFrameData)) then
+    Exit;
 
-//  Result := fStorageImageBuffer[FrameIndex].PixelSampler
+  if fFrameData[FrameIndex] is TvgDescriptor_PerFrame_StorageImage then
+  begin
+    FrameData := TvgDescriptor_PerFrame_StorageImage(fFrameData[FrameIndex]);
+    if Assigned(FrameData.fStorageImageBuffer) then
+      Result := FrameData.fStorageImageBuffer.PixelSampler;
+  end;
 end;
 
 
@@ -3744,45 +3780,6 @@ begin
   fPixelSampleRadius := Value;
 end;
 
-(*
-procedure TvgDescriptor_Data_StorageImage.SetFormat(const Value: TvgFormat);
-  Var V:TvkFormat;
-begin
-  V:= GetVKFormat(Value);
-  If fImageProps.Format=V then exit;
-  SetActiveState(False);
-  fImageProps.Format := V;
-end;
-
-procedure TvgDescriptor_Data_StorageImage.SetfPixelSamplingON(const Value: Boolean);
-begin
-  If fPixelSamplingON = Value then exit;
-  SetActiveState(False);
-  fPixelSamplingON := Value;
-end;
-
-procedure TvgDescriptor_Data_StorageImage.SetImageHeight(const Value: TvkUint32);
-begin
-  If fImageHeight = Value  then exit;
-  SetActiveState(False);
-  fImageHeight := Value;
-end;
-
-procedure TvgDescriptor_Data_StorageImage.SetImageWidth(const Value: TvkUint32);
-begin
-  If fImageWidth = Value  then exit;
-  SetActiveState(False);
-  fImageWidth := Value;
-end;
-
-procedure TvgDescriptor_Data_StorageImage.SetPixelSampleRadius(  const Value: TvgPixelSampleRadius);
-begin
-  If fPixelSampleRadius = Value  then exit;
-  SetActiveState(False);
-  fPixelSampleRadius := Value;
-end;
-
-*)
 
 { TvgDescriptorArray_UniformBuffer<T> }
 
@@ -3804,12 +3801,7 @@ begin
   inherited;
 
   fDescriptorType    := VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
- (*
-  fBindingMode        := vgdbmFixedArray;
-  fBindingCount       := 64;  //MAX_SLOTS;          // e.g. 64
-  PartiallyBound      := True;               // dioPartiallyBound
-  UpdateAfterBind     := True;              // dioUpdateAfterBind  (optional)
- *)
+
   fStageFlags         :=  TVkShaderStageFlags(VK_SHADER_STAGE_VERTEX_BIT) or
                           TVkShaderStageFlags(VK_SHADER_STAGE_FRAGMENT_BIT);
 
@@ -3824,10 +3816,26 @@ begin
 end;
 
 function TvgDescriptorArray_UniformBuffer<T>.GetGLSLDeclarationBody: String;
+var
+  ElementType: String;
+  ElementTypeInfo: PTypeInfo;
 Begin
-  Result := 'uniform ' + GetPropertyName;
-  // e.g. → "uniform TvgDescriptor_Data_UBO_4x4MatrixD"
-  // caller wraps it: layout(...) uniform TvgDescriptor_Data_UBO_4x4MatrixD myUBO[];
+  ElementTypeInfo := TypeInfo(T);
+  ElementType := GetGLSLTypeNameForPascalType(ElementTypeInfo.Name);
+  if SameText(ElementType, 'vec3') or SameText(ElementType, 'ivec3') or
+     SameText(ElementType, 'uvec3') or SameText(ElementType, 'dvec3') then
+    raise EArgumentException.CreateFmt(
+      '%s requires a padded std140 GPU type; SizeOf(T) is not layout-compatible',
+      [ClassName]);
+
+  Result := 'uniform ' + Name + 'Block {' + sLineBreak +
+            '    ' + ElementType + ' value;' + sLineBreak +
+            '}';
+end;
+
+function TvgDescriptorArray_UniformBuffer<T>.GetGLSLLayoutQualifier: String;
+begin
+  Result := 'std140';
 end;
 
 function TvgDescriptorArray_UniformBuffer<T>.RemoveUBO( aDD_UBO: TvgDescriptor_Data_UniformBuffer<T>): Boolean;
@@ -4492,11 +4500,26 @@ begin
 end;
 
 function TvgDescriptorArray_StorageBuffer<T>.GetGLSLDeclarationBody: String;
+var
+  ElementType: String;
+  ElementTypeInfo: PTypeInfo;
 begin
-  Result := 'buffer ' + GetPropertyName;
-    // e.g. -> "buffer TMyStorageBuffer"
-    // caller wraps it as:
-    // layout(set = X, binding = Y, std430) buffer TMyStorageBuffer myBuffer[];
+  ElementTypeInfo := TypeInfo(T);
+  ElementType := GetGLSLTypeNameForPascalType(ElementTypeInfo.Name);
+  if SameText(ElementType, 'vec3') or SameText(ElementType, 'ivec3') or
+     SameText(ElementType, 'uvec3') or SameText(ElementType, 'dvec3') then
+    raise EArgumentException.CreateFmt(
+      '%s requires a padded std430 GPU type; SizeOf(T) is not layout-compatible',
+      [ClassName]);
+
+  Result := 'buffer ' + Name + 'Block {' + sLineBreak +
+            '    ' + ElementType + ' values[];' + sLineBreak +
+            '}';
+end;
+
+function TvgDescriptorArray_StorageBuffer<T>.GetGLSLLayoutQualifier: String;
+begin
+  Result := 'std430';
 end;
 
 function TvgDescriptorArray_StorageBuffer<T>.RemoveStorageBuffer(  aData_SB: TvgDescriptor_Data_StorageBuffer<T>): Boolean;
@@ -4518,43 +4541,104 @@ Result := -1;
     Result := IndexOfDescriptorData(aStorageImageData);
 end;
 
+procedure TvgDescriptorArray_StorageImage.ClearDescriptor(
+  aCommandBuffer: TvgCommandBuffer);
+var
+  I: Integer;
+  DD: TvgDescriptor_Data_StorageImage;
+  FrameData: TvgDescriptorPerFrameData;
+begin
+  if not Assigned(aCommandBuffer) then
+    Exit;
+
+  for I := 0 to High(fDescriptorArray) do
+    if fDescriptorArray[I] is TvgDescriptor_Data_StorageImage then
+    begin
+      DD := TvgDescriptor_Data_StorageImage(fDescriptorArray[I]);
+      FrameData := DD.GetFrameData(fCurrentFrameIndex);
+      if FrameData is TvgDescriptor_PerFrame_StorageImage then
+        TvgDescriptor_PerFrame_StorageImage(FrameData).ClearDescriptor(
+          aCommandBuffer);
+    end;
+end;
+
 constructor TvgDescriptorArray_StorageImage.Create(AOwner: TComponent);
 begin
 
- inherited Create(AOwner);
+  inherited Create(AOwner);
   fDescriptorType := VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
   fStageFlags := TVkShaderStageFlags(VK_SHADER_STAGE_FRAGMENT_BIT) or TVkShaderStageFlags(VK_SHADER_STAGE_COMPUTE_BIT);
+  fImageProps.ImageType := VK_IMAGE_TYPE_2D;
+  fImageProps.Tiling := VK_IMAGE_TILING_OPTIMAL;
+  fImageProps.Usage := TVkImageUsageFlags(VK_IMAGE_USAGE_STORAGE_BIT) or
+                       TVkImageUsageFlags(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) or
+                       TVkImageUsageFlags(VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+  fImageProps.Samples := VK_SAMPLE_COUNT_1_BIT;
+end;
+
+class function TvgDescriptorArray_StorageImage.GetPropertyName: String;
+begin
+  Result := 'StorageImage';
+end;
+
+function TvgDescriptorArray_StorageImage.GetImageFormat: TvgFormat;
+begin
+  Result := GetVGFormat(fImageProps.Format);
 end;
 
 function TvgDescriptorArray_StorageImage.GetGLSLDeclarationBody: String;
-var
-  D: TvgDescriptor_Data_StorageImage;
 begin
-  // A GLSL layout declaration has exactly ONE base type per binding,
-  // regardless of how many descriptor slots are populated - it must NOT
-  // be built by iterating every TvgDescriptor_Data_StorageImage and
-  // concatenating one declaration per slot (the previous implementation
-  // did this, which produced invalid GLSL once wrapped by
-  // GetShaderDescriptorStringTemplate_Vertex's single
-  // "layout(...) <body> Name[];" template).
-  D := GetDescriptorDataStorageImage(0);
-
-  if Assigned(D) then
-    Result := 'uniform ' + D.GetGLSLBaseTypeName    // e.g. "uniform image2D"
+  case fImageProps.Format of
+    VK_FORMAT_R32_UINT,
+    VK_FORMAT_R32G32_UINT,
+    VK_FORMAT_R32G32B32A32_UINT:
+      Result := 'uniform uimage2D';
+    VK_FORMAT_R32_SINT,
+    VK_FORMAT_R32G32_SINT,
+    VK_FORMAT_R32G32B32A32_SINT:
+      Result := 'uniform iimage2D';
+    VK_FORMAT_R32_SFLOAT,
+    VK_FORMAT_R32G32_SFLOAT,
+    VK_FORMAT_R32G32B32A32_SFLOAT,
+    VK_FORMAT_R8G8B8A8_UNORM:
+      Result := 'uniform image2D';
   else
-    Result := 'uniform image2D';                    // default before any slot is populated
+    raise EArgumentException.CreateFmt(
+      '%s does not support storage-image format %d',
+      [ClassName, Ord(fImageProps.Format)]);
+  end;
+end;
 
-  // caller wraps it as:
-  //   layout(set=X, binding=Y) uniform image2D myImages[];
-  //
-  // TODO: Vulkan storage images also require a format qualifier inside
-  // the layout(...) parens (e.g. rgba8, rgba32f) which
-  // GetShaderDescriptorStringTemplate_Vertex has no hook for yet - it
-  // hardcodes "layout(set=..., binding=...)" with nothing else injectable
-  // before the closing paren. Worth a small follow-up to add an optional
-  // format-qualifier virtual on TvgDescriptorArray that the base template
-  // consults, since UniformBuffer/StorageBuffer don't need this but
-  // StorageImage does.
+function TvgDescriptorArray_StorageImage.GetGLSLLayoutQualifier: String;
+begin
+  case fImageProps.Format of
+    VK_FORMAT_R32_UINT:             Result := 'r32ui';
+    VK_FORMAT_R32_SINT:             Result := 'r32i';
+    VK_FORMAT_R32_SFLOAT:           Result := 'r32f';
+    VK_FORMAT_R32G32_UINT:          Result := 'rg32ui';
+    VK_FORMAT_R32G32_SINT:          Result := 'rg32i';
+    VK_FORMAT_R32G32_SFLOAT:        Result := 'rg32f';
+    VK_FORMAT_R32G32B32A32_UINT:    Result := 'rgba32ui';
+    VK_FORMAT_R32G32B32A32_SINT:    Result := 'rgba32i';
+    VK_FORMAT_R32G32B32A32_SFLOAT:  Result := 'rgba32f';
+    VK_FORMAT_R8G8B8A8_UNORM:       Result := 'rgba8';
+  else
+    raise EArgumentException.CreateFmt(
+      '%s does not support storage-image format %d',
+      [ClassName, Ord(fImageProps.Format)]);
+  end;
+end;
+
+procedure TvgDescriptorArray_StorageImage.SetImageFormat(
+  const Value: TvgFormat);
+var
+  VulkanFormat: TVkFormat;
+begin
+  VulkanFormat := GetVKFormat(Value);
+  if fImageProps.Format = VulkanFormat then
+    Exit;
+  SetActiveState(False);
+  fImageProps.Format := VulkanFormat;
 end;
 
 
@@ -4708,6 +4792,7 @@ end;
 Initialization
 
   RegisterDescriptorType(TvgDescriptorArray_Texture);
+  RegisterDescriptorType(TvgDescriptorArray_StorageImage);
 
   RegisterDescriptorType(TvgDescriptorArray_UBO_4x4MatrixD);
   RegisterDescriptorType(TvgDescriptorArray_SB_2UI);
