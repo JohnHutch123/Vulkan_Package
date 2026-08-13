@@ -3869,13 +3869,8 @@ TvgBaseComponent = class(TComponent)
     procedure SetRenderEngine(const Value: TvgBaseRenderEngine);
     function GetPipeHandle(aThread,aFrame : Integer): TVkPipeline;
     procedure SetFrameCount(const Value: TvkUint32);
- //   procedure SetName(const Value: String);
     procedure SetThreadCount(const Value: TvkUint32);
-  //  procedure SetResourceUse(const Value: TvgResourceUse);
     procedure SetCurrentFrame(const Value: TvkUint32);
- //   function GetSubPassRef: Integer;
- //   procedure SetSubPassRef(const Value: Integer);
-//    function GetNodeCount: Integer;
     procedure SetValidStructure(const Value: Boolean);
     function GetSubPass: TvgSubPass;
     procedure SetSubPass(const Value: TvgSubPass);
@@ -3890,11 +3885,12 @@ TvgBaseComponent = class(TComponent)
 
    //links
      fRenderEngine       : TvgBaseRenderEngine;
+
      fSubPass            : TvgSubPass;
 
      fObjectStore        : TvgBaseObjectStore;
 
-     fUseShaderObjects   : Boolean;           // design-time or runtime switch
+     fUseShaderObjects   : Boolean;             // design-time or runtime switch
      fShaderObjects      : TvgShaderObjectCol; // collection of stage objects
 
   //state
@@ -3919,6 +3915,8 @@ TvgBaseComponent = class(TComponent)
      fShaderStages       : Array[0..2] of TvkPipelineShaderStageCreateInfo;
 
      fShaderUseDouble    : Boolean;
+     fValidStructure     : Boolean;  //set when GP is considered valid
+     fObjectIDON         : Boolean;//supports object selection set in Build
 
 //Viewports and Scissors
      fvp                 : TvkViewPort;
@@ -3979,12 +3977,9 @@ TvgBaseComponent = class(TComponent)
      fCurrentFrameIndex,
      fThreadCount           : TvkUint32  ;
 
-
     //Worker(thread) array of Max Frames In Flight array of handle
      fPipelineHandles       : Array of Array of TVkPipeline;
      //holds Array of Frame In Flight worker array of   pipelines
-     fValidStructure        : Boolean;  //set when GP is considered valid
-     fObjectIDON            : Boolean;//supports object selection set in Build
 
      procedure DefineProperties(Filer: TFiler); override;
 
@@ -4039,9 +4034,9 @@ TvgBaseComponent = class(TComponent)
                                         aWorkerIndex,
                                         aFrameIndex: TvkUint32);//called from the Node Draw
 
-     Function BuildShaderVertexName(aBaseName:String):Boolean;   Virtual;
-     Function BuildShaderGeometryName(aBaseName:String):Boolean;   Virtual;
-     Function BuildShaderFRagmentName(aBaseName:String):Boolean;   Virtual;
+ //    Function BuildShaderVertexName(aBaseName:String):Boolean;   Virtual;
+ //    Function BuildShaderGeometryName(aBaseName:String):Boolean;   Virtual;
+ //    Function BuildShaderFRagmentName(aBaseName:String):Boolean;   Virtual;
 
      //handle the asembly of text into Shader
      //see descendants
@@ -4060,7 +4055,6 @@ TvgBaseComponent = class(TComponent)
     Property ThreadCount       : TvkUint32 read fThreadCount write SetThreadCount;
 
     Property ObjectStore       : TvgBaseObjectStore read fObjectStore write SetObjectStore;
-
 
     Property ValidStructure: Boolean Read fValidStructure write SetValidStructure;
 
@@ -4646,8 +4640,6 @@ TvgBaseComponent = class(TComponent)
     Property BufDepthON          : Boolean Read GetDepthBufON write SetDepthBufON;
     Property BufStencilON        : Boolean Read GetStencilBufON write SetStencilBufON;
     Property BufDepthCompare     : TvgCompareOpBit   Read GetBufDepthCompare Write SetBufDepthCompare;
-
-//    Property SelectON            : Boolean Read fSelectON write SetSelectON;
 
     Property MSAASample          : TvgSampleCountFlagBits Read GetSampleCount write SetSampleCount;
 
@@ -5353,11 +5345,11 @@ TvgBaseComponent = class(TComponent)
     Property WorkerIndex : TvkUint32 Read fWorkerIndex ;
 
   End;
-
+ (*
   TvgResourceSet = (
       RS_SelectBuffer,
       RS_ViewProjectBuffer);
-
+  *)
   TvgBaseRenderEngine   =  class(TvgBaseComponent, IvgGlobalDataTarget)
   //handles graphics and rendering framework
   //DO NOT use as stand alone Use descendant
@@ -5381,7 +5373,7 @@ TvgBaseComponent = class(TComponent)
     fRenderPass        : TvgRenderPass;
 
   //Global resources
- //   fGlobalResSet      :
+
     fGlobalRes         : TvgDescriptorSet;
     //holds GLOBAL shader resources structure and data  SET = 0
     //Used for Proj/View  matrix
@@ -5406,8 +5398,6 @@ TvgBaseComponent = class(TComponent)
     Function SetEnabled  : Boolean;   Override  ;
 
     procedure SetLinker(const Value: TvgLinker); Virtual;
-    function GetSelectON: Boolean;     Virtual;
-    procedure SetSelectOn(const Value: Boolean);   Virtual;
 
     Procedure BuildRenderPassStructure;    Virtual;
 
@@ -5416,7 +5406,7 @@ TvgBaseComponent = class(TComponent)
     Procedure CleanUpAndFreeWorkers;       Virtual;
     //tidy up
 
-    Procedure BuildAndSetUpGlobalResources;     Virtual;  //called on CREATE
+    Procedure VaildateGlobalResources;     Virtual;Abstract;  //called on CREATE
 
     Procedure ClearGlobalResources;
 
@@ -5465,8 +5455,6 @@ TvgBaseComponent = class(TComponent)
     Property Linker        : TvgLinker read GetLinker write SetLinker;
     Property RenderPass    : TvgRenderPass read GetRenderPass ;//write SetRenderPass;
     Property BaseScene     : TvgBaseScene read fBaseScene write SetBaseScene;
-
-    Property SelectON      : Boolean Read GetSelectON write SetSelectOn;
 
     Property CurrentPrepareFrame  : TvgFrame read fCurrentPrepareFrame;
 
@@ -12146,12 +12134,6 @@ begin
 
 end;
 
-
-procedure TvgBaseRenderEngine.BuildAndSetUpGlobalResources;
-Begin
-  //see descendant
-end;
-
 procedure TvgBaseRenderEngine.BuildRenderPassStructure;
 begin
   CustomAssert(Assigned(fRenderPass),'RenderPass not created.',Self);
@@ -12249,7 +12231,7 @@ begin
 
   fRenderWorkers     := TList<TvgRenderWorker>.Create;
 
-  BuildAndSetUpGlobalResources; //   should happen at Create NOT enabled;
+//  VaildateGlobalResources; //   should happen at Create NOT enabled;
 
 end;
 
@@ -12330,11 +12312,6 @@ end;
 function TvgBaseRenderEngine.GetRenderPass: TvgRenderPass;
 begin
   result := fRenderPass;
-end;
-
-function TvgBaseRenderEngine.GetSelectON: Boolean;
-begin
-  Result := False;
 end;
 
 function TvgBaseRenderEngine.GetViewportAspect: Single;
@@ -12691,7 +12668,7 @@ begin
       CustomAssert(GetPhysicalDevice = Established, 'TvgRenderEngine: device mismatch against scene''s established device.',  Self);
   end;
 
- // BuildAndSetUpGlobalResources;  this needs to be fixed.   should happen at Create NOT enabled;
+ // VaildateGlobalResources;  this needs to be fixed.   should happen at Create NOT enabled;
 
   If assigned(fRenderPass) then
   Begin
@@ -12779,11 +12756,6 @@ begin
 
   End;
 
-end;
-
-procedure TvgBaseRenderEngine.SetSelectOn(const Value: Boolean);
-begin
-  //do nothing
 end;
 
 procedure TvgBaseRenderEngine.SetBaseScene(const Value: TvgBaseScene);
@@ -14797,7 +14769,7 @@ procedure TvgGraphicPipeline.BindShaderObjects(aCommandBuf: TvgCommandBuffer;   
 begin
   //finish
 end;
-
+(*
 function TvgGraphicPipeline.BuildShaderFRagmentName(aBaseName: String): Boolean;
   Var S:String;
       Sel,
@@ -14926,7 +14898,7 @@ begin
 
   Result := CompareText(VertexS.FileName,S)=0;
 end;
-
+*)
 
 
 procedure TvgGraphicPipeline.CheckDynamicStateCapabilities;
@@ -28145,7 +28117,9 @@ begin
   If L>0 then
     For I:=0 to L-1 do
       If assigned( fDescriptorArray[I]) then
-        fDescriptorArray[I].Active:=True;
+      Begin
+        fDescriptorArray[I].SetActiveState(True);
+      End;
 end;
 
 procedure TvgDescriptorArray.SetFrameCount(const Value: TvkUint32);

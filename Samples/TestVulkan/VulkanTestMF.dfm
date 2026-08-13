@@ -163,7 +163,7 @@ object TestVulkan: TTestVulkan
     Width = 177
     Height = 106
     Caption = 'Tests'
-    ItemIndex = 2
+    ItemIndex = 1
     Items.Strings = (
       'Simple Triangle'
       'Data Triangle'

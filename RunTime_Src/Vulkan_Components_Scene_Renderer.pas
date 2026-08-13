@@ -275,6 +275,7 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
  Private
 
     procedure SetModelViewON(const Value: Boolean);
+    procedure SetSelectOn(const Value: Boolean);
 
 
  Protected
@@ -291,11 +292,8 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
 
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
 
-    procedure SetSelectOn(const Value: Boolean);   Override;
-    function GetSelectON: Boolean;  Override;
 
-
-    Procedure BuildAndSetUpGlobalResources;     Override;
+    Procedure VaildateGlobalResources;     Override;
     Procedure ConfigureGraphicPipelineFromRenderPass(GP:TvgGraphicPipeline);  Override;
 
 
@@ -306,7 +304,8 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
 
  Published
 
-    Property ModelViewON   : Boolean read fModelViewON write SetModelViewON;
+    Property MVPMatrixON   : Boolean read fModelViewON write SetModelViewON;
+    Property ObjSelectON   : Boolean read fSelectON write SetSelectON;
 
 
 
@@ -2030,7 +2029,7 @@ end;
 
 { TvgRenderEngine }
 
-procedure TvgRenderEngine.BuildAndSetUpGlobalResources;
+procedure TvgRenderEngine.VaildateGlobalResources;
 
 //called in Create
  var     DI   : TvgDescriptorItem;
@@ -2045,32 +2044,25 @@ procedure TvgRenderEngine.BuildAndSetUpGlobalResources;
 begin
   CustomAssert(assigned(fGlobalRes),'Global Resource not assigned',Self);
 
-  DI := fGlobalRes.GetDescriptorItem(GlobalObjectIDDescriptor);
-  if Assigned(DI) and
-     (DI.Descriptor is TvgDescriptorArray_StorageImage) then
-    fObjectIDImage := TvgDescriptorArray_StorageImage(DI.Descriptor);
-
-//  CustomAssert(assigned(fLinker),'Linker not assigned',Self);
 
   //simple Model/View/Proj Matrix
   //Should to the initial Model/View/Project multiplation in Dpouble precision in CPU
   If assigned(fLinker) then
   Begin
     FC:= fLinker.FrameCount  ;
-    //If assigned(fLinker.de
   end else
     FC:=MaxFramesInFlight;
 
 
-  If assigned(fGlobalRes) and (fGlobalRes.GetDescriptorItem(GlobalViewProjectDescriptor)=nil) then
+  If (fGlobalRes.GetDescriptorItem(GlobalViewProjectDescriptor)=nil) then
   Begin
 
     DI:=fGlobalRes.Descriptors.Add ;
 
     If assigned(DI) then
     Begin
-      DI.DescriptorName := TvgDescriptorArray_UBO_4x4MatrixD.GetPropertyName;   //will create the DA
       DI.Name           := GlobalViewProjectDescriptor;
+      DI.DescriptorName := TvgDescriptorArray_UBO_4x4MatrixD.GetPropertyName;   //will create the DA
 
       If assigned(fLinker) then
           DI.Device      := fLinker.ScreenDevice;
@@ -2091,9 +2083,6 @@ begin
 
           Mat4.AddMatrix;      //add an new descriptor Data/frame data
 
-    //      Mat4.BindingMode    := vgdbmFixedArray;
-    //      Mat4.BindingCount   := 64;
-
           M:=TvgMatrix4x4D.Identity;
 
           For I:=0 to Mat4.frameCount-1 do
@@ -2102,7 +2091,11 @@ begin
         DA.SetUploadFlags;
       end;
     End;
-  end;
+  end else
+  Begin
+
+
+  End;
 
 
   If (fSelectON) and (fGlobalRes.GetDescriptorItem(GlobalObjectIDDescriptor)=nil)  then     //all OK
@@ -2145,7 +2138,15 @@ begin
       end;
     End;
 
+    DI := fGlobalRes.GetDescriptorItem(GlobalObjectIDDescriptor);
+    if Assigned(DI) and
+       (DI.Descriptor is TvgDescriptorArray_StorageImage) then
+      fObjectIDImage := TvgDescriptorArray_StorageImage(DI.Descriptor);
+
   end;
+
+
+
   //screen size UBO
   (*
     DI:=fGlobalRes.Descriptors.Add ;
@@ -2255,7 +2256,7 @@ begin
 
 
       //order sets the constant_ID  value
-    If SelectON then
+    If fSelectON then
     Begin
 
       GP.ObjectIDON := True;
@@ -2338,11 +2339,6 @@ begin
    Result := TvgObject(Candidate);
 end;
 
-function TvgRenderEngine.GetSelectON: Boolean;
-begin
-  result := fSelectON;
-end;
-
 procedure TvgRenderEngine.Notification(AComponent: TComponent;  Operation: TOperation);
 begin
     inherited Notification(AComponent, Operation);
@@ -2395,6 +2391,8 @@ begin
   SetActiveState(False);
 
   fModelViewON := Value;
+
+  VaildateGlobalResources;
 end;
 
 procedure TvgRenderEngine.SetSelectOn(const Value: Boolean);
@@ -2404,8 +2402,11 @@ begin
   SetActiveState(False);
 
   fSelectON := Value;
-  if fSelectON and Assigned(fGlobalRes) then
-    BuildAndSetUpGlobalResources;
+
+  VaildateGlobalResources;
+
+ // if fSelectON and Assigned(fGlobalRes) then
+  //  BuildAndSetUpGlobalResources;
 end;
 
 end.
