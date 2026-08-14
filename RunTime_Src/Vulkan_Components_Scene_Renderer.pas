@@ -280,12 +280,9 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
 
  Protected
 
-    fScene                  : TvgScene;
+   fScene                  : TvgScene;
 
-    fSelectON,
-    fModelViewON            : Boolean;
-
-    fObjectIDImage          : TvgDescriptorArray_StorageImage;
+   fObjectIDImage          : TvgDescriptorArray_StorageImage;
 
     Function SetDisabled :Boolean; Override;
     Function SetEnabled  :Boolean; Override;
@@ -304,10 +301,8 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
 
  Published
 
-    Property MVPMatrixON   : Boolean read fModelViewON write SetModelViewON;
-    Property ObjSelectON   : Boolean read fSelectON write SetSelectON;
-
-
+   Property MVPMatrixON   : Boolean read FFlags.MVPMatrixON write SetMVPMatrixON;
+   Property ObjSelectON   : Boolean read FFlags.SelectON write SetSelectON;
 
  End;
 
@@ -2098,7 +2093,7 @@ begin
   End;
 
 
-  If (fSelectON) and (fGlobalRes.GetDescriptorItem(GlobalObjectIDDescriptor)=nil)  then     //all OK
+  If SelectON and (fGlobalRes.GetDescriptorItem(GlobalObjectIDDescriptor)=nil)  then     //all OK
   Begin
 
     DI:=fGlobalRes.Descriptors.Add ;
@@ -2250,50 +2245,41 @@ begin
   if fRenderPass.DepthBufOn and GP.DepthStencil.DepthTestEnable then
     GP.SetUpDepthStencilState(True, fRenderPass.StencilBufOn, fRenderPass.DepthCompare);
 
-  // SelectON — renderer decides, ObjectStore reads it
-  if fSelectON then
+  // Feature flags are owned by the renderer and propagated to each pipeline.
+  if SelectON then
+  begin
     GP.ObjectIDON := True;
 
-
-      //order sets the constant_ID  value
-    If fSelectON then
+    SHS := GP.VertexS.SpecialConst.add;    //vertex
+    If assigned(SHS) then
     Begin
-
-      GP.ObjectIDON := True;
-
-      SHS := GP.VertexS.SpecialConst.add;    //vertex
-      If assigned(SHS) then
-      Begin
-        SHS.Name       :=  'USE_OBJECTID' ;
-        SHS.SpecType   :=  TS_BOOLEAN;
-        SHS.SpecTValue := 'TRUE';
-        SHS.ConstantID := CI_USE_OBJECTID;
-      end;
-
-      SHS := GP.FragmentS.SpecialConst.add;  //Fragment
-      If assigned(SHS) then
-      Begin
-        SHS.Name       := 'USE_OBJECTID';
-        SHS.SpecType   :=  TS_BOOLEAN;
-        SHS.SpecTValue := 'TRUE';
-        SHS.ConstantID := CI_USE_OBJECTID;
-      end;
-
+      SHS.Name       :=  'USE_OBJECTID' ;
+      SHS.SpecType   :=  TS_BOOLEAN;
+      SHS.SpecTValue := 'TRUE';
+      SHS.ConstantID := CI_USE_OBJECTID;
     end;
 
-    if ShadersUseDouble then
+    SHS := GP.FragmentS.SpecialConst.add;  //Fragment
+    If assigned(SHS) then
     Begin
-      SHS := GP.VertexS.SpecialConst.add;    //vertex only
-      If assigned(SHS) then
-      Begin
-        SHS.Name       :=  'USE_DOUBLE' ;
-        SHS.SpecType   :=  TS_BOOLEAN;
-        SHS.SpecTValue := 'TRUE';
-        SHS.ConstantID := CI_USE_DOUBLE;
-      end;
+      SHS.Name       := 'USE_OBJECTID';
+      SHS.SpecType   :=  TS_BOOLEAN;
+      SHS.SpecTValue := 'TRUE';
+      SHS.ConstantID := CI_USE_OBJECTID;
     end;
+  end;
 
-
+  if ShaderUseDouble then
+  begin
+    SHS := GP.VertexS.SpecialConst.add;    //vertex only
+    If assigned(SHS) then
+    Begin
+      SHS.Name       :=  'USE_DOUBLE' ;
+      SHS.SpecType   :=  TS_BOOLEAN;
+      SHS.SpecTValue := 'TRUE';
+      SHS.ConstantID := CI_USE_DOUBLE;
+    end;
+  end;
 end;
 
 function TvgRenderEngine.GetObjectAtLocation(aFrameIndex: TvkUint32; Shift: TShiftState; X, Y: Integer): TvgObject;
@@ -2307,8 +2293,8 @@ begin
   Result := Nil;
 
   If State = vgcsInactive then exit;
-  if not fSelectON then exit;
- If not assigned(fScene) or (fScene.GetObjectCount=0) then exit;
+  if not SelectON then exit;
+  If not assigned(fScene) or (fScene.GetObjectCount=0) then exit;
 
  CustomAssert(Assigned(fScene),'Scene NOT connected',self);
  CustomAssert(Assigned(fObjectIDImage),
@@ -2387,26 +2373,11 @@ end;
 
 procedure TvgRenderEngine.SetModelViewON(const Value: Boolean);
 begin
-  If fModelViewON = Value then exit;
-  SetActiveState(False);
-
-  fModelViewON := Value;
-
-  VaildateGlobalResources;
+   SetMVPMatrixON(Value);
 end;
 
 procedure TvgRenderEngine.SetSelectOn(const Value: Boolean);
-
 begin
-  If fSelectON = Value then exit;
-  SetActiveState(False);
-
-  fSelectON := Value;
-
-  VaildateGlobalResources;
-
- // if fSelectON and Assigned(fGlobalRes) then
-  //  BuildAndSetUpGlobalResources;
+   SetSelectON(Value);
 end;
-
 end.

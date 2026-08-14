@@ -3914,7 +3914,7 @@ TvgBaseComponent = class(TComponent)
 
      fShaderStages       : Array[0..2] of TvkPipelineShaderStageCreateInfo;
 
-     fShaderUseDouble    : Boolean;
+ //    fShaderUseDouble    : Boolean;
      fValidStructure     : Boolean;  //set when GP is considered valid
      fObjectIDON         : Boolean;//supports object selection set in Build
 
@@ -5350,6 +5350,14 @@ TvgBaseComponent = class(TComponent)
       RS_SelectBuffer,
       RS_ViewProjectBuffer);
   *)
+
+  TvgRenderFeatureFlags = record
+    SelectON       : Boolean;
+    MVPMatrixON    : Boolean;
+    ShaderUseDouble: Boolean;
+  end;
+
+
   TvgBaseRenderEngine   =  class(TvgBaseComponent, IvgGlobalDataTarget)
   //handles graphics and rendering framework
   //DO NOT use as stand alone Use descendant
@@ -5363,6 +5371,10 @@ TvgBaseComponent = class(TComponent)
 
     procedure SetViewProjectMatrix(aFrameIndex : TvkUint32; const aMat  : TpvMatrix4x4);
     function  GetViewportAspect : Single;
+
+    procedure SetMVPMatrixON(const Value: Boolean);
+    procedure SetSelectON(const Value: Boolean);
+    procedure SetShaderUseDouble(const Value: Boolean);
 
   Protected
   //Connected Components Device connected in TvgEngine
@@ -5378,6 +5390,8 @@ TvgBaseComponent = class(TComponent)
     //holds GLOBAL shader resources structure and data  SET = 0
     //Used for Proj/View  matrix
     //used for ObjectID Storage Image
+
+    FFlags: TvgRenderFeatureFlags;
 
     fRenderWorkerCount : TvkUint32;                 //should match thread/worker count used for rendering
     fRenderWorkers     : TList<TvgRenderWorker>;
@@ -5407,6 +5421,7 @@ TvgBaseComponent = class(TComponent)
     //tidy up
 
     Procedure VaildateGlobalResources;     Virtual;Abstract;  //called on CREATE
+    procedure ApplyFeatureFlagsToPipelines; virtual;
 
     Procedure ClearGlobalResources;
 
@@ -5459,6 +5474,10 @@ TvgBaseComponent = class(TComponent)
     Property CurrentPrepareFrame  : TvgFrame read fCurrentPrepareFrame;
 
     Property GlobalRes     : TvgDescriptorSet Read GetGlobalResources ;  //hold shader resource structure and data
+
+    property SelectON       : Boolean read FFlags.SelectON write SetSelectON;
+    property MVPMatrixON    : Boolean read FFlags.MVPMatrixON write SetMVPMatrixON;
+    property ShaderUseDouble: Boolean read FFlags.ShaderUseDouble write SetShaderUseDouble;
 
     Property OnRenderPassBuild : TvgWindowBuildRenderPassStructureEvent read fOnRenderPassStructureBuild write fOnRenderPassStructureBuild;
   end;
@@ -12134,6 +12153,11 @@ begin
 
 end;
 
+procedure TvgBaseRenderEngine.ApplyFeatureFlagsToPipelines;
+begin
+
+end;
+
 procedure TvgBaseRenderEngine.BuildRenderPassStructure;
 begin
   CustomAssert(Assigned(fRenderPass),'RenderPass not created.',Self);
@@ -12716,7 +12740,6 @@ begin
 
 end;
 
-
 procedure TvgBaseRenderEngine.SetLinker(const Value: TvgLinker);
   Var OldLinker:TvgLinker;
 begin
@@ -12756,6 +12779,39 @@ begin
 
   End;
 
+end;
+
+procedure TvgBaseRenderEngine.SetMVPMatrixON(const Value: Boolean);
+begin
+  If FFlags.MVPMatrixON = Value  then exit;
+  SetActiveState(False);
+
+  FFlags.MVPMatrixON := Value;
+
+  ApplyFeatureFlagsToPipelines;
+  FlagRebuildALLFrames;
+end;
+
+procedure TvgBaseRenderEngine.SetSelectON(const Value: Boolean);
+begin
+  If FFlags.SelectON = Value  then exit;
+  SetActiveState(False);
+
+  FFlags.SelectON := Value;
+
+  ApplyFeatureFlagsToPipelines;
+  FlagRebuildALLFrames;
+end;
+
+procedure TvgBaseRenderEngine.SetShaderUseDouble(const Value: Boolean);
+begin
+  If FFlags.ShaderUseDouble = Value  then exit;
+  SetActiveState(False);
+
+  FFlags.ShaderUseDouble := Value;
+
+  ApplyFeatureFlagsToPipelines;
+  FlagRebuildALLFrames;
 end;
 
 procedure TvgBaseRenderEngine.SetBaseScene(const Value: TvgBaseScene);
