@@ -164,8 +164,7 @@ begin
 
 
             ObjStore.Topology        := TRIANGLE_LIST;
-            ObjStore.InstanceDataON  := true;
-            ObjStore.ObjectSelectON  := True;
+          //  ObjStore.InstanceDataON  := true;
 
          //  ObjStore.InitializeIndexBuffer(itUInt32);
             ObjStore.BaseVertName := 'TestTriangleWithData';
@@ -179,7 +178,7 @@ begin
             // Define vertex attributes for the vertex binding: position (loc0) + color (loc1)
            // DS.AddVertexAttributes(vBinding, [vdtPosition, vdtColor], [0, 1]);
 
-            Obj.SetUpObjectID;
+            Obj.SelectON:=True;
 
             // Define instance attributes for the object's instance binding: objID + instance color
             // objID uses uvec2 (two uints) at location 2, color at location 3
@@ -198,8 +197,8 @@ begin
 
 
             ObjStore.Topology        := TRIANGLE_LIST;
-            ObjStore.InstanceDataON  := true;
-            ObjStore.ObjectSelectON  := True;
+         //   ObjStore.InstanceDataON  := true;
+         //   ObjStore.ObjectSelectON  := True;
 
            ObjStore.BaseVertName := 'TestTextureRect';
            ObjStore.BaseFragName := 'TestTextureRect';
@@ -210,8 +209,8 @@ begin
             Obj1 := ObjStore.AddObject;
             Obj2 := ObjStore.AddObject;
 
-            Obj1.SetUpObjectID;
-            Obj2.SetUpObjectID;
+         //   Obj1.SetUpObjectID;
+         //   Obj2.SetUpObjectID;
 
             // Allocate vertex storage and instance storage for this object's bindings
             Obj1.AllocateVertices( 4);

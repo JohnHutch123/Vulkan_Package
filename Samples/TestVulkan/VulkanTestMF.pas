@@ -296,7 +296,7 @@ Case TestRead.ItemIndex of
 
                //      DS := TvgObjectStore.Create;
                      DS.Topology     := TRIANGLE_LIST;
-                     DS.InstanceDataON  := true;
+                 //    DS.InstanceDataON  := true;
                       //
                      DS.BaseVertName := 'TestTextureRect';
                      DS.BaseFragName := 'TestTextureRect';
@@ -307,20 +307,6 @@ Case TestRead.ItemIndex of
                       Obj1 := DS.AddObject;
                       Obj2 := DS.AddObject;
 
-
-                      If Obj1.AddInstance <>-1 then
-                      Begin
-                         ObjPtr := Uint64(Obj1);
-                         Split64BitTo32Bit(ObjPtr, ObjLow, ObjHigh);
-                         Obj1.SetInstanceObjID(ObjLow, ObjHigh)  ;
-                      End;
-
-                      If Obj2.AddInstance <>-1 then
-                      Begin
-                         ObjPtr := Uint64(Obj2);
-                         Split64BitTo32Bit(ObjPtr, ObjLow, ObjHigh);
-                         Obj2.SetInstanceObjID(ObjLow, ObjHigh)  ;
-                      End;
 
                       // Allocate vertex storage and instance storage for this object's bindings
                       Obj1.AllocateVertices( 4);
@@ -800,7 +786,7 @@ begin
 
                 MessagesTxt.Lines.add(Format('Test Scene Loaded #%d',[TestRB.ItemIndex]));
 
-                MessagesTxt.lines.add(fScene.GetSceneGLSLHeaders);
+             //   MessagesTxt.lines.add(fScene.GetSceneGLSLHeaders);
 
            End;
   end; //case

@@ -233,6 +233,7 @@ Type
 
     Procedure SetDisabled ; Override;
     Procedure SetEnabled  ; Override;
+    function HasPayload: Boolean; override;
 
     function GetWriteDescriptorPayload( out aBufInfo   : TVkDescriptorBufferInfo;
                                         out aImgInfo   : TVkDescriptorImageInfo  ): Boolean; Override;
@@ -313,6 +314,7 @@ Type
 
     Procedure SetDisabled ;  Override;
     Procedure SetEnabled ;   Override;
+    function HasPayload: Boolean; override;
 
     function GetWriteDescriptorPayload( out aBufInfo   : TVkDescriptorBufferInfo;
                                         out aImgInfo   : TVkDescriptorImageInfo  ): Boolean; Override;
@@ -520,6 +522,7 @@ TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
 
     Procedure SetDisabled ; Override;
     Procedure SetEnabled ; Override;
+    function HasPayload: Boolean; override;
 
     function GetWriteDescriptorPayload( out aBufInfo   : TVkDescriptorBufferInfo;
                                         out aImgInfo   : TVkDescriptorImageInfo  ): Boolean; Override;
@@ -618,6 +621,7 @@ TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
 
     Procedure SetDisabled ; Override;
     Procedure SetEnabled  ; Override;
+    function HasPayload: Boolean; override;
 
     function GetWriteDescriptorPayload( out aBufInfo   : TVkDescriptorBufferInfo;
                                         out aImgInfo   : TVkDescriptorImageInfo  ): Boolean; Override;
@@ -1053,6 +1057,11 @@ begin
   fUploadNeeded:=True;
 end;
 
+function TvgDescriptor_PerFrame_UniformBuffer<T>.HasPayload: Boolean;
+begin
+  Result := assigned(fVulkanBuffer);
+end;
+
 function TvgDescriptor_PerFrame_UniformBuffer<T>.GetWriteDescriptorPayload( out aBufInfo: TVkDescriptorBufferInfo;
                                                                   out aImgInfo: TVkDescriptorImageInfo): Boolean;
 begin
@@ -1443,18 +1452,13 @@ begin
 end;
 
 function TvgDescriptor_Data_Texture.GetTextureFrame(Index: Integer): TvgDescriptor_PerFrame_Texture;
-  Var L:Integer;
+var
+  DF: TvgDescriptorPerFrameData;
 begin
-  Result := Nil;
-  L:= Length(fFrameData) ;
-  If L=0 then exit;
-
-  If (Index>=0) and (Index<L) and
-     assigned(fFrameData[index]) and (fFrameData[index] is TvgDescriptor_PerFrame_Texture) then
-     Result := TvgDescriptor_PerFrame_Texture(fFrameData[index])
-  else
-  If (index>=L) then
-     Result := TvgDescriptor_PerFrame_Texture(fFrameData[L-1]) ;
+  Result := nil;
+  DF := GetFrameData(Index);
+  if DF is TvgDescriptor_PerFrame_Texture then
+    Result := TvgDescriptor_PerFrame_Texture(DF);
 end;
 
 function TvgDescriptor_Data_Texture.GetWrapModeU: TpvVulkanTextureWrapMode;
@@ -1492,7 +1496,8 @@ begin
   L:=Length(fFrameData);
   If L>0 then
     For I:=0 to L-1 do
-      fFrameData[I].Active := False;
+      If assigned(fFrameData[I]) then
+        fFrameData[I].Active := False;
 
 end;
 
@@ -1577,7 +1582,8 @@ begin
   L:=Length(fFrameData);
   If L>0 then
     For I:=0 to L-1 do
-      fFrameData[I].Active := True ;
+      If assigned(fFrameData[I]) then
+        fFrameData[I].Active := True ;
  (*
 
   DC := GetDescriptorCount;
@@ -2431,7 +2437,7 @@ procedure TvgElementSampler.SetSampleRadius(const Value : TvgPixelSampleRadius);
 begin
   if fSampleRadius = Value then Exit;
 
-  if fActive then
+  if Active then
   begin
     SetActiveState(False);
     fSampleRadius := Value;
@@ -2463,7 +2469,7 @@ end;
 procedure TvgElementSampler.SetSamplingDimension( const Value: TvgElementSamplingDimension);
 begin
   if fSamplingDimension = Value then Exit;
-  CustomAssert((fActive=False),'You can''t change the Sampling Dimension when active');
+  CustomAssert((Active=False),'You can''t change the Sampling Dimension when active');
  // SetActiveState(False);
   fSamplingDimension := Value;
 end;
@@ -2481,7 +2487,7 @@ end;
 procedure TvgElementSampler.SetStrideWidth(const Value: TvkUint32);
 begin
   if fStrideWidth = Value then Exit;
-  CustomAssert((fActive=False),'You can''t change the Stride Width when active');
+  CustomAssert((Active=False),'You can''t change the Stride Width when active');
 //  SetActiveState(False);
   fStrideWidth := Value;
 end;
@@ -2631,7 +2637,7 @@ var
   ReadSize : TvkUint32;
 begin
   Result := False;
-  if not fActive           then exit;
+  if not Active           then exit;
   if fElementStride = 0    then exit;
   if not assigned(fStagingBuffer) then exit;
 
@@ -2647,7 +2653,7 @@ end;
 function TvgElementSampler.SampleElement(CentreIndex : Integer) : Boolean;
 begin
   Result := False;
-  if not fActive then exit;
+  if not Active then exit;
   CustomAssert(fSamplingDimension = esdLinear1D,
     'SampleElement is for esdLinear1D - use SampleElementXY when SamplingDimension = esdGrid2D');   // NEW
 
@@ -2658,7 +2664,7 @@ end;
 function TvgElementSampler.SampleElementXY(CentreX, CentreY: Integer): Boolean;
 begin
   Result := False;
-  if not fActive then exit;
+  if not Active then exit;
   CustomAssert(fSamplingDimension = esdGrid2D,
     'SampleElementXY requires SamplingDimension = esdGrid2D');
 
@@ -2749,13 +2755,13 @@ begin
   end;
 
   SetLength(fSampledData, 0);
-  fActive := False;
+  Active := False;
 end;
 
 procedure TvgElementSampler.SetEnabled;
 begin
   Inherited;
-  fActive := False;
+  Active := False;
 
   CustomAssert(assigned(fSourceBuffer),          'Source Buffer NOT assigned to TvgElementSampler');
   CustomAssert(assigned(fDevice),                'Device NOT assigned to TvgElementSampler');
@@ -2799,7 +2805,7 @@ begin
       fCommandBuffer.Active := True;
   end;
 
-  fActive := True;
+  Active := True;
 end;
 
 
@@ -3026,6 +3032,11 @@ begin
   Result := True;
 end;
 
+function TvgDescriptor_PerFrame_StorageBuffer<T>.HasPayload: Boolean;
+begin
+  Result := assigned(fVulkanBuffer);
+end;
+
 (*
 function TvgDescriptor_PerFrame_StorageBuffer<T>.GetElementSampler(FrameIndex : Integer) : TvgElementSampler;
 begin
@@ -3247,6 +3258,11 @@ begin
   aImgInfo.imageView   := fStorageImageBuffer.ImageView.Handle;
   aImgInfo.sampler     := VK_NULL_HANDLE;
   Result := True;
+end;
+
+function TvgDescriptor_PerFrame_StorageImage.HasPayload: Boolean;
+begin
+  Result := assigned(fStorageImageBuffer);
 end;
 
 Procedure TvgDescriptor_PerFrame_StorageImage.SetDisabled;
@@ -3706,16 +3722,16 @@ end;
 
 function TvgDescriptor_Data_StorageImage.GetPixelSampler(  FrameIndex: Integer): TvgPixelSampler;
 var
+  DF: TvgDescriptorPerFrameData;
   FrameData: TvgDescriptor_PerFrame_StorageImage;
 begin
   Result := Nil;
   If not (Active) then exit;
-  if (FrameIndex < 0) or (FrameIndex >= Length(fFrameData)) then
-    Exit;
 
-  if fFrameData[FrameIndex] is TvgDescriptor_PerFrame_StorageImage then
+  DF := GetFrameData(FrameIndex);
+  if DF is TvgDescriptor_PerFrame_StorageImage then
   begin
-    FrameData := TvgDescriptor_PerFrame_StorageImage(fFrameData[FrameIndex]);
+    FrameData := TvgDescriptor_PerFrame_StorageImage(DF);
     if Assigned(FrameData.fStorageImageBuffer) then
       Result := FrameData.fStorageImageBuffer.PixelSampler;
   end;
@@ -3730,7 +3746,8 @@ begin
   L:=Length(fFrameData);
   If L>0 then
     For I:=0 to L-1 do
-      fFRameData[I].Active := False;
+     If assigned(fFRameData[I]) then
+       fFRameData[I].Active := False;
 
 
 end;
@@ -3743,6 +3760,7 @@ begin
   L:=Length(fFrameData);
   If L>0 then
     For I:=0 to L-1 do
+    If assigned(fFRameData[I]) then
       fFRameData[I].Active := True;
 end;
 
@@ -3753,14 +3771,8 @@ begin
   fClearCol.float32[2] := B;
   fClearCol.float32[3] := A;
 end;
-(*
-procedure TvgDescriptor_Data_StorageImage.SetFormat(const Value: TvgFormat);
-begin
 
-end;
-*)
-procedure TvgDescriptor_Data_StorageImage.SetfPixelSamplingON(
-  const Value: Boolean);
+procedure TvgDescriptor_Data_StorageImage.SetfPixelSamplingON( const Value: Boolean);
 begin
   fPixelSamplingON := Value;
 end;
@@ -3915,17 +3927,13 @@ begin
 end;
 
 function TvgDescriptor_Data_UniformBuffer<T>.GetUBOFrame( Index: Integer): TvgDescriptor_PerFrame_UniformBuffer<T>;
-  Var L:Integer;
+var
+  DF: TvgDescriptorPerFrameData;
 begin
-  Result := Nil;
-  L:=Length(fFrameData);
-  If (L=0) then exit;
-
-  If (index>=0) and (Index<L) and assigned(fFrameData[Index]) then
-    Result := TvgDescriptor_PerFrame_UniformBuffer<T>(fFrameData[Index] )
-  else
-  If (index>=L) then
-    Result := TvgDescriptor_PerFrame_UniformBuffer<T>(fFrameData[L-1] );
+  Result := nil;
+  DF := GetFrameData(Index);
+  if DF is TvgDescriptor_PerFrame_UniformBuffer<T> then
+    Result := TvgDescriptor_PerFrame_UniformBuffer<T>(DF);
 end;
 
 function TvgDescriptor_Data_UniformBuffer<T>.GetGLSLBaseTypeName: String;
@@ -3965,7 +3973,8 @@ begin
   L:=Length(fFrameData);
   If L>0 then
     For I:=0 to L-1 do
-      fFRameData[I].Active := False;
+      If assigned(fFRameData[I]) then
+        fFRameData[I].Active := False;
 
 end;
 
@@ -3977,7 +3986,8 @@ begin
   L:=Length(fFrameData);
   If L>0 then
     For I:=0 to L-1 do
-      fFRameData[I].Active := True;
+      If assigned(fFRameData[I]) then
+        fFRameData[I].Active := True;
 
 end;
 
@@ -4110,6 +4120,11 @@ begin
   aImgInfo.sampler     := fVulkanTexture.Sampler.Handle;
 
   Result := True;
+end;
+
+function TvgDescriptor_PerFrame_Texture.HasPayload: Boolean;
+begin
+  Result := assigned(fVulkanTexture);
 end;
 
 procedure TvgDescriptor_PerFrame_Texture.SetDisabled;
@@ -4321,13 +4336,13 @@ begin
 end;
 
 function TvgDescriptor_Data_StorageBuffer<T>.GetStorageBufferFrame( Index: Integer): TvgDescriptor_PerFrame_StorageBuffer<T>;
+var
+  DF: TvgDescriptorPerFrameData;
 begin
-  If (Index>=0) and (Index<Length(fFrameData)) and
-     assigned(fFrameData[Index]) and
-    (fFrameData[Index] is TvgDescriptor_PerFrame_StorageBuffer<T>) then
-      Result := TvgDescriptor_PerFrame_StorageBuffer<T>(fFrameData[Index])
-  else
-      Result:=  Nil;
+  Result := nil;
+  DF := GetFrameData(Index);
+  if DF is TvgDescriptor_PerFrame_StorageBuffer<T> then
+    Result := TvgDescriptor_PerFrame_StorageBuffer<T>(DF);
 
 end;
 procedure TvgDescriptor_Data_StorageBuffer<T>.RefreshSamplerSourceBuffers;
@@ -4338,7 +4353,7 @@ begin
   if not assigned(fElementSampler) then exit;
   for I := 0 to Length(fFrameData) - 1 do
   begin
-    DF := TvgDescriptor_PerFrame_StorageBuffer<T>(fFrameData[I]);
+    DF := TvgDescriptor_PerFrame_StorageBuffer<T>(GetFrameData(I));
     if assigned(DF) then
       fElementSampler.SourceBuffer[I] := DF.fVulkanBuffer;
   end;

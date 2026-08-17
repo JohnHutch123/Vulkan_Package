@@ -1,4 +1,4 @@
-unit Vulkan_Components_ShaderBuilder;
+﻿unit Vulkan_Components_ShaderBuilder;
 
 interface
 
@@ -1445,7 +1445,7 @@ begin
     end;
 
     //?? ObjectID output ????????????????????????????????????????????????????????
-    if Assigned(aGP) and aGP.ObjectIDON then
+    if Assigned(aGP) and aGP.SelectON then
     begin
       if ObjectIDBufferName = '' then
         raise EInvalidOperation.Create(
@@ -1574,7 +1574,7 @@ begin
   end;
 
   // Detect USE_DOUBLE spec constant in the vertex module
-  UseDouble := ModuleUsesDouble(GP.VertexS) or GP.UseDouble or
+  UseDouble := ModuleUsesDouble(GP.VertexS) or GP.DoubleOn or
                GlobalUsesDouble(GP);
 
   SB := TStringBuilder.Create;
@@ -1692,7 +1692,7 @@ begin
     SB.Append(SB_Header(GlobalUsesDouble(GP), False,
       RequiresDescriptorIndexing(GP)));
     SB.Append(SB_SpecialisationConstants(GP.FragmentS));       // [FULL]
-    if GP.ObjectIDON then
+    if GP.SelectON then
     begin
       SB.Append(Cmt('ObjectID image writes must occur only after depth tests pass'));
       SB.AppendLine('layout(early_fragment_tests) in;');

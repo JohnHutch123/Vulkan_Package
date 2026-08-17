@@ -59,8 +59,10 @@ type
     fCurrentVertex  : Integer;     // Current local vertex index for adding
     fCurrentInstance: Integer;     // Current local instance index for adding
 
+
     Procedure SetDisabled; Override;
     Procedure SetEnabled; Override;
+
 
   Public
     Constructor Create;
@@ -99,9 +101,6 @@ type
     procedure SetIndex(AIndexPos: Integer; AValue: Cardinal);
     procedure SetTriangle(ATriangleIndex: Integer; I1, I2, I3: Cardinal);
 
-    Function SetUpObjectID:Boolean;
-    Function IsSelectable : Boolean;Virtual;//override to control object selecability eg Frozen/Locked
-
     Function IncCurrentVertex  :Boolean;
 
     // Properties
@@ -110,13 +109,13 @@ type
 
     Property CurrentVertex : Integer Read fCurrentVertex write SetCurrentVertex;
 
+
   End;
 
   TvgObjectStore = Class(TvgVulkanDataStore)
   private
     function GetActive: Boolean;
-    procedure SetIncInstanceData(const Value: Boolean);
-    procedure SetObjectSelectON(const Value: Boolean);
+ //   procedure SetActiveState(const Value: Boolean);
 
   protected
     fScene               : TvgScene;
@@ -132,8 +131,8 @@ type
     fLineWidth     : Single;
     fPointSize     : Single;
 
-    fObjectSelectON   : Boolean;
-    fShadersUseDouble : Boolean;
+//    fObjectSelectON   : Boolean;
+//    fShadersUseDouble : Boolean;
 
     Procedure SetEnabled; Override;
     Procedure SetDisabled; Override;
@@ -142,6 +141,13 @@ type
     Procedure ObjectsListOfPipes_Clear;
 
     Procedure  ConfigureGraphicPipeline(GP:TvgGraphicPipeline); Override;
+
+    function GetEditable: Boolean;  Override;
+    function GetFrozen: Boolean;  Override;
+    function GetLocked: Boolean;    Override;
+    function GetSelectable: Boolean; Override;
+    function GetVisible: Boolean;  Override;
+
 
   public
     constructor Create(AOwner: TComponent);  Override;
@@ -167,8 +173,8 @@ type
    //Free GraphicPipelines
 
     // Configuration
-    Property InstanceDataON : Boolean read fInstanceDataON write SetIncInstanceData;
-    Property ObjectSelectON : Boolean read fObjectSelectON write SetObjectSelectON ;
+//    Property InstanceDataON : Boolean read fInstanceDataON write SetIncInstanceData;
+ //   Property ObjectSelectON : Boolean read fObjectSelectON write SetObjectSelectON ;
 
     Property Scene: TvgScene read fScene ;
     Property Active: Boolean read GetActive write SetActiveState;
@@ -219,7 +225,7 @@ type
 
 //   Function GetObjectAtPointer(aPointer:Pointer): TvgObject;
 
-   Function GetSceneGLSLHeaders:String;
+ //  Function GetSceneGLSLHeaders:String;
 
    Procedure ClearScene; Override;
 
@@ -274,9 +280,6 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
  TvgRenderEngine= Class(TvgBaseRenderEngine)
  Private
 
-    procedure SetModelViewON(const Value: Boolean);
-    procedure SetSelectOn(const Value: Boolean);
-
 
  Protected
 
@@ -301,8 +304,8 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
 
  Published
 
-   Property MVPMatrixON   : Boolean read FFlags.MVPMatrixON write SetMVPMatrixON;
-   Property ObjSelectON   : Boolean read FFlags.SelectON write SetSelectON;
+//   Property MVPMatrixON   : Boolean read FFlags.MVPMatrixON write SetMVPMatrixON;
+//   Property ObjSelectON   : Boolean read FFlags.SelectON write SetSelectON;
 
  End;
 
@@ -459,6 +462,11 @@ begin
   fObjIndex        := -1;
   fCurrentVertex   := -1;
   fCurrentInstance := -1;
+
+  fFlags.Selectable := True;
+  fFlags.Visible    := True;
+
+  SetUpObjectID;
 end;
 
 function TvgObject.IncCurrentVertex: Boolean;
@@ -475,11 +483,6 @@ begin
     fCurrentVertex := NewV;
     Result := True;
   End;
-end;
-
-function TvgObject.IsSelectable: Boolean;
-begin
-  Result := True;
 end;
 
 procedure TvgObject.SetCurrentVertex(const Value: Integer);
@@ -504,6 +507,7 @@ procedure TvgObject.SetEnabled;
 begin
   inherited;
 
+  SetUpObjectID;
   // Object-specific enable logic
 end;
 
@@ -631,39 +635,6 @@ begin
 
   fDataStore.SetObjectTriangle(fObjIndex, ATriangleIndex, I1, I2, I3);
   fDataStore.SetDataDirty;
-end;
-
-function TvgObject.SetUpObjectID: Boolean;
- var
-  ObjHigh,ObjLow : Longword;
-  ObjPtr         : Uint64;
-
-begin
-  Result := False;
-
-  If not assigned(self.fDataStore) then exit;
-  If not fDataStore.fObjectSelectON then exit;
-  if not fDataStore.fInstanceDataON then exit;
-
-  If not fDataStore.IsInstanceTypeSet(idtObjID) then exit;
-
-  If AddInstance <>-1 then
-  Begin
-     If IsSelectable then
-     Begin
-       ObjPtr := Uint64(self);
-       Split64BitTo32Bit(ObjPtr, ObjLow, ObjHigh);
-     End else
-     Begin
-       ObjLow :=0;
-       ObjHigh:=0;
-     end;
-
-     SetInstanceObjID(ObjLow, ObjHigh)  ;
-     Result := True;
-
-  End;
-
 end;
 
 { Vertex Setters - use current vertex }
@@ -868,9 +839,7 @@ begin
   fPointSize     := 5;// Single;
 
 
-  fInstanceDataON   := False;
-  fObjectSelectON   := False;
-  fShadersUseDouble := TRue;
+//  fInstanceDataON   := False;
 
   fScene := nil;
 
@@ -968,26 +937,81 @@ begin
   Result := fObjects.Count;
 end;
 
+function TvgObjectStore.GetSelectable: Boolean;
+  Var I,L:Integer;
+begin
+  Result := False;
+  L:= self.fObjects.Count;
+  If L=0 then exit;
+  For I:=0 to L-1 do
+    If fObjects.Items[I].SelectON then
+    Begin
+      Result := True;
+      Exit;
+    End;
+end;
+
+function TvgObjectStore.GetVisible: Boolean;
+  Var I,L:Integer;
+begin
+  Result := False;
+  L:= self.fObjects.Count;
+  If L=0 then exit;
+  For I:=0 to L-1 do
+    If fObjects.Items[I].VisibleON then
+    Begin
+      Result := True;
+      Exit;
+    End;
+end;
+
 function TvgObjectStore.GetActive: Boolean;
 begin
   Result := fActive;
 end;
 
-procedure TvgObjectStore.SetIncInstanceData(const Value: Boolean);
+function TvgObjectStore.GetEditable: Boolean;
+  Var I,L:Integer;
 begin
-  if fObjects.Count > 0 then
-    raise Exception.Create('Cannot change IncludeInstanceData after objects have been added');
-  fInstanceDataON := Value;
+  Result := False;
+  L:= self.fObjects.Count;
+  If L=0 then exit;
+  For I:=0 to L-1 do
+    If fObjects.Items[I].EditON then
+    Begin
+      Result := True;
+      Exit;
+    End;
 end;
 
-procedure TvgObjectStore.SetObjectSelectON(const Value: Boolean);
+function TvgObjectStore.GetFrozen: Boolean;
+  Var I,L:Integer;
 begin
-  If fObjectSelectON = Value then exit;
-  SetActiveState(False);
-  fObjectSelectON := Value;
-  If  fObjectSelectON then
-     fInstanceDataON := True;
+  Result := False;
+  L:= self.fObjects.Count;
+  If L=0 then exit;
+  For I:=0 to L-1 do
+    If fObjects.Items[I].FrozenON then
+    Begin
+      Result := True;
+      Exit;
+    End;
 end;
+
+function TvgObjectStore.GetLocked: Boolean;
+  Var I,L:Integer;
+begin
+  Result := False;
+  L:= self.fObjects.Count;
+  If L=0 then exit;
+  For I:=0 to L-1 do
+    If fObjects.Items[I].LockON then
+    Begin
+      Result := True;
+      Exit;
+    End;
+end;
+
 
 function TvgObjectStore.AddObject: TvgObject;
 var
@@ -997,10 +1021,8 @@ begin
   Obj.fDataStore := Self;
   
   // Add to data store and get index
-  Obj.fObjIndex  := AddDataObject(fInstanceDataON);
+  Obj.fObjIndex  := AddDataObject(SelectON);
 
-
-  
   // Add to our object list
   fObjects.Add(Obj);
   
@@ -1073,7 +1095,6 @@ var
   SHS: TvgShaderSpecialisationItem;
 begin
 
-
     // Shader files — ObjectStore owns these
     GP.BuildShaderVertexName( fShaderBaseVertName);
  //   GP.GeometryS.FileName := fGe                      FINISH
@@ -1098,9 +1119,6 @@ begin
     GP.Rasterizer.CullMode    := GetVGCullMode(fCullMode);      // default CULL_BACK (not NONE)
     GP.Rasterizer.FrontFace   := GetVGFrontFace(fFrontFace);     // default FF_CLOCKWISE
     GP.Rasterizer.LineWidth   := fLineWidth;     // default 1.0
-
-    // Double precision — ObjectStore owns this
-    GP.UseDouble := fShadersUseDouble;     // explicit property
 
 end;
 
@@ -1145,7 +1163,9 @@ begin
 
       aDataStore.FVulkanDevice :=  GetVulkanDevice;
     End;
+
   Result := True;
+
 end;
 
 procedure TvgScene.BuildGraphicPipelinesForRenderer(aRenderer: TvgBaseRenderEngine);
@@ -1346,33 +1366,6 @@ begin
   Result := fSceneData.count;
 end;
 
-function TvgScene.GetSceneGLSLHeaders: String;
-  Var S:String;
-      I:Integer;
-      ObjStr:TvgObjectStore;
-begin
-  Result := '';
-  If fSceneData.Count=0 then exit;
-
-  For I:=0 to fSceneData.Count-1 do
-  Begin
-    ObjStr := fSceneData.Items[I] ;
-    If assigned(ObjStr) then
-    Begin
-      S:= ObjStr.WriteGLSLHeader;
-
-      Result := Result +'********'+ #10+#13;
-      Result := Result +Format('%d : Object Store' ,[I]) + #10+#13;
-      Result := Result +'********'+ #10+#13;
-      Result := Result + #10+#13+ S;
-      Result := Result +'********'+ #10+#13;
-    End;
-
-  End;
-
-end;
-
-
 procedure TvgScene.Notification(AComponent: TComponent; Operation: TOperation);
 begin
   inherited;
@@ -1435,13 +1428,13 @@ Function TvgScene.SetEnabled:Boolean;
      ObjStr : TvgObjectStore;
 
 begin
-  inherited;
-//  Result := False;
+  Result := inherited;
 
   CustomAssert(assigned(fSceneData),'Scene Data List NOT available',self);
   CustomAssert(assigned(fRendererList),'Renderer List NOT available',self);
 
  // If fRendererList.count=0 then exit;
+
   If fSceneData.Count>0 then
     For I:=0 to fSceneData.count-1 do
     Begin
@@ -1842,7 +1835,7 @@ begin
   If Assigned(Obj) then
   Begin
 
-    If Assigned(Obj) and Obj.IsSelectable then
+    If Assigned(Obj) and Obj.SelectON then
     Begin
       fSelectedObject := Obj;
 
@@ -2248,7 +2241,6 @@ begin
   // Feature flags are owned by the renderer and propagated to each pipeline.
   if SelectON then
   begin
-    GP.ObjectIDON := True;
 
     SHS := GP.VertexS.SpecialConst.add;    //vertex
     If assigned(SHS) then
@@ -2371,13 +2363,4 @@ begin
 
 end;
 
-procedure TvgRenderEngine.SetModelViewON(const Value: Boolean);
-begin
-   SetMVPMatrixON(Value);
-end;
-
-procedure TvgRenderEngine.SetSelectOn(const Value: Boolean);
-begin
-   SetSelectON(Value);
-end;
 end.

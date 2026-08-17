@@ -224,15 +224,39 @@ type
   End;
 
   //base class for all Tvg... component descendants
+  TvgObjectStateFlags = record
+      Selectable : Boolean;
+      Visible    : Boolean;
+      Locked     : Boolean;
+      Frozen     : Boolean;
+      Editable   : Boolean;
+
+  end;
+
+
   TvgBaseObject = Class
+  private
+    fActive         : Boolean;
+    fActiveChanging : Boolean;
+
+    procedure SetEditableON(const Value: Boolean);
+    procedure SetFrozenON(const Value: Boolean);
+    procedure SetLockedON(const Value: Boolean);
+    procedure SetSelectON(const Value: Boolean);
+    procedure SetVisibleON(const Value: Boolean);
   Protected
-       fActive         : Boolean;
-       fActiveChanging : Boolean;
 
-       Procedure SetActiveState(aValue:Boolean);
+    fObjHigh,
+    fObjLow         : Longword;       //Object ID (pointer) for use if Selection is ON  set in Create
+    fFlags          : TvgObjectStateFlags;
 
-       Procedure SetDisabled ; Virtual;
-       Procedure SetEnabled;   Virtual;
+
+     Procedure SetActiveState(aValue:Boolean);
+
+     Procedure SetDisabled ; Virtual;
+     Procedure SetEnabled;   Virtual;
+
+     Function SetUpObjectID:Boolean;
 
    Public
    // constructor Create;
@@ -241,6 +265,13 @@ type
      Property Active : Boolean read fActive write SetActiveState;
      Property ActiveChanging : Boolean read fActiveChanging;
 
+    Property SelectON  : Boolean Read fFlags.selectable  write SetSelectON;
+    Property VisibleON : Boolean Read fFlags.visible  write SetVisibleON;
+    Property LockON    : Boolean Read fFlags.Locked  write SetLockedON;
+    Property FrozenON  : Boolean Read fFlags.Frozen  write SetFrozenON;
+    Property EditON    : Boolean Read fFlags.Editable  write SetEditableON;
+
+
   End;
 
  TvgComponentState = (
@@ -248,8 +279,6 @@ type
     vgcsDesign,
     vgcsActive
   );
-
-
 
 TvgBaseComponent = class(TComponent)
   private
@@ -2101,6 +2130,7 @@ TvgBaseComponent = class(TComponent)
 
     fUploadNeeded   : Boolean;
 
+    function HasPayload: Boolean; virtual;
     Procedure SetDisabled; override;
     Procedure SetEnabled;  override;
     procedure SetUploadNeeded(const Value: Boolean);   //see descendants
@@ -2153,6 +2183,7 @@ TvgBaseComponent = class(TComponent)
 
     Procedure SetGLSLIndex(aGLSLIndex : TvkUint32);
 
+    function ResolveFrameData(aFrameIndex: Integer): TvgDescriptorPerFrameData;
     Function GetOrAddFrameDataObject(aFrameIndex:Integer) : TvgDescriptorPerFrameData; Virtual;  //descendant builds correct frameData type
     function GetFrameData(aFrameIndex: Integer): TvgDescriptorPerFrameData; Virtual;  //one per Frame per Descriptor see descendants for extra data
 
@@ -3877,17 +3908,16 @@ TvgBaseComponent = class(TComponent)
     function GetUseShaders: TvgPipelineShaders;
     procedure SetUseShaders(const Value: TvgPipelineShaders);
     procedure SetObjectStore(const Value: TvgBaseObjectStore);
-    procedure SetUseDouble(const Value: Boolean);
+    function GetDoubleON: Boolean;
+    function GetSelectON: Boolean;
 
   Protected
 
      fName   : String;
 
-   //links
+   //external links
      fRenderEngine       : TvgBaseRenderEngine;
-
      fSubPass            : TvgSubPass;
-
      fObjectStore        : TvgBaseObjectStore;
 
      fUseShaderObjects   : Boolean;             // design-time or runtime switch
@@ -3914,9 +3944,7 @@ TvgBaseComponent = class(TComponent)
 
      fShaderStages       : Array[0..2] of TvkPipelineShaderStageCreateInfo;
 
- //    fShaderUseDouble    : Boolean;
      fValidStructure     : Boolean;  //set when GP is considered valid
-     fObjectIDON         : Boolean;//supports object selection set in Build
 
 //Viewports and Scissors
      fvp                 : TvkViewPort;
@@ -4034,12 +4062,9 @@ TvgBaseComponent = class(TComponent)
                                         aWorkerIndex,
                                         aFrameIndex: TvkUint32);//called from the Node Draw
 
- //    Function BuildShaderVertexName(aBaseName:String):Boolean;   Virtual;
- //    Function BuildShaderGeometryName(aBaseName:String):Boolean;   Virtual;
- //    Function BuildShaderFRagmentName(aBaseName:String):Boolean;   Virtual;
-
-     //handle the asembly of text into Shader
-     //see descendants
+     Function BuildShaderVertexName(aBaseName:String):Boolean;   Virtual;
+     Function BuildShaderGeometryName(aBaseName:String):Boolean;   Virtual;
+     Function BuildShaderFRagmentName(aBaseName:String):Boolean;   Virtual;
 
      Procedure AddObjectStoreToCommand(aTask: TvgRenderTask; aRenderWorker: TvgRenderWorker) ;
 
@@ -4060,12 +4085,12 @@ TvgBaseComponent = class(TComponent)
 
   Published
 
-    Property ObjectIDON         : Boolean Read fObjectIDON write fObjectIDON;
+    Property SelectON         : Boolean Read GetSelectON ;
+    Property DoubleON         : Boolean Read GetDoubleON ;
 
     Property PipeCreateFlags  : TvgPipelineCreateFlagBits Read GetPipeCreateFlags write SetPipeCreateFlags;
 
     Property UseShaders       : TvgPipelineShaders Read GetUseShaders write SetUseShaders;
-    Property UseDouble        : Boolean Read fShaderUseDouble write SetUseDouble;
 
     Property VertexS          : TvgShaderModule Read fVertShader;
     Property GeometryS        : TvgShaderModule Read fGeomShader;
@@ -5129,6 +5154,7 @@ TvgBaseComponent = class(TComponent)
   //Node management
 
      fActive            : Boolean;
+     fActiveChanging    : Boolean;
 
   //vulkan stuff linked
      fBaseScene         : TvgBaseScene;
@@ -5153,7 +5179,7 @@ TvgBaseComponent = class(TComponent)
 
  //GraphicPipeline settings
 
-     fTopology         : TvkPrimitiveTopology ;
+     fTopology             : TvkPrimitiveTopology ;
 
      fDynamicStateTypeCore : TvgDynamicStateTypeCORE;
 
@@ -5161,7 +5187,9 @@ TvgBaseComponent = class(TComponent)
      fShaderBaseGeomName    : String;
      fShaderBaseFragName    : String;
 
-     fInstanceDataON        : Boolean;
+ //    fInstanceDataON        : Boolean;
+    fFlags          : TvgObjectStateFlags;
+
 
 
     Procedure SetDisabled;  Virtual;
@@ -5170,6 +5198,11 @@ TvgBaseComponent = class(TComponent)
 
     function GetObjectCount: Integer; Virtual;
 
+    function GetEditable: Boolean;  Virtual;Abstract;
+    function GetFrozen: Boolean;  Virtual;Abstract;
+    function GetLocked: Boolean;    Virtual;Abstract;
+    function GetSelectable: Boolean; Virtual;Abstract;
+    function GetVisible: Boolean;  Virtual;Abstract;
  //these calls can be threaded and tasked
 
     Procedure ConfigureGraphicPipeline(GP:TvgGraphicPipeline);Virtual; Abstract;
@@ -5189,6 +5222,7 @@ TvgBaseComponent = class(TComponent)
     Procedure DisableResources;
     Procedure SetResourceLinker(aLinker:TvgLinker);
 
+  //  Function IsInstanceData
 
   Public
 
@@ -5234,8 +5268,7 @@ TvgBaseComponent = class(TComponent)
 
     function WriteGLSLHeader: String; virtual;
     function GetShaderVertexPositionExpression(const aPositionName: String): String; virtual;
-    function GetShaderFragmentColorExpression(const aSamplerName,
-      aTexCoordName, aColorName: String): String; virtual;
+    function GetShaderFragmentColorExpression(const aSamplerName, aTexCoordName, aColorName: String): String; virtual;
 
     Property Active        : Boolean Read GetActive write SetActiveState Stored False;
 
@@ -5253,6 +5286,13 @@ TvgBaseComponent = class(TComponent)
    Property ResourceUse    : TvgResourceUse Read fResourceUse write SetResourceUse;
    Property ObjectStoreRes : TvgDescriptorSet read fObjectStoreRes;  //SET=2
    Property ObjectModelRes : TvgDescriptorSet read fObjectModelRes;
+
+    Property SelectON  : Boolean Read GetSelectable ;
+    Property VisibleON : Boolean Read GetVisible  ;
+    Property LockON    : Boolean Read GetLocked ;
+    Property FrozenON  : Boolean Read GetFrozen ;
+    Property EditON    : Boolean Read GetEditable  ;
+
 
 
   End;
@@ -5376,6 +5416,7 @@ TvgBaseComponent = class(TComponent)
     procedure SetSelectON(const Value: Boolean);
     procedure SetShaderUseDouble(const Value: Boolean);
 
+
   Protected
   //Connected Components Device connected in TvgEngine
     fLinker            : TvgLinker;
@@ -5391,7 +5432,7 @@ TvgBaseComponent = class(TComponent)
     //Used for Proj/View  matrix
     //used for ObjectID Storage Image
 
-    FFlags: TvgRenderFeatureFlags;
+    FFlags             : TvgRenderFeatureFlags;
 
     fRenderWorkerCount : TvkUint32;                 //should match thread/worker count used for rendering
     fRenderWorkers     : TList<TvgRenderWorker>;
@@ -5404,7 +5445,6 @@ TvgBaseComponent = class(TComponent)
 
     fRenderLock           : Boolean;
     //true if the Linker is running a Prepare Frame Loop
-
 
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
 
@@ -5457,9 +5497,6 @@ TvgBaseComponent = class(TComponent)
     Procedure FlagRebuildALLFrames;
 
     function GetPhysicalDevice: TvgPhysicalDevice;
-
-  //Object Selection
-//    function GetObjectAtLocation(aFrameIndex: TvkUint32; Shift: TShiftState; X, Y: Integer): Pointer;    Virtual;
 
     Property WorkerCount   : TvkUint32 read fRenderWorkerCount write SetWorkerCount;
 
@@ -6188,12 +6225,65 @@ begin
  fActive := False;
 end;
 
+procedure TvgBaseObject.SetEditableON(const Value: Boolean);
+begin
+  fFlags.Editable := Value;
+
+  If fFlags.Editable then
+  Begin
+    fFlags.Selectable := True;
+    SetUpObjectID;
+  End;
+
+end;
+
 procedure TvgBaseObject.SetEnabled;
 begin
  fActive := True;
+
+ SetUpObjectID;
 end;
 
+procedure TvgBaseObject.SetFrozenON(const Value: Boolean);
+begin
+  fFlags.Frozen := Value;
+end;
 
+procedure TvgBaseObject.SetLockedON(const Value: Boolean);
+begin
+  fFlags.Locked := Value;
+end;
+
+procedure TvgBaseObject.SetSelectON(const Value: Boolean);
+begin
+  fFlags.selectable := Value;
+  SetUpObjectID;
+
+end;
+
+function TvgBaseObject.SetUpObjectID: Boolean;
+ var
+  ObjPtr         : Uint64;
+
+begin
+  Result := True;
+
+   If fFlags.Selectable then
+   Begin
+     ObjPtr := Uint64(self);
+     Split64BitTo32Bit(ObjPtr, fObjLow, fObjHigh);
+   End else
+   Begin
+     fObjLow :=0;
+     fObjHigh:=0;
+   end;
+
+end;
+
+procedure TvgBaseObject.SetVisibleON(const Value: Boolean);
+begin
+  fFlags.visible := Value;
+end;
 
 { TvgBaseComponent }
 
@@ -12255,7 +12345,7 @@ begin
 
   fRenderWorkers     := TList<TvgRenderWorker>.Create;
 
-//  VaildateGlobalResources; //   should happen at Create NOT enabled;
+  VaildateGlobalResources; //   should happen at Create NOT enabled;
 
 end;
 
@@ -12788,6 +12878,7 @@ begin
 
   FFlags.MVPMatrixON := Value;
 
+  VaildateGlobalResources;
   ApplyFeatureFlagsToPipelines;
   FlagRebuildALLFrames;
 end;
@@ -12799,6 +12890,7 @@ begin
 
   FFlags.SelectON := Value;
 
+  VaildateGlobalResources;
   ApplyFeatureFlagsToPipelines;
   FlagRebuildALLFrames;
 end;
@@ -12810,6 +12902,7 @@ begin
 
   FFlags.ShaderUseDouble := Value;
 
+  VaildateGlobalResources;
   ApplyFeatureFlagsToPipelines;
   FlagRebuildALLFrames;
 end;
@@ -14663,6 +14756,9 @@ begin
   aTask.TaskJob     := TM_BIND_PIPELINE;
   aRenderWorker.CompleteTask(aTask);
 
+  If not fObjectStore.Active then
+     fObjectStore.SetActiveState(True);
+
   If fObjectStore.Active then
   Begin
     aTask.ObjectStore := fObjectStore;
@@ -14825,7 +14921,7 @@ procedure TvgGraphicPipeline.BindShaderObjects(aCommandBuf: TvgCommandBuffer;   
 begin
   //finish
 end;
-(*
+
 function TvgGraphicPipeline.BuildShaderFRagmentName(aBaseName: String): Boolean;
   Var S:String;
       Sel,
@@ -14851,15 +14947,12 @@ begin
 
   Sel:='';
 
-  If fObjectStore.fInstanceDataON then
+  If fObjectStore.SelectON and fRenderEngine.SelectON   then
   Begin
-    If fRenderEngine.SelectON then
-      Sel := '_Sel' ;
-
+    Sel := '_Sel' ;
   end else
   Begin
-
-    Sel:='';
+    Sel := '';
   End;
 
   S:=Format('%s_frag.spv',[S]);
@@ -14894,11 +14987,9 @@ begin
 
   Sel:='';
 
-  If fObjectStore.fInstanceDataON then
+  If fObjectStore.SelectON and fRenderEngine.SelectON then
   Begin
-    If fRenderEngine.SelectON then
-      Sel := '_Sel' ;
-
+    Sel := '_Sel' ;
   end else
   Begin
 
@@ -14923,7 +15014,7 @@ begin
   CustomAssert(assigned(fRenderEngine),'Renderer NOT assigned',self);
   CustomAssert(assigned(fSubPass),'SubPass NOT assigned',self);
   CustomAssert(assigned(fObjectStore),'Object Store NOT asssigned',self);
-  CustomAssert(assigned(FragmentS),'Vertex Shader Modul',self);
+  CustomAssert(assigned(FragmentS),'Vertex Shader Module NOT assigned',self);
 
   S := Trim(aBaseName);
   Dbl:='';
@@ -14937,11 +15028,9 @@ begin
 
   Sel:='';
 
-  If fObjectStore.fInstanceDataON then
+  If fObjectStore.SelectON and fRenderEngine.SelectON  then
   Begin
-    If fRenderEngine.SelectON then
-      Sel := '_Sel' ;
-
+    Sel := '_Sel' ;
   end else
   Begin
 
@@ -14954,8 +15043,6 @@ begin
 
   Result := CompareText(VertexS.FileName,S)=0;
 end;
-*)
-
 
 procedure TvgGraphicPipeline.CheckDynamicStateCapabilities;
   Var I: Integer;
@@ -15179,6 +15266,14 @@ begin
   Result := True;
 end;
 
+function TvgGraphicPipeline.GetDoubleON: Boolean;
+begin
+  If assigned(fRenderEngine) then
+     Result := fRenderEngine.ShaderUseDouble
+  else
+     Result := False;
+end;
+
 function TvgGraphicPipeline.GetDynamicStates: TvgDynamicStates;
 begin
   Result:= fDynamicStates;
@@ -15223,6 +15318,14 @@ begin
     Result:= fRenderEngine.Linker.ScreenDevice
   else
     Result:=nil;
+end;
+
+function TvgGraphicPipeline.GetSelectON: Boolean;
+begin
+  If assigned(fRenderEngine) then
+     Result := fRenderEngine.SelectON
+  else
+     Result := False;
 end;
 
 function TvgGraphicPipeline.GetSubPass: TvgSubPass;
@@ -15877,14 +15980,6 @@ begin
     End;
   End;
 
-end;
-
-procedure TvgGraphicPipeline.SetUseDouble(const Value: Boolean);
-begin
-   If fShaderUseDouble=Value then exit;
-   InvalidateStates;
-
-   fShaderUseDouble := Value;
 end;
 
 procedure TvgGraphicPipeline.SetUseShaders(const Value: TvgPipelineShaders);
@@ -27065,6 +27160,8 @@ var
   I,J: Integer;
   SD: TvgDescriptorItem;
   D: TvgDescriptorArray;
+  DF: TvgDescriptorPerFrameData;
+  UsesSharedFrameData: Boolean;
   NeedsReflush: Boolean;
   WriteCount: TvkUint32;
 
@@ -27117,9 +27214,18 @@ begin
       If assigned(D) and (D.active) then
       For J:=0 to Length(D.fDescriptorArray )-1 do      //for each descriptor
 
-        if assigned(D.DescriptorData[J]) and
-           assigned(D.DescriptorData[J].FrameData[aFrameIndex]) and
-           (D.DescriptorData[J].FrameData[aFrameIndex].UploadNeeded) then
+      begin
+        DF := nil;
+        UsesSharedFrameData := False;
+        if assigned(D.DescriptorData[J]) then
+        begin
+          DF := D.DescriptorData[J].FrameData[aFrameIndex];
+          UsesSharedFrameData := assigned(DF) and
+            ((aFrameIndex >= Length(D.DescriptorData[J].fFrameData)) or
+             (D.DescriptorData[J].fFrameData[aFrameIndex] <> DF));
+        end;
+
+        if assigned(DF) and (DF.UploadNeeded or UsesSharedFrameData) then
         begin
               WriteCount := D.GetDescriptorCountForWrite(aFrameIndex);
 
@@ -27133,8 +27239,10 @@ begin
                   NeedsReflush := True;
               end;
 
-              D.DescriptorData[J].FrameData[aFrameIndex].UploadNeeded := False;
+              if not UsesSharedFrameData then
+                DF.UploadNeeded := False;
         end;
+      end;
     end;  //Descriptor Loop
 
     if NeedsReflush then
@@ -27902,17 +28010,21 @@ begin
 end;
 
 function TvgDescriptorArray.GetUploadNeeded(aFrameIndex, aDescriptorIndex: Integer): Boolean;
-  Var DL,FL:Integer;
+  Var DL:Integer;
+      DD:TvgDescriptorData;
+      DF:TvgDescriptorPerFrameData;
 Begin
   Result := False;
 
   DL:=  Length(fDescriptorArray);
   If  ( DL=0) or (aDescriptorIndex<0)  or (aDescriptorIndex>=DL) then exit ;
 
-  FL:=  Length(fDescriptorArray[aDescriptorIndex].fFrameData);
-  If  ( FL=0) or (aFrameIndex<0)  or (aFrameIndex>=FL) then exit ;
+  DD:= fDescriptorArray[aDescriptorIndex];
+  if not assigned(DD) then exit;
 
-  Result := fDescriptorArray[aDescriptorIndex].fFrameData[aFrameIndex].UploadNeeded;
+  DF:= DD.FrameData[aFrameIndex];
+  if assigned(DF) then
+    Result := DF.UploadNeeded;
 
 end;
 
@@ -27947,17 +28059,21 @@ begin
 end;
 
 function TvgDescriptorArray.IsDataUploadNeeded(aFrameIndex, aDescriptorIndex: Integer): Boolean;
-  Var DL,FL:Integer;
+  Var DL:Integer;
+      DD:TvgDescriptorData;
+      DF:TvgDescriptorPerFrameData;
 Begin
   Result := False;
 
   DL:=  Length(fDescriptorArray);
   If  ( DL=0) or (aDescriptorIndex<0)  or (aDescriptorIndex>=DL) then exit ;
 
-  FL:=  Length(fDescriptorArray[aDescriptorIndex].fFrameData);
-  If  ( FL=0) or (aFrameIndex<0)  or (aFrameIndex>=FL) then exit ;
+  DD:= fDescriptorArray[aDescriptorIndex];
+  if not assigned(DD) then exit;
 
-  Result := fDescriptorArray[aDescriptorIndex].fFrameData[aFrameIndex].UploadNeeded;
+  DF:= DD.FrameData[aFrameIndex];
+  if assigned(DF) then
+    Result := DF.UploadNeeded;
 end;
 
 function TvgDescriptorArray.IsRuntimeArrayBinding: Boolean;
@@ -27966,17 +28082,21 @@ begin
 end;
 
 function TvgDescriptorArray.IsUploadNeeded(aFrameIndex, aDescriptorIndex: TvkUint32): Boolean;
-  Var DL,FL:Integer;
+  Var DL:Integer;
+      DD:TvgDescriptorData;
+      DF:TvgDescriptorPerFrameData;
 Begin
   Result := False;
 
   DL:=  Length(fDescriptorArray);
   If  ( DL=0) or (aDescriptorIndex<0)  or (aDescriptorIndex>=DL) then exit ;
 
-  FL:=  Length(fDescriptorArray[aDescriptorIndex].fFrameData);
-  If  ( FL=0) or (aFrameIndex<0)  or (aFrameIndex>=FL) then exit ;
+  DD:= fDescriptorArray[aDescriptorIndex];
+  if not assigned(DD) then exit;
 
-  Result := fDescriptorArray[aDescriptorIndex].fFrameData[aFrameIndex].UploadNeeded;
+  DF:= DD.FrameData[aFrameIndex];
+  if assigned(DF) then
+    Result := DF.UploadNeeded;
 end;
 
 function TvgDescriptorArray.IsVariableCountBinding: Boolean;
@@ -28378,17 +28498,20 @@ begin
 end;
 
 procedure TvgDescriptorArray.SetUploadFlag(aFrameIndex, aDescriptorIndex: TvkUint32; aValue: Boolean);
-  Var DL,FL:Integer;
+  Var DL:Integer;
+      DD:TvgDescriptorData;
+      DF:TvgDescriptorPerFrameData;
 Begin
 
   DL:=  Length(fDescriptorArray);
   If  ( DL=0) or (aDescriptorIndex<0)  or (aDescriptorIndex>=DL) then exit ;
 
-  FL:=  Length(fDescriptorArray[aDescriptorIndex].fFrameData);
-  If  ( FL=0) or (aFrameIndex<0)  or (aFrameIndex>=FL) then exit ;
+  DD:= fDescriptorArray[aDescriptorIndex];
+  if not assigned(DD) then exit;
 
-  If fDescriptorArray[aDescriptorIndex].fFrameData[aFrameIndex].UploadNeeded <> aValue then
-     fDescriptorArray[aDescriptorIndex].fFrameData[aFrameIndex].UploadNeeded := aValue;
+  DF:= DD.FrameData[aFrameIndex];
+  if assigned(DF) and (DF.UploadNeeded <> aValue) then
+     DF.UploadNeeded := aValue;
 
 end;
 
@@ -28410,24 +28533,28 @@ begin
         If assigned(DD) then
         Begin
           For J:=0 to Length(DD.fFrameData)-1 do
-             DD.fFrameData[J].SetUploadNeeded(True);
+            If assigned(DD.fFrameData[J]) then
+              DD.fFrameData[J].SetUploadNeeded(True);
         end;
       End;
     End;
 end;
 
 procedure TvgDescriptorArray.SetUploadNeeded(aFrameIndex, aDescriptorIndex: Integer; const Value: Boolean);
-  Var DL,FL:Integer;
+  Var DL:Integer;
+      DD:TvgDescriptorData;
+      DF:TvgDescriptorPerFrameData;
 Begin
 
   DL:=  Length(fDescriptorArray);
   If  ( DL=0) or (aDescriptorIndex<0)  or (aDescriptorIndex>=DL) then exit ;
 
-  FL:=  Length(fDescriptorArray[aDescriptorIndex].fFrameData);
-  If  ( FL=0) or (aFrameIndex<0)  or (aFrameIndex>=FL) then exit ;
+  DD:= fDescriptorArray[aDescriptorIndex];
+  if not assigned(DD) then exit;
 
-  If fDescriptorArray[aDescriptorIndex].fFrameData[aFrameIndex].UploadNeeded <> Value then
-     fDescriptorArray[aDescriptorIndex].fFrameData[aFrameIndex].UploadNeeded := Value;
+  DF:= DD.FrameData[aFrameIndex];
+  if assigned(DF) and (DF.UploadNeeded <> Value) then
+     DF.UploadNeeded := Value;
 
 end;
 
@@ -28730,13 +28857,25 @@ var
   // multi-buffer upload lagging, etc). A transient per-frame condition,
   // never a layout/configuration problem - so never gated by PartiallyBound.
   function IsPendingUpload(aIndex: Integer): Boolean;
+  var
+    LDF: TvgDescriptorPerFrameData;
   begin
-    Result := (not IsVacant(aIndex)) and (not Assigned(fDescriptorArray[aIndex].FrameData[aFrameIndex]));
+    if IsVacant(aIndex) then
+      Exit(False);
+
+    LDF := fDescriptorArray[aIndex].FrameData[aFrameIndex];
+    Result := (not assigned(LDF)) or (not LDF.HasPayload);
   end;
 
   function HasPayload(aIndex: Integer): Boolean;
+  var
+    LDF: TvgDescriptorPerFrameData;
   begin
-    Result := (not IsVacant(aIndex)) and Assigned(fDescriptorArray[aIndex].FrameData[aFrameIndex]);
+    if IsVacant(aIndex) then
+      Exit(False);
+
+    LDF := fDescriptorArray[aIndex].FrameData[aFrameIndex];
+    Result := assigned(LDF) and LDF.HasPayload;
   end;
 
   procedure FlushRun;
@@ -31192,12 +31331,8 @@ begin
 end;
 
 function TvgDescriptorData.GetFrameData(  aFrameIndex: Integer): TvgDescriptorPerFrameData;
-  Var L:Integer;
 begin
-  Result := nil;
-  L:=Length(fFrameData);
-  If (aFrameIndex<0) or (aFrameIndex>=L) then exit;
-  Result := fFrameData[aFrameIndex];
+  Result := ResolveFrameData(aFrameIndex);
 end;
 
 function TvgDescriptorData.GetGLSLArraySuffix: String;
@@ -31244,6 +31379,70 @@ begin
   Result := nil;
 end;
 
+function TvgDescriptorData.ResolveFrameData(
+  aFrameIndex: Integer): TvgDescriptorPerFrameData;
+var
+  I, FoundIndex, FoundCount: Integer;
+  Candidate, Requested: TvgDescriptorPerFrameData;
+begin
+  Result := nil;
+  Requested := nil;
+
+  if (aFrameIndex >= 0) and (aFrameIndex < Length(fFrameData)) then
+    Requested := fFrameData[aFrameIndex];
+
+  if assigned(Requested) and Requested.HasPayload then
+  begin
+    Result := Requested;
+    Exit;
+  end;
+
+  // Prefer a unique payload-capable frame object when the requested frame
+  // has no usable payload. This allows one loaded frame to be shared across
+  // all render frames.
+  FoundIndex := -1;
+  FoundCount := 0;
+  for I := 0 to Length(fFrameData) - 1 do
+  begin
+    Candidate := fFrameData[I];
+    if assigned(Candidate) and Candidate.HasPayload then
+    begin
+      if FoundIndex < 0 then
+        FoundIndex := I;
+      Inc(FoundCount);
+      if FoundCount > 1 then
+        Break; // Not unique - defer to requested slot handling.
+    end;
+  end;
+
+  if (FoundCount = 1) and (FoundIndex >= 0) and (fFrameData[FoundIndex] <> nil) then
+  begin
+    Result := fFrameData[FoundIndex];
+    Exit;
+  end;
+
+  // If there is no payload-ready candidate yet, still return the requested
+  // slot (or a uniquely assigned fallback) so upload paths can initialize it.
+  if assigned(Requested) then
+  begin
+    Result := Requested;
+    Exit;
+  end;
+
+  FoundIndex := -1;
+  for I := 0 to Length(fFrameData) - 1 do
+    if assigned(fFrameData[I]) then
+    begin
+      if FoundIndex < 0 then
+        FoundIndex := I
+      else
+        Exit; // More than one assigned frame and no payload signal.
+    end;
+
+  if FoundIndex >= 0 then
+    Result := fFrameData[FoundIndex];
+end;
+
 function TvgDescriptorData.GetStaging: Boolean;
 begin
   If assigned(fDescriptor) then
@@ -31253,10 +31452,13 @@ begin
 end;
 
 function TvgDescriptorData.GetUploadNeeded(aFrameIndex: Integer): Boolean;
+var
+  DF: TvgDescriptorPerFrameData;
 begin
   Result := False;
-  If (aFrameIndex<0) or (aFrameIndex>= Length(fFrameData)) then exit;
-  Result := fFrameData[aFrameIndex].fUploadNeeded;
+  DF := ResolveFrameData(aFrameIndex);
+  if assigned(DF) then
+    Result := DF.fUploadNeeded;
 end;
 
 Procedure TvgDescriptorData.SetDisabled;
@@ -31267,6 +31469,7 @@ begin
   L:= Length(fFrameData);
   If L=0 then exit;
   For I:=0 to L-1 do
+   If assigned( fFrameData[I]) then
     fFrameData[I].SetActiveState(False);
 
 
@@ -31279,7 +31482,9 @@ begin
 
   L:= Length(fFrameData);
   If L=0 then exit;
+
   For I:=0 to L-1 do
+   If assigned( fFrameData[I]) then
     fFrameData[I].SetActiveState(True);
 end;
 
@@ -31318,28 +31523,25 @@ begin
 end;
 
 procedure TvgDescriptorData.SetUploadNeeded(aFrameIndex: Integer; const Value: Boolean);
+var
+  DF: TvgDescriptorPerFrameData;
 begin
-
-  If (aFrameIndex<0) or (aFrameIndex>= Length(fFrameData)) then exit;
-  fFrameData[aFrameIndex].fUploadNeeded:=Value ;
+  DF := ResolveFrameData(aFrameIndex);
+  if assigned(DF) then
+    DF.fUploadNeeded:=Value;
 
 end;
 
 procedure TvgDescriptorData.UpLoadDescriptorData(aFrameIndex: TvkUint32;  aGraphicPool, aTransferPool: TvgCommandBufferPool);
 
-  Var I,L,Actual:Integer;
+  Var DF:TvgDescriptorPerFrameData;
 begin
   if not Assigned(aGraphicPool) or not Assigned(aTransferPool) then
     Exit;
 
-  L:=Length(fFrameData);
-  If L=0 then exit;
-
-  If aFrameIndex>= L then
-     aFrameIndex:= L-1;
-
-  If assigned(fFrameData[aFrameIndex]) then
-      fFrameData[aFrameIndex].UpLoadDescriptorData(aFrameIndex, aGraphicPool, aTransferPool);
+  DF := ResolveFrameData(aFrameIndex);
+  if assigned(DF) then
+    DF.UpLoadDescriptorData(aFrameIndex, aGraphicPool, aTransferPool);
 
 end;
 
@@ -31359,6 +31561,13 @@ begin
 
 
   inherited;
+end;
+
+function TvgDescriptorPerFrameData.HasPayload: Boolean;
+begin
+  // Base behavior: an assigned frame object is considered usable.
+  // Resource-backed descendants override this with stricter checks.
+  Result := True;
 end;
 
 function TvgDescriptorPerFrameData.GetDataFlow: TvgDescriptorDataFlow;
