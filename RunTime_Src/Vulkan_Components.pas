@@ -2130,7 +2130,19 @@ TvgBaseComponent = class(TComponent)
 
     fUploadNeeded   : Boolean;
 
+    // Bitmask of the frame indices whose descriptor set already carries THIS
+    // object's payload. Needed because one object can legitimately serve
+    // several frames (a single shared texture / buffer), so "uploaded" is no
+    // longer the same question as "written into frame N's descriptor set".
+    fWrittenFrames  : TvkUint32;
+
     function HasPayload: Boolean; virtual;
+    function IsWriteReady: Boolean; virtual;
+    // Called when the payload is flagged as changed. Buffer backed descendants
+    // rebuild their Vulkan buffer (it may need a different size), so the base
+    // behaviour is to drop the resources. Descendants whose resource is NOT
+    // rebuilt from the flag (a loaded texture) override this and keep it.
+    procedure InvalidateForUpload; virtual;
     Procedure SetDisabled; override;
     Procedure SetEnabled;  override;
     procedure SetUploadNeeded(const Value: Boolean);   //see descendants
@@ -2149,6 +2161,10 @@ TvgBaseComponent = class(TComponent)
     Procedure UpLoadDescriptorData (aFrameIndex:TvkUint32;
                                     aGraphicPool:TvgCommandBufferPool;
                                     aTransferPool:TvgCommandBufferPool);   Virtual; Abstract;
+
+    Procedure ClearFrameWrites;
+    Procedure MarkFrameWritten(aFrameIndex: Integer);
+    Function  IsFrameWritten(aFrameIndex: Integer): Boolean;
 
 
     Property UploadNeeded   : Boolean read fUploadNeeded write SetUploadNeeded;
@@ -2173,6 +2189,15 @@ TvgBaseComponent = class(TComponent)
     fBufferSharingMode : TVkSharingMode;
 
     fFrameData      : Array of TvgDescriptorPerFrameData;
+
+    // When True only ONE TvgDescriptorPerFrameData object is kept (the first
+    // populated slot). Every render frame then resolves to that single object,
+    // so one loaded resource (eg. one texture) serves all frames in flight.
+    fSharedFrameData : Boolean;
+
+    Procedure SetSharedFrameData(const Value: Boolean); Virtual;
+    Function  CountPopulatedFrameData(out aFirstIndex: Integer): Integer;
+    Procedure DropSurplusFrameData(aKeepIndex: Integer);
 
     Procedure SetDisabled; override;
     Procedure SetEnabled; override;
@@ -2213,6 +2238,10 @@ TvgBaseComponent = class(TComponent)
     Property UploadedNeeded[aFrameIndex:Integer]:Boolean read GetUploadNeeded write SetUploadNeeded;
     Property FrameCount : TvkUint32 Read GetFrameCount write SetFrameCount;
     Property FrameData[aFrameIndex:Integer] : TvgDescriptorPerFrameData read GetFrameData;
+
+    // Set True to load/keep a SINGLE per frame data object that is shared by
+    // every frame in flight. Set False to give every frame its own object.
+    Property SharedFrameData : Boolean read fSharedFrameData write SetSharedFrameData;
 
   End;
 
@@ -2347,6 +2376,10 @@ TvgBaseComponent = class(TComponent)
     procedure SetUploadFlags;
     Procedure SetUploadFlag(aFrameIndex, aDescriptorIndex:TvkUint32; aValue:Boolean) ;
     Function IsUploadNeeded(aFrameIndex, aDescriptorIndex:TvkUint32):Boolean  ;
+
+    // Forget which frames' descriptor sets already carry the current payloads.
+    // Must be called whenever the VkDescriptorSets themselves are re-created.
+    procedure ClearDescriptorWriteCache;
 
     procedure SetStageFlags(aFlags: TVkShaderStageFlags);
 
@@ -27163,10 +27196,35 @@ var
   I,J: Integer;
   SD: TvgDescriptorItem;
   D: TvgDescriptorArray;
+  DD: TvgDescriptorData;
   DF: TvgDescriptorPerFrameData;
-  UsesSharedFrameData: Boolean;
   NeedsReflush: Boolean;
+  NeedsWrite: array of Boolean;
   WriteCount: TvkUint32;
+
+  //True when THIS frame's descriptor set does not yet carry the payload of the
+  //object that serves it. Works for both one-object-per-frame and for a single
+  //shared object used by every frame.
+  function FrameNeedsWrite(aDescriptor: TvgDescriptorArray): Boolean;
+    Var K:Integer;
+        LDD:TvgDescriptorData;
+        LDF:TvgDescriptorPerFrameData;
+  begin
+    Result := False;
+    If not assigned(aDescriptor) then exit;
+
+    For K:=0 to Length(aDescriptor.fDescriptorArray)-1 do
+    Begin
+      LDD := aDescriptor.DescriptorData[K];
+      If not assigned(LDD) then Continue;
+
+      LDF := LDD.FrameData[aFrameIndex];
+      If not assigned(LDF) then Continue;
+
+      If LDF.UploadNeeded or (not LDF.IsFrameWritten(aFrameIndex)) then
+        Exit(True);
+    End;
+  end;
 
 begin
   if not fSetCurrent then
@@ -27188,6 +27246,18 @@ begin
       SD.Active := True;
   end;
 
+  // Snapshot BEFORE uploading : the upload itself clears UploadNeeded, so
+  // testing it afterwards would skip the very write it was asking for.
+  SetLength(NeedsWrite, fDescriptorCol.Count);
+  for I := 0 to fDescriptorCol.Count - 1 do
+  begin
+    SD := fDescriptorCol.Items[I];
+    if Assigned(SD) then
+      NeedsWrite[I] := FrameNeedsWrite(SD.Descriptor)
+    else
+      NeedsWrite[I] := False;
+  end;
+
   for I := 0 to fDescriptorCol.Count - 1 do
   begin
     SD := fDescriptorCol.Items[I];
@@ -27207,6 +27277,8 @@ begin
 
     for I := 0 to fDescriptorCol.Count - 1 do
     begin
+      if not NeedsWrite[I] then Continue;
+
       SD := fDescriptorCol.Items[I];
 
       if Assigned(SD) then
@@ -27215,37 +27287,31 @@ begin
         D := nil;
 
       If assigned(D) and (D.active) then
-      For J:=0 to Length(D.fDescriptorArray )-1 do      //for each descriptor
+      Begin
+        WriteCount := D.GetDescriptorCountForWrite(aFrameIndex);
 
-      begin
-        DF := nil;
-        UsesSharedFrameData := False;
-        if assigned(D.DescriptorData[J]) then
+        if (WriteCount > 0) or (not D.PartiallyBound) then
         begin
-          DF := D.DescriptorData[J].FrameData[aFrameIndex];
-          UsesSharedFrameData := assigned(DF) and
-            ((aFrameIndex >= Length(D.DescriptorData[J].fFrameData)) or
-             (D.DescriptorData[J].fFrameData[aFrameIndex] <> DF));
+          //WriteDescriptorSet flags each per frame object it actually wrote,
+          //so a shared object is written once per frame index and no more.
+          D.WriteDescriptorSet( fVulkanDescriptorSets[aFrameIndex],
+                                aFrameIndex,
+                                D.Binding,
+                                D.GetFirstArrayElementForWrite(aFrameIndex),
+                                vgdmWriteActiveRange  );
+          NeedsReflush := True;
         end;
 
-        if assigned(DF) and (DF.UploadNeeded or UsesSharedFrameData) then
-        begin
-              WriteCount := D.GetDescriptorCountForWrite(aFrameIndex);
+        For J:=0 to Length(D.fDescriptorArray)-1 do
+        Begin
+          DD := D.DescriptorData[J];
+          If not assigned(DD) then Continue;
 
-              if (WriteCount > 0) or (not D.PartiallyBound) then
-              begin
-                  D.WriteDescriptorSet(         fVulkanDescriptorSets[aFrameIndex],
-                                                aFrameIndex,
-                                                D.Binding,
-                                                D.GetFirstArrayElementForWrite(aFrameIndex),
-                                                vgdmWriteActiveRange  );
-                  NeedsReflush := True;
-              end;
-
-              if not UsesSharedFrameData then
-                DF.UploadNeeded := False;
-        end;
-      end;
+          DF := DD.FrameData[aFrameIndex];
+          If assigned(DF) then
+             DF.UploadNeeded := False;
+        End;
+      End;
     end;  //Descriptor Loop
 
     if NeedsReflush then
@@ -27571,6 +27637,10 @@ begin
     begin
       SD.CurrentFrame := fCurrentFrameIndex;
       SD.Active := True;
+
+      // Brand new VkDescriptorSets are about to be built below, so anything
+      // remembered about previously written frames is stale.
+      SD.ClearDescriptorWriteCache;
     end;
   end;
 
@@ -28516,13 +28586,27 @@ Begin
 
 end;
 
+procedure TvgDescriptorArray.ClearDescriptorWriteCache;
+  Var I,J:Integer;
+      DD : TvgDescriptorData;
+begin
+  For I:=0 to Length(fDescriptorArray)-1 do
+  Begin
+    DD := fDescriptorArray[I];
+    If not assigned(DD) then Continue;
+
+    For J:=0 to Length(DD.fFrameData)-1 do
+      If assigned(DD.fFrameData[J]) then
+         DD.fFrameData[J].ClearFrameWrites;
+  End;
+end;
+
 procedure TvgDescriptorArray.SetUploadFlags;
   Var I,J, DC:Integer;
       DD : TvgDescriptorData;
 begin
   If fFrameCount=0 then exit;
   DC :=  GetDescriptorCount ;
-
 
   If DC>0 then
     For I:=0 to DC-1 do
@@ -28865,7 +28949,7 @@ var
       Exit(False);
 
     LDF := fDescriptorArray[aIndex].FrameData[aFrameIndex];
-    Result := (not assigned(LDF)) or (not LDF.HasPayload);
+    Result := (not assigned(LDF)) or (not LDF.IsWriteReady);
   end;
 
   function HasPayload(aIndex: Integer): Boolean;
@@ -28876,7 +28960,7 @@ var
       Exit(False);
 
     LDF := fDescriptorArray[aIndex].FrameData[aFrameIndex];
-    Result := assigned(LDF) and LDF.HasPayload;
+    Result := assigned(LDF) and LDF.IsWriteReady;
   end;
 
   procedure FlushRun;
@@ -28894,7 +28978,13 @@ var
 
       DD := fDescriptorArray[RunStart + K];
       DF := DD.FrameData[aFrameIndex];
-      DF.GetWriteDescriptorPayload(BufInfos[K], ImgInfos[K]);
+      if assigned(DF) then
+      begin
+         DF.GetWriteDescriptorPayload(BufInfos[K], ImgInfos[K]);
+         //this frame's descriptor set now carries DF's payload - a shared
+         //object therefore gets written once per frame index, not every frame.
+         DF.MarkFrameWritten(aFrameIndex);
+      end;
     end;
 
     aSet.WriteToDescriptorSet(aBinding,
@@ -31397,6 +31487,21 @@ begin
   aResolvedIndex := -1;
   Requested := nil;
 
+  // Explicit shared mode : ONE object serves every frame, so map straight onto
+  // it. This must not depend on HasPayload, the single object has to resolve
+  // even before its data is loaded.
+  if fSharedFrameData then
+  begin
+    for I := 0 to Length(fFrameData) - 1 do
+      if assigned(fFrameData[I]) then
+      begin
+        Result := fFrameData[I];
+        aResolvedIndex := I;
+        Exit;
+      end;
+    Exit;
+  end;
+
   if (aFrameIndex >= 0) and (aFrameIndex < Length(fFrameData)) then
     Requested := fFrameData[aFrameIndex];
 
@@ -31527,9 +31632,75 @@ begin
     If FC>L then
       SetLength(fFrameData,FC);
 
+    If fSharedFrameData then
+    Begin
+      // Only ONE object is ever created; ResolveFrameData maps every frame
+      // onto it. Do NOT populate the remaining slots, they would only produce
+      // empty (invalid) resources for the extra frames.
+      If (Length(fFrameData)>0) and not assigned(fFrameData[0]) then
+         GetOrAddFrameDataObject(0);
+      DropSurplusFrameData(0);
+    End else
+    Begin
+      For I:=0 to Length(fFrameData)-1 do
+        If not assigned( fFrameData[I] ) then
+            GetOrAddFrameDataObject(I);
+    End;
+  End;
+end;
+
+function TvgDescriptorData.CountPopulatedFrameData(out aFirstIndex: Integer): Integer;
+  Var I:Integer;
+begin
+  Result     := 0;
+  aFirstIndex:= -1;
+
+  For I:=0 to Length(fFrameData)-1 do
+    If assigned(fFrameData[I]) and fFrameData[I].HasPayload then
+    Begin
+      If aFirstIndex<0 then
+         aFirstIndex := I;
+      Inc(Result);
+    End;
+end;
+
+procedure TvgDescriptorData.DropSurplusFrameData(aKeepIndex: Integer);
+  Var I:Integer;
+begin
+  If (aKeepIndex<0) or (aKeepIndex>=Length(fFrameData)) then exit;
+
+  For I:=0 to Length(fFrameData)-1 do
+    If (I<>aKeepIndex) and assigned(fFrameData[I]) then
+       FreeAndNil(fFrameData[I]);
+end;
+
+procedure TvgDescriptorData.SetSharedFrameData(const Value: Boolean);
+  Var I, FirstIndex, Populated:Integer;
+begin
+  If fSharedFrameData = Value then exit;
+
+  fSharedFrameData := Value;
+
+  If fSharedFrameData then
+  Begin
+    // Keep the object that actually holds data (fall back to slot 0) and
+    // release every other per frame object so nothing invalid is left behind.
+    Populated := CountPopulatedFrameData(FirstIndex);
+    If (Populated=0) or (FirstIndex<0) then
+       FirstIndex := 0;
+
+    If (Length(fFrameData)>0) then
+    Begin
+      If not assigned(fFrameData[FirstIndex]) then
+         GetOrAddFrameDataObject(FirstIndex);
+      DropSurplusFrameData(FirstIndex);
+    End;
+  End else
+  Begin
+    // Restore one object per frame.
     For I:=0 to Length(fFrameData)-1 do
-      If not assigned( fFrameData[I] ) then
-          GetOrAddFrameDataObject(I);
+      If not assigned(fFrameData[I]) then
+         GetOrAddFrameDataObject(I);
   End;
 end;
 
@@ -31545,7 +31716,7 @@ var
 begin
   DF := ResolveFrameData(aFrameIndex);
   if assigned(DF) then
-    DF.fUploadNeeded:=Value;
+    DF.UploadNeeded := Value;   //property : also invalidates the frame write cache
 
 end;
 
@@ -31597,6 +31768,14 @@ begin
   Result := True;
 end;
 
+function TvgDescriptorPerFrameData.IsWriteReady: Boolean;
+begin
+  // Payload exists AND the Vulkan objects it needs for a descriptor write are
+  // fully built. Descendants whose resources are only completed during upload
+  // (textures need Finish + Sampler) override this with a stricter test.
+  Result := HasPayload;
+end;
+
 function TvgDescriptorPerFrameData.GetDataFlow: TvgDescriptorDataFlow;
 begin
   If assigned(fDescriptorData) then
@@ -31625,19 +31804,54 @@ Procedure TvgDescriptorPerFrameData.SetDisabled;
 begin
   fActive := False;
 
-
+  //resources are gone : every descriptor set must be re-written when rebuilt
+  ClearFrameWrites;
 end;
 
 Procedure TvgDescriptorPerFrameData.SetEnabled;
 begin
   fActive := True;
+
+  ClearFrameWrites;
 end;
 
 procedure TvgDescriptorPerFrameData.SetUploadNeeded(const Value: Boolean);
 begin
   If fUploadNeeded=Value then exit;
-  SetActiveState(False);
+
   fUploadNeeded := Value;
+
+  If Value then
+  Begin
+    ClearFrameWrites;    //payload changed - every frame needs re-writing
+    InvalidateForUpload;
+  End;
+end;
+
+procedure TvgDescriptorPerFrameData.InvalidateForUpload;
+begin
+  // Default : the Vulkan resource is rebuilt from the current data on the next
+  // activation (see the buffer descendants, which size the buffer in SetEnabled).
+  SetActiveState(False);
+end;
+
+Procedure TvgDescriptorPerFrameData.ClearFrameWrites;
+begin
+  fWrittenFrames := 0;
+end;
+
+Procedure TvgDescriptorPerFrameData.MarkFrameWritten(aFrameIndex: Integer);
+begin
+  If (aFrameIndex>=0) and (aFrameIndex<32) then
+     fWrittenFrames := fWrittenFrames or (TvkUint32(1) shl aFrameIndex);
+end;
+
+Function TvgDescriptorPerFrameData.IsFrameWritten(aFrameIndex: Integer): Boolean;
+begin
+  If (aFrameIndex<0) or (aFrameIndex>=32) then
+     Result := False
+  else
+     Result := (fWrittenFrames and (TvkUint32(1) shl aFrameIndex)) <> 0;
 end;
 
 { TvgShaderObjectPipeline }

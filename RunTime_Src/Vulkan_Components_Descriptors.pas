@@ -315,6 +315,8 @@ Type
     Procedure SetDisabled ;  Override;
     Procedure SetEnabled ;   Override;
     function HasPayload: Boolean; override;
+    function IsWriteReady: Boolean; override;
+    procedure InvalidateForUpload; override;
 
     function GetWriteDescriptorPayload( out aBufInfo   : TVkDescriptorBufferInfo;
                                         out aImgInfo   : TVkDescriptorImageInfo  ): Boolean; Override;
@@ -333,6 +335,8 @@ Type
 
     Function LoadTexture(aFileName:String;    Var aGLSLIndex:TvkUint32):Boolean;   Overload;
     Function LoadTexture(aFileStream:TStream; Var aGLSLIndex:TvkUint32):Boolean;   Overload; //owns the FileStream
+
+    Function HasTextureSource : Boolean;   //texture data has been loaded into this frame object
 
   End;
 
@@ -365,10 +369,16 @@ Type
     function GetGLSLBaseTypeName: String; override;
     Procedure SetFrameCount(aCount:Integer);
 
+    // If only ONE frame object actually holds texture data, release the empty
+    // ones and flag this data as shared so every frame resolves to it.
+    Procedure CollapseToSharedTexture;
+
     Public
 
     Constructor Create;
     Destructor Destroy; Override;
+
+    Function LoadSharedTexture(aFileName:String):Boolean;  //ONE texture used by every frame
 
     Property Sampler     : TvgSampler Read fSampler;
 
@@ -1341,9 +1351,6 @@ end;
 function TvgDescriptorArray_Texture.AddSharedTexture(aTextureName, aFileName: String): Integer;
 var
   TD: TvgDescriptor_Data_Texture;
-  TF: TvgDescriptorPerFrameData;
-  TT: TvgDescriptor_PerFrame_Texture;
-  GLSLIndex: TvkUint32;
 begin
   Result := -1;
   TD := TvgDescriptor_Data_Texture.Create;
@@ -1351,12 +1358,10 @@ begin
   if AddDescriptorDataToArray(TD) then
   begin
     Result := IndexOfDescriptorData(TD);
-    TF := TD.GetOrAddFrameDataObject(0);          // slot 0 only — no per-frame loop
-    if Assigned(TF) and (TF is TvgDescriptor_PerFrame_Texture) then
-    begin
-      TT := TvgDescriptor_PerFrame_Texture(TF);
-      TT.LoadTexture(aFileName, GLSLIndex);
-    end;
+
+    // ONE TvgDescriptor_PerFrame_Texture is created and loaded; every frame
+    // in flight resolves to it, so no empty/invalid per frame texture exists.
+    TD.LoadSharedTexture(aFileName);
   end else
     TD.Free;
 end;
@@ -1556,6 +1561,10 @@ Procedure TvgDescriptor_Data_Texture.SetEnabled;
   Var I,L:Integer;
 begin
 
+  //ONE loaded texture serves every frame : drop the empty frame objects BEFORE
+  //they are activated, so no invalid texture is ever created or written.
+  CollapseToSharedTexture;
+
   Inherited;
 
   If assigned(fSampler) then
@@ -1572,6 +1581,54 @@ begin
         fFrameData[I].Active := True ;
 end;
 
+Procedure TvgDescriptor_Data_Texture.CollapseToSharedTexture;
+  Var I, L, FoundIndex, FoundCount:Integer;
+      TF:TvgDescriptor_PerFrame_Texture;
+begin
+  L := Length(fFrameData);
+  If L<=1 then exit;
+
+  FoundIndex := -1;
+  FoundCount := 0;
+
+  For I:=0 to L-1 do
+    If (fFrameData[I] is TvgDescriptor_PerFrame_Texture) then
+    Begin
+      TF := TvgDescriptor_PerFrame_Texture(fFrameData[I]);
+      If TF.HasPayload then
+      Begin
+        If FoundIndex<0 then
+           FoundIndex := I;
+        Inc(FoundCount);
+      End;
+    End;
+
+  //More than one frame carries its own texture : this is the classic
+  //one-texture-per-frame setup, leave it alone.
+  If (FoundCount<>1) or (FoundIndex<0) then exit;
+
+  fSharedFrameData := True;
+  DropSurplusFrameData(FoundIndex);
+end;
+
+function TvgDescriptor_Data_Texture.LoadSharedTexture(aFileName: String): Boolean;
+  Var TF:TvgDescriptorPerFrameData;
+      GLSLIndex:TvkUint32;
+begin
+  Result := False;
+
+  SharedFrameData := True;   //keeps/creates a single frame object only
+
+  If Length(fFrameData)=0 then
+     FrameCount := 1;        //nothing sized yet - one slot is all that is needed
+
+  TF := GetFrameData(0);
+  If not (TF is TvgDescriptor_PerFrame_Texture) then exit;
+
+  GLSLIndex := fGLSLIndex;
+  Result    := TvgDescriptor_PerFrame_Texture(TF).LoadTexture(aFileName, GLSLIndex);
+end;
+
 procedure TvgDescriptor_Data_Texture.SetFrameCount(aCount: Integer);
   Var L,I:Integer;
 begin
@@ -1584,8 +1641,16 @@ begin
   If (aCount>L) then
   Begin
     SetLength(fFrameData, aCount);
-    For I:=0 to aCount-1 do
-        GetOrAddFrameDataObject(I);
+
+    If fSharedFrameData then
+    Begin
+      //ONE object only, every frame resolves to it
+      If (Length(fFrameData)>0) and not assigned(fFrameData[0]) then
+         GetOrAddFrameDataObject(0);
+      DropSurplusFrameData(0);
+    End else
+      For I:=0 to aCount-1 do
+          GetOrAddFrameDataObject(I);
   end else
   //aCount<L
   Begin
@@ -4031,13 +4096,13 @@ begin
   aBufInfo:= Default(TVkDescriptorBufferInfo);
   aImgInfo:= Default(TVkDescriptorImageInfo);
 
-  CustomAssert(assigned(fVulkanTexture),'Vulkan Texture NOT assigned');
-
-  CustomAssert(assigned(fVulkanTexture.ImageLayout),'Vulkan Texture  IMAGE NOT assigned');
-  CustomAssert(assigned(fVulkanTexture.ImageView),'Vulkan Texture  IMAGE VIEW NOT assigned');
-  CustomAssert(assigned(fVulkanTexture.Sampler),'Vulkan Texture SAMPLER NOT assigned');
-
   CustomAssert(assigned(fDescriptorData),'Owner DescriptorData NOT assigned');
+
+  // NOT an error condition : a frame object can legitimately be waiting for
+  // its upload (Finish) or be an empty slot that shares another frame's
+  // texture. Returning False leaves the caller with a zeroed image info so
+  // it can skip the write instead of publishing invalid handles.
+  If not IsWriteReady then exit;
 
   aImgInfo.imageLayout := fVulkanTexture.ImageLayout;
   aImgInfo.imageView   := fVulkanTexture.ImageView.Handle;
@@ -4046,9 +4111,37 @@ begin
   Result := True;
 end;
 
+function TvgDescriptor_PerFrame_Texture.HasTextureSource: Boolean;
+begin
+  Result := fTextureSource.DataOK and
+            (fTextureSource.DataSize > 0) and
+            assigned(fTextureSource.Stream);
+end;
+
 function TvgDescriptor_PerFrame_Texture.HasPayload: Boolean;
 begin
-  Result := assigned(fVulkanTexture);
+  // "This object owns real texture content."  The source data is included so
+  // the owning TvgDescriptorData can resolve to the single loaded frame object
+  // BEFORE activation creates the TpvVulkanTexture.
+  Result := assigned(fVulkanTexture) or HasTextureSource;
+end;
+
+function TvgDescriptor_PerFrame_Texture.IsWriteReady: Boolean;
+begin
+  // A texture may only be written into a descriptor set once it has been
+  // built (LoadFromImage) AND uploaded (Finish + Sampler bound).
+  Result := assigned(fVulkanTexture) and
+            assigned(fVulkanTexture.ImageView) and
+            assigned(fVulkanTexture.Sampler);
+end;
+
+procedure TvgDescriptor_PerFrame_Texture.InvalidateForUpload;
+begin
+  // Deliberately does NOT deactivate. The texture is built from the loaded
+  // source, not from per frame data, so tearing it down here left an active
+  // object holding a nil / half built TpvVulkanTexture - which is exactly what
+  // produced invalid ImageLayout, ImageView and Sampler values at write time.
+  // This also keeps a SINGLE shared texture alive for every frame that uses it.
 end;
 
 procedure TvgDescriptor_PerFrame_Texture.SetDisabled;
@@ -4099,9 +4192,12 @@ procedure TvgDescriptor_PerFrame_Texture.UpLoadDescriptorData( aFrameIndex: TvkU
       GV,
       TV: TvgCommandBuffer;
       Sampler:TvgSampler;
+      VS:TpvVulkanSampler;
 begin
 
-  CustomAssert(assigned(fVulkanTexture) , 'No Vulkan Texture assigned');
+  // An empty frame slot (its texture lives in the shared frame object) has
+  // nothing to upload - this is a normal state, not a failure.
+  If not assigned(fVulkanTexture) then exit;
   If not UploadNeeded then exit;
 
   CustomAssert(assigned( aGraphicPool   ),'Graphic Pool not assigned');
@@ -4136,8 +4232,13 @@ begin
              'TV Command buffer not in INITIAL state before TpvVulkanTexture.Finish');
 
 
-    If assigned(Sampler) and (fVulkanTexture.Sampler<>Sampler.VulkanSampler[0]) then
-      fVulkanTexture.Sampler := Sampler.VulkanSampler[0];
+    // The sampler is deliberately taken from slot 0 : ONE sampler serves every
+    // frame, exactly like the shared texture it is bound to.
+    VS := Sampler.VulkanSampler[0];
+    CustomAssert(assigned(VS),'Vulkan Sampler NOT created');
+
+    If fVulkanTexture.Sampler <> VS then
+      fVulkanTexture.Sampler := VS;
 
 
      fVulkanTexture.Finish (GQ,
@@ -4615,7 +4716,8 @@ begin
     For I:=0 to Length(DDM.fFrameData)-1 do
     Begin
       DFM := TvgDescriptor_PerFrame_UniformBuffer <TvgMatrix4x4D>(DDM.fFrameData[I]);
-      DFM.Data.Add(TvgMatrix4x4D.Identity);
+      If assigned(DFM) then
+        DFM.Data.Add(TvgMatrix4x4D.Identity);
     end;
   End else
     FreeAndNil(DDM);
