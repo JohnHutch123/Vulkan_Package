@@ -2183,7 +2183,10 @@ TvgBaseComponent = class(TComponent)
 
     Procedure SetGLSLIndex(aGLSLIndex : TvkUint32);
 
-    function ResolveFrameData(aFrameIndex: Integer): TvgDescriptorPerFrameData;
+    function ResolveFrameData(aFrameIndex: Integer): TvgDescriptorPerFrameData;   Overload;
+    function ResolveFrameData(aFrameIndex: Integer; out aResolvedIndex: Integer): TvgDescriptorPerFrameData; overload;
+
+
     Function GetOrAddFrameDataObject(aFrameIndex:Integer) : TvgDescriptorPerFrameData; Virtual;  //descendant builds correct frameData type
     function GetFrameData(aFrameIndex: Integer): TvgDescriptorPerFrameData; Virtual;  //one per Frame per Descriptor see descendants for extra data
 
@@ -28293,9 +28296,7 @@ begin
   If L>0 then
     For I:=0 to L-1 do
       If assigned( fDescriptorArray[I]) then
-      Begin
         fDescriptorArray[I].SetActiveState(True);
-      End;
 end;
 
 procedure TvgDescriptorArray.SetFrameCount(const Value: TvkUint32);
@@ -31379,13 +31380,21 @@ begin
   Result := nil;
 end;
 
-function TvgDescriptorData.ResolveFrameData(
-  aFrameIndex: Integer): TvgDescriptorPerFrameData;
+function TvgDescriptorData.ResolveFrameData( aFrameIndex: Integer): TvgDescriptorPerFrameData;
+var
+  Dummy: Integer;
+
+begin
+  Result := ResolveFrameData(aFrameIndex,Dummy);
+end;
+
+function TvgDescriptorData.ResolveFrameData(aFrameIndex: Integer; out aResolvedIndex: Integer): TvgDescriptorPerFrameData;
 var
   I, FoundIndex, FoundCount: Integer;
   Candidate, Requested: TvgDescriptorPerFrameData;
 begin
   Result := nil;
+  aResolvedIndex := -1;
   Requested := nil;
 
   if (aFrameIndex >= 0) and (aFrameIndex < Length(fFrameData)) then
@@ -31394,6 +31403,7 @@ begin
   if assigned(Requested) and Requested.HasPayload then
   begin
     Result := Requested;
+    aResolvedIndex := aFrameIndex;
     Exit;
   end;
 
@@ -31418,6 +31428,7 @@ begin
   if (FoundCount = 1) and (FoundIndex >= 0) and (fFrameData[FoundIndex] <> nil) then
   begin
     Result := fFrameData[FoundIndex];
+    aResolvedIndex := FoundIndex;
     Exit;
   end;
 
@@ -31426,6 +31437,7 @@ begin
   if assigned(Requested) then
   begin
     Result := Requested;
+    aResolvedIndex := aFrameIndex;
     Exit;
   end;
 
@@ -31440,8 +31452,12 @@ begin
     end;
 
   if FoundIndex >= 0 then
+  begin
     Result := fFrameData[FoundIndex];
-end;
+    aResolvedIndex := FoundIndex;
+  end;end;
+
+
 
 function TvgDescriptorData.GetStaging: Boolean;
 begin
@@ -31525,6 +31541,7 @@ end;
 procedure TvgDescriptorData.SetUploadNeeded(aFrameIndex: Integer; const Value: Boolean);
 var
   DF: TvgDescriptorPerFrameData;
+
 begin
   DF := ResolveFrameData(aFrameIndex);
   if assigned(DF) then
@@ -31535,13 +31552,23 @@ end;
 procedure TvgDescriptorData.UpLoadDescriptorData(aFrameIndex: TvkUint32;  aGraphicPool, aTransferPool: TvgCommandBufferPool);
 
   Var DF:TvgDescriptorPerFrameData;
+      ResolvedIndex: Integer;
 begin
   if not Assigned(aGraphicPool) or not Assigned(aTransferPool) then
     Exit;
 
-  DF := ResolveFrameData(aFrameIndex);
+  DF := ResolveFrameData(aFrameIndex, ResolvedIndex);
   if assigned(DF) then
-    DF.UpLoadDescriptorData(aFrameIndex, aGraphicPool, aTransferPool);
+    // Forward the slot the data actually lives at (ResolvedIndex), not the
+    // caller's raw render-frame index. When fewer PerFrameData slots exist
+    // than frames in flight - e.g. a single shared TvgDescriptorPerFrameData
+    // used for all frames - ResolvedIndex differs from aFrameIndex, and the
+    // per-frame object (TvgDescriptor_PerFrame_Texture etc.) uses this value
+    // to index its own frame-sized resources (Sampler.VulkanSampler[], ...).
+    // Forwarding the unresolved aFrameIndex there indexes those arrays out
+    // of the single valid slot, which is what was causing the failure.
+    DF.UpLoadDescriptorData(TvkUint32(ResolvedIndex), aGraphicPool, aTransferPool);
+
 
 end;
 

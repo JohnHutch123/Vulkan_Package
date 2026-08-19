@@ -361,6 +361,7 @@ Type
     Procedure SetEnabled ;   Override;
 
     function GetOrAddFrameDataObject(aFrameIndex: Integer): TvgDescriptorPerFrameData; override;
+
     function GetGLSLBaseTypeName: String; override;
     Procedure SetFrameCount(aCount:Integer);
 
@@ -389,9 +390,12 @@ Type
 
 
   Public
+    class function GetPropertyName: String; override;
+
     constructor Create(AOwner: TComponent); override;
 
     Function AddTexture(aTextureName, aFileName:String ) : Integer;
+    Function AddSharedTexture(aTextureName, aFileName: String): Integer;
     Function RemoveTexture(aDataTexture : TvgDescriptor_Data_Texture):Boolean;
 
     Property TextureData[Index:Integer] : TvgDescriptor_Data_Texture  Read GetDescriptor_Data_Texture ;
@@ -1334,15 +1338,56 @@ end;
 
  { TvgDescriptorArray_Texture }
 
+function TvgDescriptorArray_Texture.AddSharedTexture(aTextureName, aFileName: String): Integer;
+var
+  TD: TvgDescriptor_Data_Texture;
+  TF: TvgDescriptorPerFrameData;
+  TT: TvgDescriptor_PerFrame_Texture;
+  GLSLIndex: TvkUint32;
+begin
+  Result := -1;
+  TD := TvgDescriptor_Data_Texture.Create;
+
+  if AddDescriptorDataToArray(TD) then
+  begin
+    Result := IndexOfDescriptorData(TD);
+    TF := TD.GetOrAddFrameDataObject(0);          // slot 0 only — no per-frame loop
+    if Assigned(TF) and (TF is TvgDescriptor_PerFrame_Texture) then
+    begin
+      TT := TvgDescriptor_PerFrame_Texture(TF);
+      TT.LoadTexture(aFileName, GLSLIndex);
+    end;
+  end else
+    TD.Free;
+end;
+
 function TvgDescriptorArray_Texture.AddTexture(aTextureName,  aFileName: String): Integer;
   Var TD:TvgDescriptor_Data_Texture;
+      TF : TvgDescriptorPerFrameData;
+      TT:TvgDescriptor_PerFrame_Texture;
+      I :Integer;
+      GLSLIndex:TvkUint32;
 begin
   Result := -1;
 
   TD:= TvgDescriptor_Data_Texture.Create;
+
+
   If AddDescriptorDataToArray(TD) then
-     Result := IndexOfDescriptorData(TD)
-  else
+  Begin
+     Result := IndexOfDescriptorData(TD);
+     For I:=0 to FrameCount-1 do
+     Begin
+       TF := TD.GetOrAddFrameDataObject(I);
+       If assigned(TF) and (TF is TvgDescriptor_PerFrame_Texture) then
+       Begin
+         TT := TvgDescriptor_PerFrame_Texture(TF);
+       //  TT.
+         If assigned(TT) then
+           TT.LoadTexture(aFileName, GLSLIndex);
+       End;
+     End;
+  end else
      TD.Free;
 
 
@@ -1373,6 +1418,11 @@ end;
 function TvgDescriptorArray_Texture.GetGLSLDeclarationBody: String;
 begin
   Result := 'uniform sampler2D';  // or combined-image-sampler equivalent
+end;
+
+class function TvgDescriptorArray_Texture.GetPropertyName: String;
+begin
+  Result := 'Descriptor_Texture';
 end;
 
 function TvgDescriptorArray_Texture.RemoveTexture( aDataTexture: TvgDescriptor_Data_Texture): Boolean;
@@ -1502,75 +1552,11 @@ begin
 end;
 
 Procedure TvgDescriptor_Data_Texture.SetEnabled;
-(*Var CF, FL, CD, DC : Integer;
-      F : String;
-      Txt : TvgDTexture_Name;
-
-    Procedure LoadTextureFromFile;
-      Var FS:TFileStream;
-          F : String;
-    Begin
-      Txt.DataOK   := False;
-      Txt.DataSize := 0;
-
-      F:= Trim(Txt.FileName) ;
-      if not FileExists(F) then
-      Begin
-        F := TextureFolderPath + F;
-        if not FileExists(F) then
-          Exit;
-      end;
-
-      FS := TFileStream.Create(Txt.FileName, fmOpenRead or fmShareDenyWrite);
-     Try
-      If FS.Size=0 then
-      Begin
-        FreeAndNil(FS);
-        exit;
-      End;
-
-      Txt.DataSize := FS.size;
-
-      fVulkanTextures.fFrameData[CF].fObjectData[CD] := TpvVulkanTexture.Create(fDescriptorItem.Device.VulkanDevice);
-
-      fVulkanTextures.fFrameData[CF].fObjectData[CD].LoadFromImage(FS,
-                                                                    True,
-                                                                    False,
-                                                                    True );
-
-      fUploadNeeded[CF][CD] := True;
-
-     Finally
-        FreeAndNil(FS);
-     End;
-    End;
-
-    Procedure LoadTextureFromMemory;
-    Begin
-      If not assigned(txt.MemoryStream) then
-      Begin
-        exit;
-      End;
-
-      Txt.DataSize := txt.MemoryStream.size;
-
-      fVulkanTextures.fFrameData[CF].fObjectData[CD] := TpvVulkanTexture.Create(fDescriptorItem.Device.VulkanDevice);
-
-      fVulkanTextures.fFrameData[CF].fObjectData[CD].LoadFromImage(txt.MemoryStream,
-                                                                    True,
-                                                                    False,
-                                                                    True );
-
-      fUploadNeeded[CF][CD] := True;
-
-    End;
-  *)
 
   Var I,L:Integer;
 begin
 
   Inherited;
-
 
   If assigned(fSampler) then
   Begin
@@ -1584,61 +1570,8 @@ begin
     For I:=0 to L-1 do
       If assigned(fFrameData[I]) then
         fFrameData[I].Active := True ;
- (*
-
-  DC := GetDescriptorCount;
-  CustomAssert(DC>0,'Descriptor Count is zero',Self);
-
-
-  CustomAssert(assigned( fDescriptorItem),'Descriptor Item Not assigned',Self);
-  CustomAssert(assigned( fDescriptorItem.Device),'Descriptor Item Device Not assigned',Self);
-  CustomAssert(assigned( fDescriptorItem.Device.VulkanDevice),'Descriptor Item Device Not Active',Self);
-
-
-  FL := Length(fFileNames.fFrameData);
-  CustomAssert(FL>0,'Frame Count is zero',Self);
-
-  SetLength(fVulkanTextures.fFrameData,fFrameCount);
-
-
-  Try
-    fDevice := fDescriptorItem.Device;
-
-    For CF:= 0 to FL-1 do
-    Begin
-      DC := Length(fFileNames.fFrameData[CF].fDescriptorData) ;
-
-
-      For CD:=0 to DC-1 do
-      Begin
-        SetLength(fVulkanTextures.fFrameData[CF].fObjectData,DC);
-
-        Txt := fFileNames.fFrameData[CF].fDescriptorData[CD];
-
-        If assigned(Txt.MemoryStream) then
-          LoadTextureFromMemory
-        else
-        If (Txt.FileName<>'') then
-          LoadTextureFromFile
-        else
-        Begin
-          fFileNames.fFrameData[CF].fDescriptorData[CD].DataOK   := False;
-          fFileNames.fFrameData[CF].fDescriptorData[CD].DataSize := 0;
-        End;
-
-
-      End;  //descriptor loop
-
-
-    End;  //frame loop
-
-  Result := True;
-
- Finally
-
- End;
- *)
 end;
+
 procedure TvgDescriptor_Data_Texture.SetFrameCount(aCount: Integer);
   Var L,I:Integer;
 begin
@@ -1664,21 +1597,6 @@ begin
   End;
 
 end;
-
-(*
-procedure TvgDescriptor_Data_Texture.SetUpArraysForFrameCount;
-begin
-  inherited;
-
-  If (Length(fFileNames.fFrameData)> fFrameCount) then
-  Begin
-
-  End;
-
-  SetLength(fFileNames.fFrameData, fFrameCount);
-
-end;
- *)
 
 procedure TvgDescriptor_Data_Texture.SetWrapModeU( const Value: TpvVulkanTextureWrapMode);
 begin
@@ -4021,6 +3939,7 @@ end;
 
 function TvgDescriptor_PerFrame_Texture.LoadTexture(aFileStream: TStream;  var aGLSLIndex: TvkUint32): Boolean;
 begin
+
   Result := False;
   CustomAssert(assigned(aFileStream),'File Stream NOT assigned')  ;
   CustomAssert(aFileStream.Size<>0,'Data Size is Zero')  ;
@@ -4106,13 +4025,18 @@ begin
 end;
 
 function TvgDescriptor_PerFrame_Texture.GetWriteDescriptorPayload( out aBufInfo: TVkDescriptorBufferInfo;
-                                                                  out aImgInfo: TVkDescriptorImageInfo): Boolean;
+                                                                   out aImgInfo: TVkDescriptorImageInfo): Boolean;
 begin
   Result := False;
   aBufInfo:= Default(TVkDescriptorBufferInfo);
   aImgInfo:= Default(TVkDescriptorImageInfo);
 
   CustomAssert(assigned(fVulkanTexture),'Vulkan Texture NOT assigned');
+
+  CustomAssert(assigned(fVulkanTexture.ImageLayout),'Vulkan Texture  IMAGE NOT assigned');
+  CustomAssert(assigned(fVulkanTexture.ImageView),'Vulkan Texture  IMAGE VIEW NOT assigned');
+  CustomAssert(assigned(fVulkanTexture.Sampler),'Vulkan Texture SAMPLER NOT assigned');
+
   CustomAssert(assigned(fDescriptorData),'Owner DescriptorData NOT assigned');
 
   aImgInfo.imageLayout := fVulkanTexture.ImageLayout;
@@ -4212,8 +4136,8 @@ begin
              'TV Command buffer not in INITIAL state before TpvVulkanTexture.Finish');
 
 
-    If assigned(Sampler) and (fVulkanTexture.Sampler<>Sampler.VulkanSampler[aFrameIndex]) then
-      fVulkanTexture.Sampler := Sampler.VulkanSampler[aFrameIndex];
+    If assigned(Sampler) and (fVulkanTexture.Sampler<>Sampler.VulkanSampler[0]) then
+      fVulkanTexture.Sampler := Sampler.VulkanSampler[0];
 
 
      fVulkanTexture.Finish (GQ,

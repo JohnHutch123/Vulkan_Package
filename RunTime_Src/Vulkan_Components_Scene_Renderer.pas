@@ -1486,6 +1486,7 @@ begin
       Begin
         S := TvgDescriptorArray_Texture.GetPropertyName ;
         DI.DescriptorName := S;
+
         If assigned(DI.Descriptor) then
         Begin
           DI.Name       := aDescriptorName;
@@ -1499,8 +1500,7 @@ begin
             Tex.BindingCount := 1;
 
 
-
-            Tex.AddTexture('ObjectStoreTexture',aImageFileName)   ;
+            Tex.AddSharedTexture('StarImage',aImageFileName)   ;
 
 
           //  DI.GLSLIndex := aGLSLIndex;
