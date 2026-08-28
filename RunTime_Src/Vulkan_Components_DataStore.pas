@@ -133,7 +133,6 @@ type
     FIndexCapacity      : Integer;
     FIndexType          : TIndexType;
 
-
     FNumFrames         : Integer;
     FDataDirty         : TArray<Boolean>;
     FBuffersCreated    : Boolean;
@@ -1200,7 +1199,8 @@ begin
   try
     Obj         := FDataObjects[ObjectIndex];
     GlobalIndex := Obj.InstanceStart + LocalIndex;
-    Data[0]     := ID1; Data[1] := ID2;
+    Data[0]     := ID1;
+    Data[1]     := ID2;
     SetInstanceAttributeData(GlobalIndex, idtObjID, Data);
     SetDataDirty;
   finally

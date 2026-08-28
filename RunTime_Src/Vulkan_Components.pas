@@ -1642,8 +1642,6 @@ TvgBaseComponent = class(TComponent)
   end;
 
 
-
-
   TvgResourceImageBuffer = Class(TvgBaseComponent)
   private
 
@@ -1735,7 +1733,7 @@ TvgBaseComponent = class(TComponent)
 
         fMSAAOn            : Boolean;
 
-        fMemoryBlock           : TpvVulkanDeviceMemoryBlock;
+        fMemoryBlock       : TpvVulkanDeviceMemoryBlock;
 
         fFrameBufferAttachmentON : Boolean;
         fFrameBufferAttachment   : TpvVulkanFrameBufferAttachment;
@@ -1803,7 +1801,6 @@ TvgBaseComponent = class(TComponent)
       Property FrameBufferAttachmentON: Boolean Read fFrameBufferAttachmentON write SetFrameBufferAttachmentON;
       Property PixelSamplerON: Boolean Read fPixelSamplerON write SetPixelSamplerON;
       Property PixelSampleRadius : TvgPixelSampleRadius read fPixelSampleRadius write SetPixelSampleRadius;
-
 
   End;
 
@@ -1944,67 +1941,6 @@ TvgBaseComponent = class(TComponent)
 
   TvgDescriptorArrayType = Class of TvgDescriptorArray;
 
-(*
-
-  //Descriptor (Resource) used for Uniform Buffer Data, Images and Samplers
-  TvgDescriptorItem = Class(TvgBaseCollectionItem)
-  //will contain instances of resouce data
-  private
-    Function GetDevice : TvgLogicalDevice;
-    Procedure SetDevice(Value:TvgLogicalDevice);
-    function GetName: String;
-    procedure SetName(const Value: String);
- //   function GetDescriptorType: TvgDescriptorType;
-    procedure SetDescriptorType(const Value: TvgDescriptorType);
-    function GetDescriptor: TvgDescriptor;
-    function GetDescriptorName: String;
-    procedure SetDescriptorName(const Value: String);
-    function GetDescriptorSet: TvgDescriptorSet;
-    function GetBinding: TvkUint32;
-    function GetDescriptorCount: TvkUint32;
-    procedure SetBinding(const Value: TvkUint32);
-    procedure SetDescriptorCount(const Value: TvkUint32);
-
-  protected
-
-    fName             : String;
-
-    fDevice           : TvgLogicalDevice;  //link to Device
-
-//shader Data structures
-
-    fDescriptorType  : TvgDescriptorType ;  //define the instance of the shader data
-    fDescriptor      : TvgDescriptor;       //created instance of data which should match the number of FramesInFlight
-
-    fBinding         : TvkUint32;          // explicit Vulkan binding number
-    fDescriptorCount : TvkUint32;  // override/authoring hint, copied into
-
-    function GetDisplayName: string; Override;
-    procedure SyncDescriptorMetadata;
-
-  Public
-
-   constructor Create(Collection: TCollection); override;
-   destructor Destroy; override;
-
-   Procedure SetDescriptor(aValue : TvgDescriptor);
-
-   Property Device      : TvgLogicalDevice Read GetDevice write SetDevice;
-   Property DescriptorSet  : TvgDescriptorSet Read GetDescriptorSet;
-
-  Published
-
-
-   Property Name        : String  Read GetName  Write SetName ;
-   property Binding: TvkUint32 read GetBinding write SetBinding default 0;
-   property DescriptorCount: TvkUint32 read GetDescriptorCount write SetDescriptorCount default 1;
-   Property DescriptorName : String  Read GetDescriptorName write SetDescriptorName;
-   Property Descriptor     : TvgDescriptor Read GetDescriptor write SetDescriptor;
-   //actual the instance of the shader data  specified in ShaderType
-
-  End;
-*)
-
   TvgDescriptorItem = class(TvgBaseCollectionItem)
 
   private
@@ -2019,10 +1955,12 @@ TvgBaseComponent = class(TComponent)
     function GetDescriptorSet: TvgDescriptorSet;
 
   protected
-    fName           : String;
-    fDevice         : TvgLogicalDevice;
+    fName                : String;
+  //  fDescriptorSet       : TvgDescriptorSet;
+    fDevice              : TvgLogicalDevice;
+
     fDescriptorArrayType : TvgDescriptorArrayType;
-    fDescriptor     : TvgDescriptorArray;
+    fDescriptor          : TvgDescriptorArray;
 
     function GetDisplayName: string; override;
     procedure SyncDescriptorMetadata;
@@ -2188,7 +2126,7 @@ TvgBaseComponent = class(TComponent)
     fBufferUsageFlags  : TVkBufferUsageFlags;
     fBufferSharingMode : TVkSharingMode;
 
-    fFrameData      : Array of TvgDescriptorPerFrameData;
+    fFrameData         : Array of TvgDescriptorPerFrameData;
 
     // When True only ONE TvgDescriptorPerFrameData object is kept (the first
     // populated slot). Every render frame then resolves to that single object,
@@ -4758,11 +4696,11 @@ TvgBaseComponent = class(TComponent)
 
   //linked components
     fScreenDevice        : TvgScreenRenderDevice  ;   //Screen Device Logical device connection use for Physical device and Instance
+    fRenderer            : TvgBaseRenderEngine;
+    fToolManager         : TvgBaseToolManager;
     fWindowIntf          : IvgVulkanWindow;
     fWindowReady         : Boolean;  //True if Interface has valid Handle for Surface creation
     fNeedSurfaceRebuild  : Boolean;
-    fRenderer            : TvgBaseRenderEngine;
-    fToolManager         : TvgBaseToolManager;
 
   //sub components owned by Linker
     fSurface             : TvgSurface;
@@ -4857,7 +4795,6 @@ TvgBaseComponent = class(TComponent)
     Property WindowIntf      : IvgVulkanWindow read GetWindowIntf write SetWindowIntf;
     Property WindowReady     : Boolean read fWindowReady Write SetWindowReady;   //handle OK
     Property NeedSurfaceRebuild  : Boolean read fNeedSurfaceRebuild write SetNeedSurfaceRebuild;
-
 
     Property ImageFormat     : TVkFormat Read fImageFormat;         //not stored
 
@@ -5049,6 +4986,7 @@ TvgBaseComponent = class(TComponent)
 
   protected
     fLinker           : TvgLinker;
+
     fToolMode         : TvgToolManagerMode;
     fMouseSensitivity : Single;      // Global multiplier (default 0.4)
 
@@ -5225,7 +5163,6 @@ TvgBaseComponent = class(TComponent)
 
  //    fInstanceDataON        : Boolean;
     fFlags          : TvgObjectStateFlags;
-
 
 
     Procedure SetDisabled;  Virtual;
@@ -5529,6 +5466,8 @@ TvgBaseComponent = class(TComponent)
 
     Procedure ClearSceneLinks;
 
+    Function GetRenderWindowSize(Var aWidth,aHeight:TvkUint32):Boolean;
+
     Procedure TriggerWindowRepaint;
     Procedure FlagRebuildALLFrames;
 
@@ -5609,7 +5548,7 @@ TvgBaseComponent = class(TComponent)
    //called attaching a RenderEngine to Scene
    Procedure DisConnectRenderEngine(aRenderEngine:TvgBaseRenderEngine);   Virtual;
    //called attaching a RenderEngine to Scene
-   Procedure ReConnectRenderEngines;
+   Procedure ReConnectRenderEngines;          Virtual;
 
    Procedure ConnectDataToRenderer(aRenderEngine : TvgBaseRenderEngine);Virtual; Abstract;
    //Called when connecting a RenderEngine
@@ -6308,6 +6247,7 @@ begin
    Begin
      ObjPtr := Uint64(self);
      Split64BitTo32Bit(ObjPtr, fObjLow, fObjHigh);
+
    End else
    Begin
      fObjLow :=0;
@@ -12357,9 +12297,10 @@ end;
 constructor TvgBaseRenderEngine.Create(AOwner: TComponent);
 begin
 
-   fGlobalRes                  := TvgDescriptorSet.Create(self);  //haold shader resource structure and data
+   fGlobalRes                  := TvgDescriptorSet.Create(self);  //hold shader global resource structure and data
+ //  fGlobalRes.Owner            := self;
    fGlobalRes.SetSubComponent(True);
-   fGlobalRes.Name             := 'Global';
+   fGlobalRes.Name             := 'GlobalRes';
    If assigned(fLinker) then
       fGlobalRes.Linker := fLinker;
 
@@ -12917,6 +12858,20 @@ begin
   VaildateGlobalResources;
   ApplyFeatureFlagsToPipelines;
   FlagRebuildALLFrames;
+end;
+
+Function TvgBaseRenderEngine.GetRenderWindowSize(Var aWidth, aHeight: TvkUint32):Boolean;
+begin
+
+  If assigned(fLinker) and
+     assigned(fLinker.SwapChain) then
+  Begin
+    aWidth  := fLinker.SwapChain.ImageWidth;
+    aHeight := fLinker.SwapChain.ImageHeight;
+    Result := True;
+  End else
+    Result := False;
+
 end;
 
 procedure TvgBaseRenderEngine.SetSelectON(const Value: Boolean);
@@ -21653,11 +21608,16 @@ begin
 end;
 
 function TvgDescriptorItem.GetDescriptorSet: TvgDescriptorSet;
+  var c:TCollection;
 begin
-  If assigned(Collection) and (Collection is TvgDescriptorCol) and (TvgDescriptorCol(Collection).Owner is TvgDescriptorSet) then
-     Result :=  TvgDescriptorSet(TvgDescriptorCol(Collection).Owner)
-  else
-     Result := nil;
+  Result := nil;
+
+  If assigned(Collection)  then
+  Begin
+    C:=Collection;
+    If (C is TvgDescriptorCol) then
+      Result := TvgDescriptorCol(C).DescriptorSet ;
+  End;
 end;
 
 procedure TvgDescriptorItem.SetDevice(const Value: TvgLogicalDevice);
@@ -22236,34 +22196,36 @@ end;
 
 procedure TvgLinker.MouseDown(aButton: TvgMouseButton; Shift: TShiftState; X, Y: Integer);
 begin
+  If not (fState =vgcsActive) then exit;
+  If X < 0 then exit;
+  If Y < 0 then exit;
 
+  // Route through ToolManager if one is attached
+  If Assigned(fToolManager) then
+    fToolManager.HandleMouseDown(aButton, Shift, X, Y);
 end;
 
 procedure TvgLinker.MouseMove(Shift: TShiftState; X, Y: Integer);
- //Var P:Pointer;
 Begin
   If not (fState =vgcsActive) then exit;
   If X < 0 then exit;
   If Y < 0 then exit;
 
- // fix
-
-  // direct object-at-location query (no tool manager)
- // If Assigned(fRenderer) then
- //   P := fRenderer.GetObjectAtLocation(TvkUint32(Max(0, fPresentFrameIndex)), Shift, X, Y);
-
   // Route through ToolManager if one is attached
   If Assigned(fToolManager) then
-  Begin
     fToolManager.HandleMouseMove(Shift, X, Y);
-    exit;
-  End;
 
 end;
 
-procedure TvgLinker.MouseUp(aButton: TvgMouseButton; Shift: TShiftState; X,
-  Y: Integer);
+procedure TvgLinker.MouseUp(aButton: TvgMouseButton; Shift: TShiftState; X, Y: Integer);
 begin
+  If not (fState =vgcsActive) then exit;
+  If X < 0 then exit;
+  If Y < 0 then exit;
+
+  // Route through ToolManager if one is attached
+  If Assigned(fToolManager) then
+    fToolManager.HandleMouseUp(aButton, Shift, X, Y);
 
 end;
 
@@ -22767,6 +22729,7 @@ begin
 
     If assigned(fRenderer) then
     Begin
+    //   fRenderer.SetRenderWindowSize(fSwapChain.ImageWidth, fSwapChain.ImageHeight);
        fRenderer.ApplyState(vgcsActive);
        fRenderRequested := True;
     End;
@@ -26494,8 +26457,14 @@ function TvgDescriptorCol.Add: TvgDescriptorItem;
 begin
   Result := TvgDescriptorItem(inherited Add);
 
-  If assigned(Result) and assigned(fComp) and assigned(FComp.fLinker) then
-      Result.Device := FComp.fLinker.ScreenDevice;
+  If assigned(Result) then
+  Begin
+     If assigned(fComp) and
+        assigned(FComp.fLinker) then
+     Begin
+        Result.Device := FComp.fLinker.ScreenDevice;
+     End;
+  End;
 end;
 
 function TvgDescriptorCol.AddItem(Item: TvgDescriptorItem; Index: Integer): TvgDescriptorItem;
@@ -28691,6 +28660,8 @@ end;
 procedure TvgDescriptorArray.UpLoadDescriptorData(aFrameIndex: TvkUint32; aGraphicPool, aTransferPool: TvgCommandBufferPool);
   Var I,L,Actual:Integer;
 begin
+  If NOT (DF_UP in fDataFlow) then exit;
+
   If not assigned(aGraphicPool) then exit;
   If not assigned(aTransferPool) then exit;
 
@@ -28748,173 +28719,6 @@ begin
 
   Result := True;
 end;
-
-
-(*
-
-procedure TvgDescriptorArray.WriteDescriptorSet(
-                                                  aSet          : TpvVulkanDescriptorSet;
-                                                  aFrameIndex,
-                                                  aBinding,
-                                                  aArrayElement : TvkUint32;
-                                                  aWriteMode    : TvgDescriptorWriteMode = vgdmWriteWholeBinding);
-var
-  I, J, WS, Actual    : Integer;
-  DD          : TvgDescriptorData;
-  DF          : TvgDescriptorPerFrameData;
-
-  BufInfos    : array of TVkDescriptorBufferInfo;          // TVkDescriptorBufferInfo
-  ImgInfos    : array of TVkDescriptorImageInfo;
-
-  BufInfo     : TVkDescriptorBufferInfo;
-  ImgInfo     : TVkDescriptorImageInfo;
-
-begin
-  Actual := Length(fDescriptorArray);
-  If Actual=0 then exit;
-
-  WS := Integer(GetDescriptorCountForWrite(aFrameIndex));
-  if WS = 0 then Exit;
-
-  if aFrameIndex >= FrameCount then
-     aFrameIndex := FrameCount - 1;
-
-
-  SetLength(BufInfos, WS);
-  SetLength(ImgInfos, WS);
-  J := 0;
-
-  for I := 0 to Min(Actual,WS) - 1 do
-  begin
-    BufInfos[J] := Default(TVkDescriptorBufferInfo);
-    ImgInfos[J] := Default(TVkDescriptorImageInfo);
-
-    DD := fDescriptorArray[I];
-
-    if Assigned(DD) then
-    begin
-      DF := DD.FrameData[aFrameIndex];
-      if Assigned(DF) then
-        DF.GetWriteDescriptorPayload(BufInfos[J], ImgInfos[J]);
-        // zero-filled slot is legal under dioPartiallyBound
-    end;
-
-    Inc(J);
-
-  end;
-
-  while J < WS do
-  begin
-    BufInfos[J] := Default(TVkDescriptorBufferInfo);
-    ImgInfos[J] := Default(TVkDescriptorImageInfo);
-    Inc(J);
-  end;
-
-  if J > 0 then
-    aSet.WriteToDescriptorSet(aBinding,
-                              aArrayElement,
-                              J,
-                              fDescriptorType,
-                              ImgInfos,
-                              BufInfos,
-                              [],
-                              False);
-
-
-  SetLength(BufInfos, 0);
-  SetLength(ImgInfos, 0);
-end;
-*)
-
-(*
-
-procedure TvgDescriptorArray.WriteDescriptorSet(  aSet          : TpvVulkanDescriptorSet;
-                                                  aFrameIndex,
-                                                  aBinding,
-                                                  aArrayElement : TvkUint32;
-                                                  aWriteMode    : TvgDescriptorWriteMode = vgdmWriteWholeBinding);
-var
-  I, L, WS            : Integer;
-  RunStart, RunCount   : Integer;
-  DD                   : TvgDescriptorData;
-  DF                   : TvgDescriptorPerFrameData;
-  BufInfos             : array of TVkDescriptorBufferInfo;
-  ImgInfos             : array of TVkDescriptorImageInfo;
-  AllowGaps            : Boolean;
-
-  function HasPayload(aIndex: Integer): Boolean;      check
-  var LDD: TvgDescriptorData;
-  begin
-    Result := False;
-    if (aIndex < 0) or (aIndex >= L) then Exit;   // beyond populated array = gap too
-    LDD := fDescriptorArray[aIndex];
-    if not Assigned(LDD) then Exit;
-    Result := Assigned(LDD.FrameData[aFrameIndex]);
-  end;
-
-  procedure FlushRun;
-  var K: Integer;
-  begin
-    if RunCount = 0 then Exit;
-
-    SetLength(BufInfos, RunCount);
-    SetLength(ImgInfos, RunCount);
-
-    for K := 0 to RunCount - 1 do
-    begin
-      BufInfos[K] := Default(TVkDescriptorBufferInfo);
-      ImgInfos[K] := Default(TVkDescriptorImageInfo);
-
-      DD := fDescriptorArray[RunStart + K];
-      DF := DD.FrameData[aFrameIndex];
-      DF.GetWriteDescriptorPayload(BufInfos[K], ImgInfos[K]);
-    end;
-
-    aSet.WriteToDescriptorSet(aBinding,
-                              aArrayElement + TvkUint32(RunStart),
-                              RunCount,
-                              fDescriptorType,
-                              ImgInfos,
-                              BufInfos,
-                              [],
-                              False);
-
-    SetLength(BufInfos, 0);
-    SetLength(ImgInfos, 0);
-    RunCount := 0;
-  end;
-
-begin
-  L := Length(fDescriptorArray);
-  if L = 0 then Exit;
-
-  if aFrameIndex >= FrameCount then
-     aFrameIndex := FrameCount - 1;
-
-  WS        := Integer(GetDescriptorCountForWrite(aFrameIndex));  // authoritative binding size
-  AllowGaps := PartiallyBound;                                    // dioPartiallyBound in fIndexingOptions
-
-  RunStart := -1;
-  RunCount := 0;
-
-  for I := 0 to WS - 1 do
-  begin
-    if HasPayload(I) then
-    begin
-      if RunCount = 0 then
-         RunStart := I;
-      Inc(RunCount);
-    end else
-    begin
-      CustomAssert(AllowGaps, 'Descriptor array has an unwritten slot but PartiallyBound is not set', Self);
-      FlushRun;   // close out whatever run preceded this gap
-    end;
-  end;
-
-  FlushRun;   // flush the trailing run, if any
-end;
-
-*)
 
 procedure TvgDescriptorArray.WriteDescriptorSet(  aSet          : TpvVulkanDescriptorSet;
                                                   aFrameIndex,
@@ -30594,7 +30398,7 @@ begin
   End;
 
   If NeedActive then
-     self.SetActiveState(TRue) ;
+     SetActiveState(TRue) ;
 end;
 
 Function TvgBaseScene.SetDisabled:Boolean;
@@ -31612,7 +31416,10 @@ end;
 procedure TvgDescriptorData.SetFrameCount(aFrameCount: TvkUint32);
   Var L,I, FC:Integer;
 begin
+
   L  := Length(fFrameData) ;
+  If aFrameCount=L then exit;
+
   FC := aFrameCount;
 
   SetActiveState(False);
@@ -31729,7 +31536,7 @@ begin
     Exit;
 
   DF := ResolveFrameData(aFrameIndex, ResolvedIndex);
-  if assigned(DF) then
+  if assigned(DF) and assigned(Descriptor) and  (DF_UP in Descriptor.DataFlow)then
     // Forward the slot the data actually lives at (ResolvedIndex), not the
     // caller's raw render-frame index. When fewer PerFrameData slots exist
     // than frames in flight - e.g. a single shared TvgDescriptorPerFrameData

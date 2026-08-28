@@ -646,13 +646,11 @@ TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
     Constructor Create;
     Destructor Destroy; Override;
 
-    Procedure UpLoadDescriptorData(aFrameIndex:TvkUint32;
-                                   aGraphicPool:TvgCommandBufferPool;
-                                   aTransferPool:TvgCommandBufferPool);  Override;
-
-
     Procedure ClearDescriptor(aCommandBuffer:TvgCommandBuffer) ;  //Clear the value in Vulkan
-//    Procedure ClearResetBarrier(aCommandBuffer: TvgCommandBuffer);
+
+    Procedure UpLoadDescriptorData (aFrameIndex:TvkUint32;
+                                    aGraphicPool:TvgCommandBufferPool;
+                                    aTransferPool:TvgCommandBufferPool);   Override;
 
 
   End;
@@ -664,10 +662,12 @@ TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
     procedure SetImageHeight(const Value: TvkUint32);
     procedure SetImageWidth(const Value: TvkUint32);
     procedure SetPixelSampleRadius(const Value: TvgPixelSampleRadius);
+    procedure SetWindowSync(const Value: Boolean);
 
   Protected
     fImageWidth,
     fImageHeight          : TvkUint32;
+    fWindowSync           : Boolean;  //size to match render swapchain size
 
     fPixelSamplingON      : Boolean;
     fPixelSampleRadius    : TvgPixelSampleRadius;
@@ -681,8 +681,10 @@ TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
     Procedure SetDisabled; override;
     Procedure SetEnabled; override;
 
-    Function GetOrAddFrameDataObject(aFrameIndex:Integer) : TvgDescriptorPerFrameData; Virtual;  //descendant builds correct frameData type
+    Function GetOrAddFrameDataObject(aFrameIndex:Integer) : TvgDescriptorPerFrameData; Override;  //descendant builds correct frameData type
     function GetGLSLBaseTypeName: String; override;
+
+    Procedure VaildateWindowSize;
 
   Public
     constructor Create;
@@ -699,6 +701,8 @@ TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
 
     Property ImageWidth  : TvkUint32 Read fImageWidth Write SetImageWidth;
     Property ImageHeight : TvkUint32 Read fImageHeight Write SetImageHeight;
+
+    Property WindowSync : Boolean read fWindowSync write SetWindowSync;
 
   End;
 
@@ -717,6 +721,7 @@ TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
     class function GetPropertyName: String; override;
     constructor Create(AOwner: TComponent); override;
     procedure ClearDescriptor(aCommandBuffer: TvgCommandBuffer); override;
+
     function AddStorageImage(aStorageImageData: TvgDescriptor_Data_StorageImage): Integer;
     function RemoveStorageImage(aStorageImageData: TvgDescriptor_Data_StorageImage): Boolean;
 
@@ -743,20 +748,6 @@ TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
 
   end;
 
-(*
-  TvgDescriptor_Data_UBO_4x4MatrixD = class(TvgDescriptor_Data_UniformBuffer<TvgMatrix4x4D> )
-  private
-    function GetMatrix(  aFrameIndex:TvkUint32; aDataIndex:TvkUint32=0): TvgMatrix4x4D;
-    procedure SetMatrix( aFrameIndex:TvkUint32; aDataIndex:TvkUint32;const Value: TvgMatrix4x4D);
-
-  Public
-
-    Function GetGLSLBaseTypeName: String;override;
-
-    Property Matrix[ aFrameIndex, aDataIndex:TvkUint32]: TvgMatrix4x4D read GetMatrix write SetMatrix;
-  end;
-
-*)
 
   TvgDescriptorArray_SB_2UI = Class(TvgDescriptorArray_StorageBuffer<TvgVector2I>)
   Public
@@ -771,45 +762,6 @@ TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
   End;
 
 
-(*
-  TvgDescriptor_Data_SB_2UI = Class(TvgDescriptor_Data_StorageBuffer<TvgVector2I>)
-
-  Public
-    Constructor Create;
-
-
-  End;
- *)
-
-
- (*
-  TvgDescriptorArray_UBO_4x4MatrixD = class(TvgDescriptorArray_UniformBuffer<TvgMatrix4x4D> )
-  private
-    function GetMatrix( aDescriptorIndex, aFrameIndex:TvkUint32; aDataIndex:TvkUint32=0): TvgMatrix4x4D;
-    procedure SetMatrix(aDescriptorIndex, aFrameIndex:TvkUint32; aDataIndex:TvkUint32;const Value: TvgMatrix4x4D);
-
-  Public
-    Class Function GetPropertyName : String; override;
-
-    Function AddDescriptorMatrix : Integer;
-
-    Property Matrix[aDescriptorIndex, aFrameIndex, aDataIndex:TvkUint32]: TvgMatrix4x4D read GetMatrix write SetMatrix;
-
-  end;
-  *)
-
-(*
-  TvgDescriptor_UBO_2UI = Class(TvgDescriptorArray_UniformBuffer<TvgVector2I>)
-  Public
-    Class Function GetPropertyName : String; override;
-
-    Constructor Create;
-//    Procedure Assign(Source: TPersistent) ;  Override;
-
-    Procedure SetValues(X, Y : TvkUint32);
-
-  End;
-*)
 
  (*
   //Matrix 4x4 Push Constant
@@ -1231,120 +1183,6 @@ begin
 
   End;
 end;
-(*
-procedure TvgDescriptor_PerFrame_UniformBuffer<T>.WriteDescriptorSet( aSet: TpvVulkanDescriptorSet;
-                                                aFrameIndex: TvkUint32;
-                                                aBinding: TvkUint32;
-                                                aArrayElement: TvkUint32;
-                                                aWriteMode: TvgDescriptorWriteMode = vgdmWriteWholeBinding
-                                              );
-var
-  Index: TvkUint32;
-  I:Integer;
-  DBI : Array of TVkDescriptorBufferInfo;
-  DC:TvkUint32;
-
-begin
-//Need to be handled by DescriptorData
-
-  CustomAssert(Assigned(aSet), 'Descriptor Set not assigned');
-  CustomAssert(aDescriptorCount = 1, 'TvgDescriptorUBO currently supports only single descriptor writes');
-
-(*
-
-  Setlength(DBI, DC);
-  For I:=0 to DC-1 do
-  Begin
-    DBI[I] := fVulkanBuffers.fFrameData[aFrameIndex].fObjectData[I].DescriptorBufferInfo;
-  End;
-
-  aSet.WriteToDescriptorSet( aBinding,
-                              aArrayElement,
-                              GetDescriptorCount,
-                              fDescriptorType,
-                               [],
-                               DBI, //[fVulkanBuffers[1].fVulkanBuffer[aFrameIndex].DescriptorBufferInfo],
-                               [],
-                              False
-                            );
-  Setlength(DBI, 0);
-
-
-end;      *)
-
-{TvgDescriptor_Texture}
-(*
-Function TvgDescriptor_Texture.AddTexture(aTextureName:String; aFrameIndex:Integer; Var GLSLIndex:TvkUint32):Boolean;
-  Var I,J:Integer;
-      F:String;
-
-  Function DoesFileExist:Boolean;
-  Begin
-    Result := False;
-    if not FileExists(F) then
-    Begin
-      F := TextureFolderPath + F;
-      if not FileExists(F) then
-        Exit;
-    End;
-    Result := True;
-  End;
-
-begin
-  Result    := false;    //not valid
-  GLSLIndex := High(TvkUint32);
-  SetActiveState(False);
-  F:=Trim(aTextureName);
-
-  CustomAssert((aTextureName<>''),'Texture Name not assigned',self);
-  CustomAssert(((aFrameIndex>=0) and (aFrameIndex<fFrameCount )),'FrameIndex NOT valid',self);
-  CustomAssert((DoesFileExist),'Texture File NOT found',self);
-
-  inc(fActiveDescriptorCount);    //important
-  If fActiveDescriptorCount>fBindingCount then
-     fBindingCount := fActiveDescriptorCount;
-
-  If fActiveDescriptorCount=0 then
-  Begin
-    fBindingMode           := vgdbmSingle;
-  End else
-  If fActiveDescriptorCount=1 then
-  Begin
-    fBindingMode           := vgdbmSingle;
-  End else
-  If fActiveDescriptorCount>1 then
-  Begin
-    fBindingMode           := vgdbmFixedArray;
-  End;
-
-//Index Array
-  SetLength(fGLSLIndex, fActiveDescriptorCount);
-  GLSLIndex :=  fNextIndex;   //use this as defualt Index
-  fGLSLIndex[fActiveDescriptorCount-1]:= GLSLIndex;    //may be can supply indx
-  inc(fNextIndex); //important
-
-//Upload Array
-  For I:=0 to fFrameCount-1 do
-  Begin
-    SetLength(fUploadNeeded[I],fActiveDescriptorCount);
-    For J:=0 to fActiveDescriptorCount-1 do
-      fUploadNeeded[I][J]:=True;
-  End;
-
-//File Name Array
- (*           fix
-  fFileNames[.Add(aTextureName);
-
-  SetLength(fFileNames, fActiveDescriptorCount);
-  SetLength(fFileNames[fActiveDescriptorCount-1].FileName, fFrameCount);
-  fFileNames[fActiveDescriptorCount-1].FileName[aFrameIndex]:= F;
-
-
-  Result := True;
-
-
-end;
- *)
 
  { TvgDescriptorArray_Texture }
 
@@ -1404,13 +1242,14 @@ end;
 
 constructor TvgDescriptorArray_Texture.Create(AOwner: TComponent);
 begin
-  inherited;
+  inherited Create(aOwner);
 
   fDescriptorType    := VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;//VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 
   fStageFlags        :=  TVkShaderStageFlags(VK_SHADER_STAGE_FRAGMENT_BIT);
 
-
+  fResourceType      :=    RT_TEXTURE;
+  fDataFlow          := [DF_UP];
 
 
 end;
@@ -1440,25 +1279,15 @@ constructor TvgDescriptor_Data_Texture.Create;
 begin
   inherited;
 
-
   fSampler      := TvgSampler.Create(nil);
   fSampler.SetSubComponent(True);
   fSampler.Name := 'Sampler';
 
 
- //   fBufferUsageFlags  : TVkBufferUsageFlags;
- //   fBufferSharingMode : TVkSharingMode;
-
-
-//  fFrameCount       := 1;
-  //Default  Leave here OPnly need ONE copy for permanant data
-
   fWrapModeU    := TpvVulkanTextureWrapMode.ClampToBorder;
   fWrapModeV    := TpvVulkanTextureWrapMode.ClampToBorder;
   fWrapModeW    := TpvVulkanTextureWrapMode.ClampToBorder;
   fBorderColor  := VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
-
- // fDataFlow := [DF_UP];
 
 end;
 
@@ -1683,536 +1512,7 @@ begin
   SetActiveState(False);
   fWrapModeW := Value;
 end;
-(*
-procedure TvgDescriptor_Data_Texture.UpLoadDescriptorData(aFrameIndex: TvkUint32;              //frame index?
-                                                aGraphicPool:TvgCommandBufferPool;
-                                               aTransferPool:TvgCommandBufferPool);
- (*
-  Var J,I : Integer;
-      GQ,
-      TQ: TpvVulkanQueue;
-      GV,
-      TV: TvgCommandBuffer;
-      aTexture:TpvVulkanTexture;
-      B:Boolean;
 
-    Procedure UploadVulkanTexture(aTextureIndex:Integer);
-    Begin
-
-       fVulkanTextures.fFrameData[aFrameIndex].fObjectData[aTextureIndex].Finish (GQ,
-                                                                                  GV.VulkanCommandBuffer,   //MUST BE ABLE TO RESET
-                                                                                  GV.BufferFence,
-                                                                                  TQ,
-                                                                                  TV.VulkanCommandBuffer,  //MUST BE ABLE TO RESET
-                                                                                  TV.BufferFence);
-
-
-      If assigned(fSampler) then
-        fVulkanTextures.fFrameData[aFrameIndex].fObjectData[aTextureIndex].Sampler := fSampler.VulkanSampler[aFrameIndex];
-
-      fUploadNeeded[aFrameIndex][aTextureIndex] := False;
-
-
-    End;
-
-begin
- *)
- (*
-  Var L:Integer;
-begin
-
-  L:=Length(fFrameData);
-
-  CustomAssert(L<>0 , 'No Frame Data assigned');
-
-  If aFrameIndex>=L then
-     aFrameIndex:=L-1;
-
-  fFrameData[aFrameIndex].UpLoadDescriptorData(aFrameIndex,              //frame index?
-                                     aGraphicPool,
-                                     aTransferPool);
-  *)
- (*
-    If not (DF_UP in fDataFlow) then exit;
-    If GetDescriptorCount=0 then exit;
-
-    If Length(fVulkanTextures.fFrameData)=0 then exit;
-
-    If (aFrameIndex>=  Length(fVulkanTextures.fFrameData)) then
-        aFrameIndex := Length(fVulkanTextures.fFrameData)-1;
-
-    B:=False;
-    For I := 0 to GetDescriptorCount-1 do
-      If  IsDataUploadNeeded(aFrameIndex, I) then
-       B:=True;
-
-    If not B then exit;
-
-
-  CustomAssert( assigned( fDescriptorItem),'Item not assigned',Self);
-  CustomAssert(assigned( fDescriptorItem.Device),'Item Device not assigned',Self);
-  CustomAssert(assigned( fDescriptorItem.Device.VulkanDevice),'Item Device not Active',Self);
-  CustomAssert(assigned( fDescriptorItem.Collection),'',Self);
-
-  CustomAssert(assigned( aGraphicPool   ),'Graphic Pool not assigned',Self);
-  CustomAssert(assigned( aTransferPool   ),'Transfer Pool not assigned',Self);
-
-  CustomAssert((fSampler.State = vgcsActive),'Sampler NOT active',Self);
-
-  Try
-   // D := fDescriptorItem.Device.VulkanDevice;
-
-    GQ := aGraphicPool.Queue[-1] ;//   D.GraphicsQueue;
-     CustomAssert(assigned(GQ), 'GQ Queue not assigned', Self);
-    TQ := aTransferPool.Queue[-1];
-     CustomAssert(assigned(TQ), 'TQ Queue not assigned', Self);
-
-
-    GV := aGraphicPool.AcquireUploadCommand(0);//  RequestCommand(0,CB_PRIMARY,[BU_SIMULTANEOUS_USE_BIT]);
-     CustomAssert(assigned(GV), 'GV Command buffer not assigned', Self);
-
-    TV := aTransferPool.AcquireUploadCommand(0);//  RequestCommand(0,CB_PRIMARY,[BU_SIMULTANEOUS_USE_BIT]);
-     CustomAssert(assigned(TV), 'TV Command buffer not assigned', Self);
-
-
-     CustomAssert(GV.BufferState in [cbsINITIAL, cbsRECORDING],
-             'GV Command buffer not in INITIAL state before TpvVulkanTexture.Finish', Self);
-
-     CustomAssert(TV.BufferState in [cbsINITIAL, cbsRECORDING],
-             'TV Command buffer not in INITIAL state before TpvVulkanTexture.Finish', Self);
-
-     For J:=0 to GetDescriptorCount - 1 do
-        If fUploadNeeded[aFrameIndex][J] then
-        Begin
-           UploadVulkanTexture(J);
-
-           GV.PrepareForRecording;
-           TV.PrepareForRecording;
-
-        End;
-
-  Finally
-       aGraphicPool.ReleaseCommand(GV);
-       aTransferPool.ReleaseCommand(TV);
-  End;
-  *)
-
-//end;
-(*
-procedure TvgDescriptor_Data_Texture.WriteDescriptorSet(
-                                                          aSet: TpvVulkanDescriptorSet;
-                                                          aFrameIndex: TvkUint32;
-                                                          aBinding: TvkUint32;
-                                                          aArrayElement: TvkUint32;
-                                                          aDescriptorCount: TvkUint32;
-                                                          aWriteMode: TvgDescriptorWriteMode
-                                                       );
-                                                       (*
-var
-  VT: TpvVulkanTexture;
-  DS: TvgDescriptorSet;
-  InfoArray : Array of TVkDescriptorImageInfo;
-  I,aCount:Integer;
-
- // Var L:Integer;
-begin
- //****** Needs to be completed by  Descriptor fix
-
-  L:=Length(fFrameData);
-
-  CustomAssert(L<>0 , 'No Frame Data assigned');
-
-  If aFrameIndex>=L then
-     aFrameIndex:=L-1;
-
-  fFrameData[aFrameIndex].WriteDescriptorSet(aSet,              //frame index?
-                                             aGraphicPool,
-                                             aTransferPool);
-
-  If fFrameCount=0 then exit;
-
-  CustomAssert(Assigned(aSet), 'Vulkan DescriptorSet NOT assigned.', Self);
-  CustomAssert(GetDescriptorCount > 0, 'No Textures assigned', Self);
-
-  If (aFrameIndex>= Length(fVulkanTextures.fFrameData)) then
-      aFrameIndex := Length(fVulkanTextures.fFrameData)-1;
-
-  if (DF_UP in fDataFlow) then
-  begin
-    CustomAssert(Assigned(fDescriptorItem), 'Descriptor Item NOT assigned', Self);
-    CustomAssert(Assigned(fDescriptorItem.Collection), 'Descriptor Item Collection NOT assigned', Self);
-    DS := TvgDescriptorCol(fDescriptorItem.Collection).DescriptorSet;
-    UpLoadDescriptorData(aFrameIndex, DS.DSGraphicCommandPool, DS.DSTransferCommandPool);
-  end;
-
-  SetLength(InfoArray, 0);
-  aCount:=0;
-
-  For I:=0 to GetDescriptorCount-1 do
-  Begin
-
-    VT := nil;
-   // if (aFrameIndex < TvkUint32(Length(fVulkanTextures.fFrameData))) then
-      if (I < Length(fVulkanTextures.fFrameData[aFrameIndex].fObjectData)) then
-        VT := fVulkanTextures.fFrameData[aFrameIndex].fObjectData[I];
-
-    If assigned(VT) then
-    Begin
-      CustomAssert(  VT.DescriptorImageInfo.imageView <> VK_NULL_HANDLE,
-                    'Texture imageView is NULL',
-                    Self
-                  );
-
-      if fDescriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER then
-      begin
-        CustomAssert(  VT.DescriptorImageInfo.sampler <> VK_NULL_HANDLE,
-                        'Texture sampler is NULL',
-                        Self
-                      );
-      end;
-
-
-       inc(aCount);
-       SetLength(InfoArray, aCount);
-       InfoArray[aCount-1] := VT.DescriptorImageInfo ;
-    end ;
-  end;
-
-
-  CustomAssert(aCount > 0, 'No valid Vulkan textures available', Self);
-
-  aSet.WriteToDescriptorSet( aBinding,
-                              aArrayElement,
-                              aCount,   //check
-                              fDescriptorType,
-                              InfoArray,   //[VT.DescriptorImageInfo],
-                               [],
-                               [],
-                              False
-                            );
-
-  SetLength(InfoArray,0);
-
-end;
-*)
-
-(*
-{ TvgDescriptor_SSBO_Data<T> }
-
-constructor TvgDescriptor_SSBO_Data<T>.Create(AOwner: TComponent);
-begin
-  inherited;
-
-  fDescriptorType   := VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-
-  fBufferUsageFlags := TVkBufferUsageFlags(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT) or
-                       TVkBufferUsageFlags(VK_BUFFER_USAGE_TRANSFER_DST_BIT) or
-                       TVkBufferUsageFlags(VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-
-  fBufferSharingMode:= VK_SHARING_MODE_EXCLUSIVE;
-
-  fStageFlags       :=  TVkShaderStageFlags(VK_SHADER_STAGE_VERTEX_BIT) or
-                        TVkShaderStageFlags(VK_SHADER_STAGE_FRAGMENT_BIT);
-
-  If fFrameCount=0 then
-     fFrameCount := MaxFramesInFlight;
-
-  SetLength(fDataArray,    fFrameCount);
-  setlength(fUploadNeeded, fFrameCount);
-
-  SetUploadFlags ;
-end;
-
-destructor TvgDescriptor_SSBO_Data<T>.Destroy;
-  Var I:Integer;
-begin
-
-  For I:=0 to Length(fDataArray)-1 do
-    fDataArray[I].Clear;
-
-  SetLength(fDataArray,    0);
-  setlength(fUploadNeeded, 0);
-
- inherited;
-end;
-
-function TvgDescriptor_SSBO_Data<T>.GetCount: Integer;
-begin
-  Result := fDataArray[fCurrentFrameIndex].ItemCount;
-end;
-
-function TvgDescriptor_SSBO_Data<T>.GetItem(Index: Integer): T;
-begin
-  Result := fDataArray[fCurrentFrameIndex][index];
-end;
-
-class function TvgDescriptor_SSBO_Data<T>.GetPropertyName: String;
-begin
-  Result:='SSBOGeneralData';
-end;
-
-procedure TvgDescriptor_SSBO_Data<T>.SetFrameCount(const Value: TvkUint32);
-begin
-  If fFrameCount=Value then exit;
-  Inherited  SetFrameCount(Value);
-
-//  fDataArray.SetCapacity(fFrameCount) ;
-  setLength(fDataArray,fFrameCount);
-  setLength(fUploadNeeded,fFrameCount);
-
-  SetUploadFlags ;
-end;
-
-procedure TvgDescriptor_SSBO_Data<T>.SetItem(Index: Integer; const Value: T);
-begin
-  fDataArray[fCurrentFrameIndex].Items[Index]:=Value  ;
-end;
-
-procedure TvgDescriptor_SSBO_Data<T>.SetupData;
-  Var I:Integer;
-begin
-  If not  fElementCountChanged then exit;
-
-  If (DF_UP   in fDataFlow) or
-     (DF_DOWN in fDataFlow)  then
-  Begin
-      For I:=0 to length(fDataArray) -1 do
-        fDataArray[I].SetItemCapacity(fElementCount) ;
-
-    If (DF_UP   in fDataFlow) then
-      SetUploadFlags;
-  End;
-
-  fElementCountChanged:=False;
-end;
-
-*)
-
-(*
-constructor TvgDescriptor_SB_Data<T>.Create(AOwner : TComponent);
-begin
-  inherited;
-
-  fStageFlags := TVkShaderStageFlags(VK_SHADER_STAGE_VERTEX_BIT) or
-                 TVkShaderStageFlags(VK_SHADER_STAGE_FRAGMENT_BIT) or
-                 TVkShaderStageFlags(VK_SHADER_STAGE_COMPUTE_BIT);
-
-  if fFrameCount = 0 then
-    fFrameCount := MaxFramesInFlight;
-
-  SetLength(fDataArray,    fFrameCount);
-  SetLength(fUploadNeeded, fFrameCount);
-
-  SetUploadFlags;
-end;
-
-destructor TvgDescriptor_SB_Data<T>.Destroy;
-  Var I:Integer;
-begin
-  For I:=0 to Length(fDataArray)-1 do
-     fDataArray[I].Clear;
-  SetLength(fDataArray,0);
-  inherited;
-end;
-
-class function TvgDescriptor_SB_Data<T>.GetPropertyName : String;
-begin
-  Result := 'StorageBuffer_Data';
-end;
-
-procedure TvgDescriptor_SB_Data<T>.SetupData;
-  Var I:Integer;
-begin
-  If not  fElementCountChanged then exit;
-
-  If (DF_UP   in fDataFlow) or
-     (DF_DOWN in fDataFlow)  then
-  Begin
-      For I:=0 to length(fDataArray)-1 do
-        fDataArray[I].SetItemCapacity(fElementCount) ;
-
-    If (DF_UP   in fDataFlow) then
-      SetUploadFlags;
-  End;
-
-  fElementCountChanged:=False;
-
-end;
-
-function TvgDescriptor_SB_Data<T>.GetCount : Integer;
-begin
-  Result := fDataArray[fCurrentFrameIndex].ItemCount;
-end;
-
-function TvgDescriptor_SB_Data<T>.GetItem(Index : Integer) : T;
-begin
-  Result := fDataArray[fCurrentFrameIndex][Index];
-end;
-
-procedure TvgDescriptor_SB_Data<T>.SetItem(Index : Integer; const Value : T);
-begin
-  fDataArray[fCurrentFrameIndex].Items[Index] := Value;
-end;
-
-function TvgDescriptor_SB_Data<T>.SetDisabled: Boolean;
-  Var I:Integer;
-begin
-  Result := False;
-
-
-   For I:=0 to Length(fDataArray)-1 do
-     fDataArray[I].Clear;
-
-  Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
-end;
-
-function TvgDescriptor_SB_Data<T>.SetEnabled: Boolean;
-begin
-  SetupData;   //must stay here
-
-  Inherited;
-  Result := True;
-
-end;
-
-procedure TvgDescriptor_SB_Data<T>.SetFrameCount(const Value : TvkUint32);
-  Var I:Integer;
-begin
-  if fFrameCount = Value then exit;
-  Inherited SetFrameCount(Value);
-
-  For I:=0 to Length(fDataArray)-1 do
-      fDataArray[I].clear;
-
-  SetLength(fDataArray,    fFrameCount);
-  SetLength(fUploadNeeded, fFrameCount);
-  SetUploadFlags;
-end;
-
-*)
-(*
-constructor TvgDescriptor_UBO_Data<T>.Create(AOwner: TComponent);
-
-begin
-  inherited;
-
-  fDescriptorType   := VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-
-  fBufferUsageFlags := TVkBufferUsageFlags(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT) or
-                       TVkBufferUsageFlags(VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-
-  fBufferSharingMode:= VK_SHARING_MODE_EXCLUSIVE;
-
-  fStageFlags       :=  TVkShaderStageFlags(VK_SHADER_STAGE_VERTEX_BIT) or
-                        TVkShaderStageFlags(VK_SHADER_STAGE_FRAGMENT_BIT);
-  If fFrameCount=0 then
-     fFrameCount := MaxFramesInFlight;
-
-  SetLength(fDataArray.fFrameData, fFrameCount);
-  setlength(fUploadNeeded,   fFrameCount);
-
-  SetUploadFlags ;
-
-end;
-
-destructor TvgDescriptor_UBO_Data<T>.Destroy;
-  Var I,J,K:Integer;
-begin
-  fDataArray.Clear;
-
-
-  SetLength(fDataArray.fFrameData, 0);
-  setlength(fUploadNeeded, 0);
-
-  inherited;
-end;
-
-function TvgDescriptor_UBO_Data<T>.GetCount: Integer;
-begin
-  Result := Length(fDataArray.fFrameData[fCurrentFrameIndex].fDescriptorData);
-end;
-
-function TvgDescriptor_UBO_Data<T>.GetItem(Index: Integer): T;
-begin
-  Result:= fDataArray[fCurrentFrameIndex].fDescriptorData[Index] ;
-end;
-
-class function TvgDescriptor_UBO_Data<T>.GetPropertyName: String;
-begin
-  Result := 'UBO_GenericData';
-end;
-
-procedure TvgDescriptor_UBO_Data<T>.SetFrameCount(const Value: TvkUint32);
-begin
-  If fFrameCount=Value then exit;
-  Inherited  SetFrameCount(Value);
-
-  fDataArray.Clear;
-
-  SetLength(fDataArray.fFrameData,   fFrameCount);
-  setLength(fUploadNeeded,fFrameCount);
-
-  SetUploadFlags ;
-
-end;
-
-procedure TvgDescriptor_UBO_Data<T>.SetItem(Index: Integer; const Value: T);
-begin
-  fDataArray[fCurrentDescriptor][fCurrentFrameIndex] := Value  ;
-end;
-
-procedure TvgDescriptor_UBO_Data<T>.SetUpData;
-  Var I,J:Integer;
-begin
-
-  If not fElementCountChanged[fCurrentDescriptor] then exit;
-  (*      FIX THIS
-  If (DF_UP   in fDataFlow) or
-     (DF_DOWN in fDataFlow)  then
-  Begin
-
-      For I:=0 to fActiveDescriptorCount-1 do
-        For J:= 0 to fFrameCount-1 do
-          fDataArray[I][J].SetItemCapacity(fElementCount[fCurrentDescriptor]) ;
-
-    If (DF_UP   in fDataFlow) then
-      SetUploadFlags;
-  End;
-
-  fElementCountChanged[fCurrentDescriptor] := False;
-
-end;
-*)
-
-
-(*
-{ TvgPushConstant_Data_Matrix4x4 }
-
-class function TvgPushConstant_Matrix4x4D.GetPropertyName: String;
-begin
-  Result := 'PushConstant_Matrix4x4D';
-end;
-
-function TvgPushConstant_Matrix4x4D.SetDisabled: Boolean;
-begin
-
-
-  Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
-end;
-
-Function TvgPushConstant_Matrix4x4D.SetEnabled:Boolean;
-  Var J:Integer;
-begin
-  Result := Inherited;
-  CustomAssert(Result,System.SysUtils.Format('%S : Fail to set State %d',[self.ClassName, ord(Result)]),self);
-
-  For J:=0 to Length(fDataArray)-1 do
-     fDataArray[J].Items[0] := TvgMatrix4x4D.Identity;
-
-end;
-*)
 
 { TvgVector4S }
 
@@ -2232,68 +1532,6 @@ begin
   W:=aW;
 end;
 
-{ TvgDescriptor_SB_2UI }
-(*
-procedure TvgDescriptor_SB_2UI.Assign(Source: TPersistent);
-begin
- // inherited;
-           fix
-end;
-*)
-(*
-constructor TvgDescriptor_SB_2UI.Create;
-begin
-
-  fDataFlow          := [DF_DOWN];
-  fElementSamplingON := True;
-  fResourceType      := RT_STORAGEBUFFER;
-
-  inherited;
-
-  fElementCount        := 1;
-  fElementCountChanged := True;
-
-end;
-
-class function TvgDescriptor_SB_2UI.GetPropertyName: String;
-begin
-  Result := 'Descriptor_SB_2UI';
-end;
-
-{ TvgDescriptor_UBO_2UI }
-
-
-constructor TvgDescriptor_UBO_2UI.Create;
-begin
-//  fDataFlow := [DF_UP];
-
- // fElementCount        := 1;
- // fElementCountChanged := True;
-
-
-
-
-end;
-
-class function TvgDescriptor_UBO_2UI.GetPropertyName: String;
-begin
-  Result := 'UBO_2UI';
-end;
-
-procedure TvgDescriptor_UBO_2UI.SetValues(X, Y: TvkUint32);
-  Var I,J:Integer;
-      V: TvgVector2I;
-begin
-  V.X:=X;
-  V.Y:=Y;
-  (*        Fix
-  For I:=0 to fActiveDescriptorCount-1 do
-    For J:=0 to fDataArray[I].Count-1 do
-      fDataArray[I].items[J] :=V;
-
-
-end;d;
-*)
 
 { TvgElementSampler }
 
@@ -2803,16 +2041,6 @@ begin
 
 end;
 
-{ TvgDescriptor_PerFrame_StorageBuffer }
-
-// ---------------------------------------------------------------------------
-// Data contract – concrete values supplied by typed subclasses
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// Lifecycle
-// ---------------------------------------------------------------------------
-
 Procedure TvgDescriptor_PerFrame_StorageBuffer<T>.SetDisabled ;
 begin
   // Destroy device-local Vulkan buffers
@@ -2963,44 +2191,6 @@ begin
   End;
 end;
 
-(*
-// ---------------------------------------------------------------------------
-// Element sampling  (analogous to TvgDescriptor_StorageImage.GetPixelData)
-// ---------------------------------------------------------------------------
-
-function TvgDescriptor_PerFrame_StorageBuffer<T>.GetElementData(
-                                                                aFrameIndex  : TvkUint32;
-                                                                ElementIndex : Integer;
-                                                                out Data     : Pointer;
-                                                                out DataSize : TvkUint32) : Boolean;
-var
-  ES        : TvgElementSampler;
-  ByteCount : TvkUint32;
-begin
-  Result   := False;
-  Data     := nil;
-  DataSize := 0;
-
-
-
-//  if not fElementSamplingON then exit;
-//  if not (State = vgcsActive) then exit;
-    //Need to fix
-
-  if (aFrameIndex >= TvkUint32(Length(fElementSampler))) then exit;
-
-  ES := fElementSampler[aFrameIndex];
-  if not assigned(ES) then exit;
-
-  // Trigger the GPU → staging readback
-  if not ES.SampleElement(ElementIndex) then exit;
-
-  // Return a pointer to the centre element (offset 0)
-  Result := ES.GetElementBytes(0, Data, ByteCount);
-  if Result then
-
-end;
-*)
 function TvgDescriptor_PerFrame_StorageBuffer<T>.GetWriteDescriptorPayload(
   out aBufInfo: TVkDescriptorBufferInfo;
   out aImgInfo: TVkDescriptorImageInfo): Boolean;
@@ -3019,97 +2209,6 @@ function TvgDescriptor_PerFrame_StorageBuffer<T>.HasPayload: Boolean;
 begin
   Result := assigned(fVulkanBuffer);
 end;
-
-(*
-function TvgDescriptor_PerFrame_StorageBuffer<T>.GetElementSampler(FrameIndex : Integer) : TvgElementSampler;
-begin
-  Result := nil;
-  if not (State = vgcsActive) then exit;
-    //Need to fix
-
-//  if (FrameIndex < 0) or (FrameIndex >= Length(fElementSampler)) then exit;
-//  Result := fElementSampler[FrameIndex];
-end;
-*)
-// ---------------------------------------------------------------------------
-// Property setters
-// ---------------------------------------------------------------------------
-(*
-procedure TvgDescriptor_PerFrame_StorageBuffer<T>.SetElementCount(const Value: TvkUint32);
-begin
-  if fElementCount = Value then exit;
-  SetActiveState(False);
-  fElementCount := Value;
-
-  fElementCountChanged := True;
-end;
-
-procedure TvgDescriptor_PerFrame_StorageBuffer<T>.SetElementSamplingON(const Value : Boolean);
-begin
-  if fElementSamplingON = Value then exit;
-  SetActiveState(False);
-  fElementSamplingON := Value;
-end;
-
-procedure TvgDescriptor_PerFrame_StorageBuffer<T>.SetElementSub(const Value: TvkUint32);
-begin
-  if fElementSub = Value then exit;
-  SetActiveState(False);
-  fElementSub := Value;
-end;
-
-procedure TvgDescriptor_PerFrame_StorageBuffer<T>.SetSampleRadius(const Value : TvgPixelSampleRadius);
-begin
-  if fSampleRadius = Value then exit;
-  SetActiveState(False);
-  fSampleRadius := Value;
-end;
-
- *)
-// ---------------------------------------------------------------------------
-// Shader template helpers
-// ---------------------------------------------------------------------------
-(*
-function TvgDescriptor_PerFrame_StorageBuffer<T>.GetShaderDescriptorStringTemplate_Vertex(  aSet, aBinding : TvkUInt32) : String;
-var Suffix: String;
-begin
-  case BindingMode of
-    vgdbmSingle       : Suffix := '';
-    vgdbmFixedArray   : Suffix := '[' + IntToStr(BindingCount) + ']';
-    vgdbmVariableArray: Suffix := '[]';
-  else
-    Suffix := '';
-  end;
-
-  Result :=
-    'layout(set=' + IntToStr(aSet) +
-    ', binding=' + IntToStr(aBinding) +
-    ') buffer ' + Name + Suffix + sLineBreak;end;
-
-function TvgDescriptor_StorageBuffer<T>.GetShaderDescriptorStringTemplate_Geometry(  aSet, aBinding : TvkUInt32) : String;
-begin
-  Result := GetShaderDescriptorStringTemplate_Vertex(aSet, aBinding);
-end;
-
-function TvgDescriptor_StorageBuffer<T>.GetShaderDescriptorStringTemplate_Fragment( aSet, aBinding : TvkUInt32) : String;
-var Suffix, GLSLType: String;
-begin
-  case BindingMode of
-    vgdbmSingle       : Suffix := '';
-    vgdbmFixedArray   : Suffix := '[' + IntToStr(BindingCount) + ']';
-    vgdbmVariableArray: Suffix := '[]';
-  else
-    Suffix := '';
-  end;
-
-  GLSLType := 'image2D'; // adjust if descendants vary by image type/format
-
-  Result :=
-    'layout(set=' + IntToStr(aSet) +
-    ', binding=' + IntToStr(aBinding) +
-    ', rgba32f) uniform ' + GLSLType + ' ' + Name + Suffix + ';';
-end;
-*)
 
 { TvgDescriptor_PerFrame_StorageImage }
 
@@ -3158,67 +2257,6 @@ end;
 constructor TvgDescriptor_PerFrame_StorageImage.Create;
 begin
   inherited;
- (*
-  fDescriptorType        := VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-
-  fImageProps.Format     := VK_FORMAT_R32G32B32_SFLOAT;
-
-  fImageProps.ImageType  := VK_IMAGE_TYPE_2D;
-  fImageProps.Tiling     := VK_IMAGE_TILING_OPTIMAL;
-  fImageProps.Usage      := TVkImageUsageFlags(VK_IMAGE_USAGE_STORAGE_BIT) +
-                            TVkImageUsageFlags(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) +
-                            TVkImageUsageFlags(VK_IMAGE_USAGE_TRANSFER_DST_BIT);
-  fImageProps.Samples    :=  VK_SAMPLE_COUNT_1_BIT;
-
-
-  fPixelSampleRadius := psr_3x3;
-
-  fClearCol          := Default(TVkClearColorValue);
-
-  fSubRange                    := Default(TVkImageSubresourceRange);
-  fSubRange.aspectMask         := TVkImageAspectFlags(VK_IMAGE_ASPECT_COLOR_BIT);
-  fSubRange.baseMipLevel       := 0;
-  fSubRange.levelCount         := 1;
-  fSubRange.baseArrayLayer     := 0;
-  fSubRange.layerCount         := 1;
-
-
-  fInitialBarrier                  := Default(TVkImageMemoryBarrier);
-  fInitialBarrier.sType            := VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-  fInitialBarrier.srcAccessMask    := 0;
-  fInitialBarrier.dstAccessMask    := TVkAccessFlags(VK_ACCESS_SHADER_WRITE_BIT) or
-                                      TVkAccessFlags(VK_ACCESS_SHADER_READ_BIT) ;
-  fInitialBarrier.oldLayout        := VK_IMAGE_LAYOUT_UNDEFINED;
-  fInitialBarrier.newLayout        := VK_IMAGE_LAYOUT_GENERAL;
-  fInitialBarrier.srcQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
-  fInitialBarrier.dstQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
-  fInitialBarrier.subresourceRange := fSubRange;
-
-
-  // Barrier: setup for clear operation
-  fPreBarrier                  := Default(TVkImageMemoryBarrier);
-  fPreBarrier.sType            := VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-  fPreBarrier.srcAccessMask    := TVkAccessFlags(VK_ACCESS_SHADER_WRITE_BIT);
-  fPreBarrier.dstAccessMask    := TVkAccessFlags(VK_ACCESS_TRANSFER_WRITE_BIT);
-  fPreBarrier.oldLayout        := VK_IMAGE_LAYOUT_GENERAL;
-  fPreBarrier.newLayout        := VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-  fPreBarrier.srcQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
-  fPreBarrier.dstQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
-  fPreBarrier.subresourceRange := fSubRange;
-
-  // Barrier: wait for shader writes to finish before the transfer clear
-  fPostBarrier                  := Default(TVkImageMemoryBarrier);
-  fPostBarrier.sType            := VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-  fPostBarrier.srcAccessMask    := TVkAccessFlags(VK_ACCESS_TRANSFER_WRITE_BIT);
-  fPostBarrier.dstAccessMask    := TVkAccessFlags(VK_ACCESS_SHADER_WRITE_BIT) or
-                                   TVkAccessFlags(VK_ACCESS_SHADER_READ_BIT);
-  fPostBarrier.oldLayout        := VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-  fPostBarrier.newLayout        := VK_IMAGE_LAYOUT_GENERAL;
-  fPostBarrier.srcQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
-  fPostBarrier.dstQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
-  fPostBarrier.subresourceRange := fSubRange;
-
- *)
 end;
 
 destructor TvgDescriptor_PerFrame_StorageImage.Destroy;
@@ -3227,9 +2265,8 @@ begin
   inherited;
 end;
 
-function TvgDescriptor_PerFrame_StorageImage.GetWriteDescriptorPayload(
-  out aBufInfo: TVkDescriptorBufferInfo;
-  out aImgInfo: TVkDescriptorImageInfo): Boolean;
+function TvgDescriptor_PerFrame_StorageImage.GetWriteDescriptorPayload(  out aBufInfo: TVkDescriptorBufferInfo;
+                                                                         out aImgInfo: TVkDescriptorImageInfo): Boolean;
 begin
   Result := False;
   aBufInfo := Default(TVkDescriptorBufferInfo);
@@ -3249,7 +2286,6 @@ begin
 end;
 
 Procedure TvgDescriptor_PerFrame_StorageImage.SetDisabled;
-//Var I,L:Integer;
 begin
 
   Inherited;
@@ -3258,24 +2294,6 @@ begin
      FreeAndNil(fStorageImageBuffer);
 
   fImageLayoutSet:=False;
-  (*
-  L:= Length(fStorageImageBuffer);
-  If L>0 then
-  Begin
-    For I:=0 to L-1 do
-    Begin
-      If assigned(fStorageImageBuffer[I]) then
-      Begin
-        fStorageImageBuffer[I].Active := False;
-        FreeAndNil(fStorageImageBuffer[I]);
-      End;
-    End;
-  End;
-
-  SetLength( fStorageImageBuffer, 0);
- *)
- // SetLength( fImageLayoutSet,     0);
-
 
 end;
 
@@ -3290,7 +2308,7 @@ Procedure TvgDescriptor_PerFrame_StorageImage.SetEnabled;
      Device    : TvgLogicalDevice;
 
      DD        : TvgDescriptor_Data_StorageImage;
- //    I         : Integer;
+
 
     Procedure CreateStorageImage;
        Var SI :  TvgResourceImageBuffer;
@@ -3303,6 +2321,7 @@ Procedure TvgDescriptor_PerFrame_StorageImage.SetEnabled;
          SI.Descriptor  := DescriptorData.Descriptor;
 
       SI.ImageMode   := imStorageImage;
+
       SI.ImageWidth  := DD.ImageWidth;
       SI.ImageHeight := DD.ImageHeight;
 
@@ -3326,34 +2345,16 @@ begin
 
   CustomAssert(assigned( DescriptorData),'Descriptor Data Not assigned');
   CustomAssert(( DescriptorData is TvgDescriptor_Data_StorageImage),'Descriptor Data Not correct type');
+
   DD:= TvgDescriptor_Data_StorageImage(DescriptorData);
-  CustomAssert(Assigned(DescriptorData.Descriptor),
-    'Storage image descriptor array not assigned');
-  CustomAssert(Assigned(DescriptorData.Descriptor.DescriptorItem),
-    'Storage image descriptor item not assigned');
-  CustomAssert(Assigned(
-    DescriptorData.Descriptor.DescriptorItem.DescriptorSet),
-    'Storage image descriptor set not assigned');
+  CustomAssert(Assigned(DescriptorData.Descriptor),                             'Storage image descriptor array not assigned');
+  CustomAssert(Assigned(DescriptorData.Descriptor.DescriptorItem),              'Storage image descriptor item not assigned');
+  CustomAssert(Assigned(DescriptorData.Descriptor.DescriptorItem.DescriptorSet),'Storage image descriptor set not assigned');
+
   Linker := DescriptorData.Descriptor.DescriptorItem.DescriptorSet.Linker;
   CustomAssert(Assigned(Linker), 'Storage image linker not assigned');
 
-  (*
-  CustomAssert(assigned( fDescriptorItem.Device),'Descriptor Item Device Not assigned',Self);
-  CustomAssert(assigned( fDescriptorItem.Device.VulkanDevice),'Descriptor Item Device Not Active',Self);
-  CustomAssert(assigned( fDescriptorItem.Collection),'Descriptor Collection not added Not Active',Self);
-  CustomAssert(assigned( TvgDescriptorCol(fDescriptorItem.Collection).DescriptorSet),'Descriptor Collection Set not added Not connected',Self);
-  CustomAssert(assigned( TvgDescriptorCol(fDescriptorItem.Collection).DescriptorSet.Linker),'Descriptor Collection Set L:inker not added Not connected',Self);
-  CustomAssert(assigned( TvgDescriptorCol(fDescriptorItem.Collection).DescriptorSet.Linker.SwapChain),'Descriptor Collection Set Linker Swap Chain not added Not connected',Self);
-  *)
- //  Linker  := TvgDescriptorCol(fDescriptorItem.Collection).DescriptorSet.Linker;
-
-   DD.ImageWidth := Linker.SwapChain.ImageWidth;
-   DD.ImageHeight := Linker.SwapChain.ImageHeight;
-   if Linker.RenderTarget = RT_FRAME then
-   begin
-     DD.ImageWidth := DD.ImageWidth * Linker.FrameResolution;
-     DD.ImageHeight := DD.ImageHeight * Linker.FrameResolution;
-   end;
+  DD.VaildateWindowSize;
 
 
    If assigned(fStorageImageBuffer) then
@@ -3361,7 +2362,6 @@ begin
    fImageLayoutSet:=False;
 
    CreateStorageImage;
-
 
 // ── NEW: transition every image UNDEFINED → GENERAL before first shader use ──
   CmdPool                   := TvgCommandBufferPool.Create(nil);
@@ -3411,107 +2411,27 @@ begin
     FreeAndNil(CmdPool);
   End;
 
-  // Mark all frames as already in GENERAL — no initial barrier needed in ClearDescriptor
-  //For I := 0 to fFrameCount - 1 do
-  //  fImageLayoutSet[I] := True;     fix
-
 end;
-procedure TvgDescriptor_PerFrame_StorageImage.UpLoadDescriptorData(
-  aFrameIndex: TvkUint32; aGraphicPool, aTransferPool: TvgCommandBufferPool);
+
+procedure TvgDescriptor_PerFrame_StorageImage.UpLoadDescriptorData( aFrameIndex: TvkUint32; aGraphicPool, aTransferPool: TvgCommandBufferPool);
+
 begin
-  inherited;
+  CustomAssert(Assigned(fStorageImageBuffer), 'Vulkan Storage Image Buffer NOT assigned');
+  if not Assigned(fStorageImageBuffer) then
+    Exit;   // release-build safety net: CustomAssert no-ops outside DEBUG/design-time
+
+  if not ((DF_UP in GetDataFlow) or (DF_DOWN in GetDataFlow)) then
+    Exit;
+
+  if not fUploadNeeded then
+    Exit;
+
+  if not Active then
+    SetActiveState(True);
+
+  fUploadNeeded := False;
 
 end;
-
-(*
-procedure TvgDescriptor_PerFrame_StorageImage.UpLoadDescriptorData(  aFrameIndex  : TvkUint32;
-                                                            aGraphicPool : TvgCommandBufferPool;
-                                                            aTransferPool: TvgCommandBufferPool);
-begin
-//do nothing
-    If not (DF_UP in fDataFlow) then exit;
-    //Need to fix
-
- //   If not IsDataUploadNeeded(aIndex) then exit;
-
-end;
-*)
-(*
-procedure TvgDescriptor_PerFrame_StorageImage.WriteDescriptorSet(
-  aSet: TpvVulkanDescriptorSet;
-  aFrameIndex: TvkUint32;
-  aBinding: TvkUint32;
-  aArrayElement: TvkUint32;
-  aDescriptorCount: TvkUint32;
-  aWriteMode: TvgDescriptorWriteMode
-);
-var
-  RIB: TvgResourceImageBuffer;
-  L,DIndex: Integer;
-  IMGInfo: TVkDescriptorImageInfo;
-begin
-
-(*
-  CustomAssert(Assigned(aSet), 'Vulkan DescriptorSet NOT assigned.');
-
-  case aWriteMode of
-    vgdmWriteWholeBinding,
-    vgdmWriteActiveRange: ;
-  else
-    raise EvgVulkanException.Create(ClassName + ': unsupported descriptor write mode');
-  end;
-
-  if BindingMode = vgdbmSingle then
-  begin
-    CustomAssert(aDescriptorCount = 1, ClassName + ' single binding expects exactly one descriptor write', Self);
-  end else
-  begin
-    CustomAssert(aDescriptorCount = 1, ClassName + ' does not yet support descriptor-array writes', Self);
-  end;
-
-  RIB := nil;
-
-  L := Length(fStorageImageBuffer.fFrameData);
-  DIndex := 0;//fix
-
-  if Integer(aFrameIndex) < L then begin
-    RIB := fStorageImageBuffer.fFrameData[aFrameIndex].fObjectData[DIndex];
-  end else if L = 1 then begin
-    RIB := fStorageImageBuffer.fFrameData[0].fObjectData[DIndex];
-  end;
-
-  CustomAssert(Assigned(RIB), 'Storage Image NOT available', Self);
-  CustomAssert(RIB.Active, 'Storage Image NOT active', Self);
-
-  IMGInfo := Default(TVkDescriptorImageInfo);
-  IMGInfo.imageView := RIB.ImageView.Handle;
-  IMGInfo.imageLayout := VK_IMAGE_LAYOUT_GENERAL;
-  IMGInfo.sampler := VK_NULL_HANDLE;
-
-  aSet.WriteToDescriptorSet( aBinding,
-                             aArrayElement,
-                             1,
-                             fDescriptorType,
-                             [IMGInfo],
-                             [],
-                             [],
-                             False);
-
- (*
-  aSet.WriteToDescriptorSet(  aBinding,
-                              aArrayElement,
-                              1,
-                              fDescriptorType,
-                              @IMGInfo,
-                              nil,
-                              nil,
-                              False
-                            );
-
-  SetUploadFlags;
-
-end;
-*)
 
 { TvgPushConstant_Data }
 
@@ -3618,23 +2538,6 @@ begin
 end;
 
 
-(*
-{ TvgDTexture_PerFrame_Name }
-
-procedure TvgDTexture_PerFrame_Name.FreeMemoryStream;
-begin
-  If assigned(MemoryStream) then
-     FreeAndNil(MemoryStream);
-end;
-
-procedure TvgDTexture_PerFrame_Name.SetUpMemoryStream;
-begin
-  If assigned(MemoryStream) then exit;
-  MemoryStream := TMemoryStream.Create;
-end;
-
-*)
-
 { TvgDescriptor_Data_StorageImage }
 
 constructor TvgDescriptor_Data_StorageImage.Create;
@@ -3645,6 +2548,7 @@ begin
   fSubRange.aspectMask := TVkImageAspectFlags(VK_IMAGE_ASPECT_COLOR_BIT);
   fSubRange.levelCount := 1;
   fSubRange.layerCount := 1;
+  fWindowSync          := True;
 end;
 
 destructor TvgDescriptor_Data_StorageImage.Destroy;
@@ -3678,14 +2582,6 @@ begin
     Result := Nil;
 end;
 
-(*
-function TvgDescriptor_Data_StorageImage.GetFormat: TvgFormat;
-begin
- // Result := fStorageImageBuffer[FrameIndex].PixelSampler.for
-
-  //Result := GetVGFormat(fImageProps.Format);
-end;
- *)
 function TvgDescriptor_Data_StorageImage.GetPixelData(aFrameIndex: TvkUint32; Shift: TShiftState; X, Y: Integer; out Data: TvgPixelData): Boolean;
 var
   PS: TvgPixelSampler;
@@ -3731,20 +2627,15 @@ begin
     For I:=0 to L-1 do
      If assigned(fFRameData[I]) then
        fFRameData[I].Active := False;
-
-
 end;
 
 procedure TvgDescriptor_Data_StorageImage.SetEnabled;
   Var I,L:Integer;
 begin
+  VaildateWindowSize; //stay here
+
   inherited;
 
-  L:=Length(fFrameData);
-  If L>0 then
-    For I:=0 to L-1 do
-    If assigned(fFRameData[I]) then
-      fFRameData[I].Active := True;
 end;
 
 procedure TvgDescriptor_Data_StorageImage.SetClearColor(R, G, B: Single; A:Single);
@@ -3762,11 +2653,15 @@ end;
 
 procedure TvgDescriptor_Data_StorageImage.SetImageHeight(  const Value: TvkUint32);
 begin
+  If fImageHeight = Value then exit;
+  SetActiveState(False);
   fImageHeight := Value;
 end;
 
 procedure TvgDescriptor_Data_StorageImage.SetImageWidth(const Value: TvkUint32);
-begin
+Begin
+  If fImageHeight = Value then exit;
+  SetActiveState(False);
   fImageWidth := Value;
 end;
 
@@ -3775,6 +2670,39 @@ begin
   fPixelSampleRadius := Value;
 end;
 
+
+procedure TvgDescriptor_Data_StorageImage.SetWindowSync(const Value: Boolean);
+begin
+  If  fWindowSync = Value then exit;
+  SetActiveState(False)  ;
+  fWindowSync := Value;
+end;
+
+procedure TvgDescriptor_Data_StorageImage.VaildateWindowSize;
+  Var Linker:TvgLinker;
+begin
+  If NOT fWindowSync then exit;
+
+  If assigned(fDescriptor) and
+     assigned(fDescriptor.DescriptorItem) and
+     assigned(fDescriptor.DescriptorItem.DescriptorSet) and
+     assigned(fDescriptor.DescriptorItem.DescriptorSet.Linker) and
+     assigned(fDescriptor.DescriptorItem.DescriptorSet.Linker.SwapChain) then
+  Begin
+     Linker :=  fDescriptor.DescriptorItem.DescriptorSet.Linker;
+
+     fImageWidth  := Linker.SwapChain.ImageWidth;
+     fImageHeight := Linker.SwapChain.ImageHeight;
+
+     if (Linker.RenderTarget = RT_FRAME) and ( Linker.FrameResolution<>1) then
+     begin
+       fImageWidth  := fImageWidth  * Linker.FrameResolution;         //check
+       fImageHeight := fImageHeight * Linker.FrameResolution;         //check
+     End;
+
+  End;
+
+end;
 
 { TvgDescriptorArray_UniformBuffer<T> }
 
@@ -3838,63 +2766,6 @@ function TvgDescriptorArray_UniformBuffer<T>.RemoveUBO( aDD_UBO: TvgDescriptor_D
 begin
   Result := RemoveAndFreeDescriptor(aDD_UBO);
 end;
-(*
-procedure TvgDescriptorArray_UniformBuffer<T>.WriteDescriptorSet( aSet: TpvVulkanDescriptorSet;
-                                                        aFrameIndex,
-                                                        aBinding,
-                                                        aArrayElement : TvkUint32;
-                                                        aWriteMode: TvgDescriptorWriteMode = vgdmWriteWholeBinding );
-var
-  Index: TvkUint32;
-  I,L,J:Integer;
-  DBI : Array of TVkDescriptorBufferInfo;
-  DC:Integer;
-  DD:TvgDescriptorData;
-  DF: TvgDescriptorPerFrameData;
-begin
-  L:= Length(fDescriptorArray);
-  If L=0 then exit;
-
-  If aFrameIndex>= FrameCount then
-     aFrameIndex:=FrameCount-1;
-
-
-  SetLength(DBI, L);    // allocate for all slots
-  J := 0;
-  for I := 0 to L - 1 do
-  begin
-    DD := fDescriptorArray[I];
-    if not Assigned(DD) then
-       begin
-         Inc(J);
-         Continue;
-       end;
-
-    DF := DD.FrameData[aFrameIndex];
-    if Assigned(DF) and (DF is TvgDescriptor_PerFrame_UniformBuffer<T>) and
-       Assigned(TvgDescriptor_PerFrame_UniformBuffer<T>(DF).fVulkanBuffer) then
-      DBI[J] := TvgDescriptor_PerFrame_UniformBuffer<T>(DF).fVulkanBuffer.DescriptorBufferInfo
-    else
-      DBI[J] := Default(TVkDescriptorBufferInfo);  // zero-fill sparse slot
-    Inc(J);
-  end;
-
-
-  If J>0 then
-      aSet.WriteToDescriptorSet( aBinding,
-                                aArrayElement,
-                                J,
-                                DescriptorType,
-                               [],
-                               DBI,
-                               [],
-                              False
-                            );
-
-   Setlength(DBI, 0);
-
-end;
-*)
 
 { TvgDescriptor_Data_UniformBuffer<T> }
 
@@ -4177,11 +3048,6 @@ begin
 
   end;
 
-(*
-    If assigned(Sampler) and (fVulkanTexture.Sampler<>Sampler) then
-      fVulkanTexture.Sampler := Sampler.VulkanSampler[GetFrameIndex];
-*)
-
 end;
 
 procedure TvgDescriptor_PerFrame_Texture.UpLoadDescriptorData( aFrameIndex: TvkUint32; aGraphicPool, aTransferPool: TvgCommandBufferPool);
@@ -4223,7 +3089,6 @@ begin
 
     TV := aTransferPool.AcquireUploadCommand(0);//  RequestCommand(0,CB_PRIMARY,[BU_SIMULTANEOUS_USE_BIT]);
      CustomAssert(assigned(TV), 'TV Command buffer not assigned');
-
 
      CustomAssert(GV.BufferState in [cbsINITIAL, cbsRECORDING],
              'GV Command buffer not in INITIAL state before TpvVulkanTexture.Finish');
@@ -4445,18 +3310,7 @@ begin
 
 
 end;
-(*
-procedure TvgDescriptor_Data_StorageBuffer<T>.SetEnabled;
-  Var I:Integer;
-begin
-  inherited;
 
-  for I := 0 to High(fFrameData) do
-    if Assigned(fFrameData[I]) then
-      fFrameData[I].Active := TRue;
-
-end;
-*)
 procedure TvgDescriptor_Data_StorageBuffer<T>.SetFrameCount(aCount: Integer);
   Var L,I:Integer;
 begin
@@ -4574,11 +3428,14 @@ end;
 
 function TvgDescriptorArray_StorageImage.AddStorageImage(  aStorageImageData: TvgDescriptor_Data_StorageImage): Integer;
 begin
-Result := -1;
+  Result := -1;
   if not Assigned(aStorageImageData) then
     Exit;
+
   if AddDescriptorDataToArray(aStorageImageData) then
+  Begin
     Result := IndexOfDescriptorData(aStorageImageData);
+  End;
 end;
 
 procedure TvgDescriptorArray_StorageImage.ClearDescriptor(
@@ -4838,11 +3695,6 @@ Initialization
   RegisterDescriptorType(TvgDescriptorArray_UBO_4x4MatrixD);
   RegisterDescriptorType(TvgDescriptorArray_SB_2UI);
 
-
-// RegisterDescriptorType(TvgDescriptor_SB_2UI);
-
-// RegisterDescriptorType(TvgDescriptor_Data_UBO_4x4MatrixD);
-// RegisterDescriptorType(TvgDescriptor_Data_UBO_4x4MatrixD);
 
 // RegisterPushConstantType(TvgPushConstant_Data_Matrix4x4D);
 

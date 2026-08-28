@@ -63,6 +63,7 @@ type
     Procedure SetDisabled; Override;
     Procedure SetEnabled; Override;
 
+    procedure SetInstanceObjID(ID1, ID2: Cardinal);
 
   Public
     Constructor Create;
@@ -85,13 +86,15 @@ type
     procedure SetVertexBiTangent(X, Y, Z: Single);
     procedure SetVertexIndex(I: Cardinal);
 
-    procedure SetInstanceObjID(ID1, ID2: Cardinal);
+
     procedure SetInstanceColor(R, G, B: Single; A: Single = 1.0);
     procedure SetInstanceNormal(X, Y, Z: Single);
     procedure SetInstanceTangent(X, Y, Z: Single);
     procedure SetInstanceVector(X, Y, Z: Single);
     procedure SetInstanceMatrix(M: TvgMatrix4x4S);
     procedure SetInstanceIndex(I: Cardinal);
+
+    Procedure AddObjectID;      //will add the Object ID ie pointer to object
 
     // Index methods
     function AddIndex(AIndex: Cardinal): Integer; overload;
@@ -108,7 +111,6 @@ type
     Property ObjIndex : Integer read fObjIndex;
 
     Property CurrentVertex : Integer Read fCurrentVertex write SetCurrentVertex;
-
 
   End;
 
@@ -157,7 +159,7 @@ type
     Procedure ClearGraphicPipes;     Override;
 
     // Object creation
-    Function AddObject: TvgObject;
+    Function AddObject(Selelectable:Boolean): TvgObject;
     Procedure RemoveObject(aObject: TvgObject);
     function GetObjectCount: Integer; Override;
 
@@ -208,6 +210,13 @@ type
 
    Procedure ClearGraphicPipelines(aRenderer:TvgBaseRenderEngine; aSubPass:TvgSubpass);Override;
     function GetObjectStore(Index: Integer): TvgBaseObjectStore; Override;
+
+   Procedure ConnectRenderEngine(aRenderEngine : TvgBaseRenderEngine);    Override;
+   //called attaching a RenderEngine to Scene
+   Procedure DisConnectRenderEngine(aRenderEngine:TvgBaseRenderEngine);   Override;
+   //called attaching a RenderEngine to Scene
+   Procedure ReConnectRenderEngines;          Override;
+
 
 
  Public
@@ -279,11 +288,13 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
 
  TvgRenderEngine= Class(TvgBaseRenderEngine)
  Private
+    fSceene: TvgScene;
+    procedure SetScene(const Value: TvgScene);
 
 
  Protected
 
-   fScene                  : TvgScene;
+   fScene                  : TvgScene;    //this is OK
 
    fObjectIDImage          : TvgDescriptorArray_StorageImage;
 
@@ -307,6 +318,7 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
 //   Property MVPMatrixON   : Boolean read FFlags.MVPMatrixON write SetMVPMatrixON;
 //   Property ObjSelectON   : Boolean read FFlags.SelectON write SetSelectON;
 
+   Property Scene :TvgScene Read fSceene write SetScene;
  End;
 
 
@@ -399,8 +411,8 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
     procedure DoCameraZoom(aWheelDelta: Integer);
 
     // --- Object operations ---
-    procedure DoPickObject(aFrameIndex: TvkUint32;
-                            Shift: TShiftState; X, Y: Integer);
+    procedure DoPickObject(aFrameIndex: TvkUint32; Shift: TShiftState; X, Y: Integer);
+
     procedure DoDragObject(X, Y: Integer);
     procedure DoAddObjectRequest(X, Y: Integer);
 
@@ -414,8 +426,7 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
                                  out   aHitPoint:    TpvVector3): Boolean;
 
     // Decides the active camera gesture from button/shift state
-    procedure DispatchCameraGesture(Shift: TShiftState;
-                                     aDeltaX, aDeltaY: Single);
+    procedure DispatchCameraGesture(Shift: TShiftState; aDeltaX, aDeltaY: Single);
 
     // --- Override base virtual mouse handlers ---
     procedure DoMouseDown (aButton: TvgMouseButton; Shift: TShiftState; X, Y: Integer); Override;
@@ -437,7 +448,7 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
     property Scene         : TvgScene          read fScene         write SetScene;
     Property Renderer      : TvgRenderEngine    Read fRenderer     write SetRenderer;
 
-    property ActionMode    : TvgToolActionMode  read fActionMode   write SetActionMode  default TAM_CAMERA_ORBIT;
+    property ActionMode    : TvgToolActionMode  read fActionMode   write SetActionMode  default TAM_OBJECT_SELECT;
     property OrbitButton   : TvgMouseButton     read fOrbitButton  write SetOrbitButton  default vgmbLeft;
     property PanButton     : TvgMouseButton     read fPanButton    write SetPanButton    default vgmbMiddle;
     property DollyButton   : TvgMouseButton     read fDollyButton  write SetDollyButton  default vgmbRight;
@@ -576,6 +587,17 @@ begin
 
   fCurrentInstance := fDataStore.AddObjectInstance(fObjIndex);
   Result           := fCurrentInstance;
+end;
+
+procedure TvgObject.AddObjectID;
+  Var I:Integer;
+begin
+  I:=AddInstance;
+  If I<>-1 then
+  Begin
+    SetUpObjectID;
+    SetInstanceObjID(fObjHigh,fObjLow);
+  End;
 end;
 
 function TvgObject.AddIndex(AIndex: Cardinal): Integer;
@@ -1013,7 +1035,7 @@ begin
 end;
 
 
-function TvgObjectStore.AddObject: TvgObject;
+function TvgObjectStore.AddObject(Selelectable:Boolean): TvgObject;
 var
   Obj: TvgObject;
 begin
@@ -1021,7 +1043,7 @@ begin
   Obj.fDataStore := Self;
   
   // Add to data store and get index
-  Obj.fObjIndex  := AddDataObject(SelectON);
+  Obj.fObjIndex  := AddDataObject(Selelectable);
 
   // Add to our object list
   fObjects.Add(Obj);
@@ -1291,6 +1313,14 @@ begin
 
 end;
 
+procedure TvgScene.ConnectRenderEngine(aRenderEngine: TvgBaseRenderEngine);
+begin
+  inherited;
+
+  If  (aRenderEngine is TvgRenderEngine) and (TvgRenderEngine(aRenderEngine).fScene=nil) then
+      TvgRenderEngine(aRenderEngine).fScene:= nil;
+end;
+
 constructor TvgScene.Create(AOwner: TComponent);
 begin
   inherited;
@@ -1340,6 +1370,14 @@ begin
 
 end;
 
+procedure TvgScene.DisConnectRenderEngine(aRenderEngine: TvgBaseRenderEngine);
+begin
+  inherited;
+
+  If  (aRenderEngine is TvgRenderEngine) and (TvgRenderEngine(aRenderEngine).fScene=self) then
+      TvgRenderEngine(aRenderEngine).fScene:= nil;
+end;
+
 function TvgScene.GetObjectCount: Integer;
   Var I:Integer;
 begin
@@ -1367,8 +1405,33 @@ begin
 end;
 
 procedure TvgScene.Notification(AComponent: TComponent; Operation: TOperation);
+  Var R:TvgBaseRenderEngine;
 begin
-  inherited;
+  inherited Notification(AComponent, Operation);
+  If aComponent=self then exit;
+
+  Case Operation of
+     opInsert : Begin
+                  If aComponent=self then exit;
+
+                  If NotificationTestON and Not (csDesigning in ComponentState) then exit;     //don't mess with links at runtime
+
+                  If (aComponent is TvgRenderEngine) and (Not assigned(TvgRenderEngine(aComponent).Scene)) then
+                     ConnectRenderEngine(TvgBaseRenderEngine(aComponent)) ;
+
+                End;
+     opRemove : Begin
+
+                  If (aComponent is TvgRenderEngine) and (TvgRenderEngine(aComponent).fScene=self)  then
+                  Begin
+                    R:= TvgBaseRenderEngine(aComponent);
+
+                    DisConnectDataFromRenderer(R);
+                    DisConnectRenderEngine(R);
+                  End;
+
+                end;
+  End;
 
 end;
 
@@ -1398,6 +1461,12 @@ begin
   // Future global data — each also receives the correct per-renderer context:
   // aTarget.SetLightData(aFrameIndex, fLights.BuildShaderBlock);
   // aTarget.SetTimeData(aFrameIndex, fTimeAccumulator);
+end;
+
+procedure TvgScene.ReConnectRenderEngines;
+begin
+  inherited;
+
 end;
 
 Function TvgScene.SetDisabled:Boolean;
@@ -1538,7 +1607,7 @@ constructor TvgToolManager.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
   fScene          := nil;
-  fActionMode     := TAM_CAMERA_ORBIT;
+  fActionMode     := TAM_OBJECT_SELECT;
   fOrbitButton    := vgmbLeft;
   fPanButton      := vgmbMiddle;
   fDollyButton    := vgmbRight;
@@ -1589,8 +1658,12 @@ procedure TvgToolManager.SetRenderer(const Value: TvgRenderEngine);
 begin
    If fRenderer = Value then exit;
    SetActiveState(False) ;
-
+  If Assigned(fRenderer) then
+    fRenderer.RemoveFreeNotification(Self);
   fRenderer := Value;
+  If Assigned(fRenderer) then
+    fRenderer.FreeNotification(Self);
+  ClearSelection;
 end;
 
 procedure TvgToolManager.SetDollyButton(const Value: TvgMouseButton);
@@ -1818,15 +1891,14 @@ end;
 //  Object operations
 // ---------------------------------------------------------------------------
 
-procedure TvgToolManager.DoPickObject(aFrameIndex: TvkUint32;
-                                       Shift: TShiftState; X, Y: Integer);
+procedure TvgToolManager.DoPickObject(aFrameIndex: TvkUint32; Shift: TShiftState; X, Y: Integer);
   Var
-    Obj     : TvgObject;
+    Obj       : TvgObject;
     PlaneNorm : TpvVector3;
-   // WorldHit  : TpvVector3;
+
 begin
   If not Assigned(fLinker)           then exit;
-  If not Assigned(fLinker.Renderer)  then exit;
+  If not Assigned(fRenderer)         then exit;
   If not Assigned(fScene)            then exit;
 
   // Query the object-ID storage image at this pixel
@@ -1902,8 +1974,7 @@ end;
 //  Virtual mouse handler overrides
 // ---------------------------------------------------------------------------
 
-procedure TvgToolManager.DoMouseDown(aButton: TvgMouseButton;
-                                      Shift: TShiftState; X, Y: Integer);
+procedure TvgToolManager.DoMouseDown(aButton: TvgMouseButton; Shift: TShiftState; X, Y: Integer);
 begin
   case fToolMode of
 
@@ -1938,7 +2009,6 @@ procedure TvgToolManager.DoMouseMove(Shift: TShiftState; X, Y: Integer);
   Var
     dX, dY : Single;
 begin
-  If not fIsDragging then exit;  // No button currently held
 
   // Scale pixel deltas by global sensitivity
   dX := (X - fLastMouseX) * fMouseSensitivity;
@@ -2089,10 +2159,10 @@ begin
   If SelectON and (fGlobalRes.GetDescriptorItem(GlobalObjectIDDescriptor)=nil)  then     //all OK
   Begin
 
-    DI:=fGlobalRes.Descriptors.Add ;
+    DI := fGlobalRes.Descriptors.Add ;
+
     If assigned(DI) then
     Begin
-
       DI.Name          := GlobalObjectIDDescriptor;
       If assigned(fLinker) then
           DI.Device    := fLinker.ScreenDevice;
@@ -2105,16 +2175,21 @@ begin
 
         DA.ResourceType := RT_STORAGEIMAGE;
         DA.DataFlow     := [DF_DOWN, DF_SAMPLING];
-        DA.FrameCount   := FC;
         DA.SetStageFlags(TVkShaderStageFlags(VK_SHADER_STAGE_FRAGMENT_BIT));
+        DA.FrameCount   := FC;
 
         If DA is TvgDescriptorArray_StorageImage then
         Begin
           SI := TvgDescriptorArray_StorageImage(DA);
           SI.ImageFormat := R32G32_UINT;
+
           SID := TvgDescriptor_Data_StorageImage.Create;
+
+       //   image width  set to swap chain size with WindowSync ON
+          SID.WindowSync := True;
           SID.PixelSample := True;
           SID.PixRadius := psr_1x1;
+
           if SI.AddStorageImage(SID) < 0 then
           Begin
             SID.Free;
@@ -2122,6 +2197,7 @@ begin
               'Unable to create the global ObjectID storage image descriptor');
           End;
           fObjectIDImage := SI;
+
         End;
       end;
     End;
@@ -2134,91 +2210,6 @@ begin
   end;
 
 
-
-  //screen size UBO
-  (*
-    DI:=fGlobalRes.Descriptors.Add ;
-    If assigned(DI) then
-    Begin
-      DI.DescriptorName :=TvgDescriptor_UBO_2UI.GetPropertyName;
-
-      If not assigned(DI.Descriptor) then
-         DI.Descriptor := TvgDescriptor_UBO_2UI.create(nil);
-
-      DI.Name          := GlobalObjectScreenSize;
-      If assigned(fLinker) then
-          DI.Device    := fLinker.ScreenDevice;
-
-      D:= DI.Descriptor;
-      If assigned(D) then
-      Begin
-
-        D.Name         := GlobalObjectScreenSize;
-        D.ResourceType := RT_UBO;
-        D.FrameCount   := FC;                  //one image per frame
-        D.DataFlow     := [DF_UP];
-
-
-        If  (D is TvgDescriptor_UBO_2UI) then
-        Begin
-          UB              := TvgDescriptor_UBO_2UI(D);
-        //  UB.ElementCount := 1;
-          UB.setupData;
-        End;
-
-      // IMPORTANT: force upload for all frames
-       // D.SetUploadFlags;
-
-      end;
-    End;
-
-  end;
- *)
-
-  //StorageImage
-(*
-    DI:=fGlobalRes.Descriptors.Add ;
-    If assigned(DI) then
-    Begin
-      DI.DescriptorName := TvgDescriptor_StorageImage.GetPropertyName;
-
-      If not assigned(DI.Descriptor) then
-         DI.Descriptor := TvgDescriptor_StorageImage.create(nil);
-
-      DI.Name          := GlobalObjectIDDescriptor;
-      If assigned(fLinker) then
-          DI.Device    := fLinker.ScreenDevice;
-
-      D:= DI.Descriptor;
-      If assigned(D) then
-      Begin
-
-        D.Name         := GlobalObjectIDDescriptor;
-        D.ResourceType := RT_STORAGEIMAGE;
-        D.FrameCount   := FC;                  //one image per frame
-
-
-        If  (D is TvgDescriptor_StorageImage) then
-        Begin
-          SI             := TvgDescriptor_StorageImage(D);
-          fObjectIDImage := SI;        //flag object Image in Render Engine
-
-          SI.PixFormat   := R32G32_UINT;  //unsigned integer pair
-          SI.PixelSample := True;
-          SI.PixRadius   := psr_1x1;
-
-          SI.SetStageFlags(TVkShaderStageFlags(VK_SHADER_STAGE_FRAGMENT_BIT));
-
-        End;
-
-      // IMPORTANT: force upload for all frames
-        D.SetUploadFlags;
-
-      end;
-
-    End;
-
-    *)
 
 
 end;
@@ -2288,38 +2279,41 @@ begin
   if not SelectON then exit;
   If not assigned(fScene) or (fScene.GetObjectCount=0) then exit;
 
- CustomAssert(Assigned(fScene),'Scene NOT connected',self);
- CustomAssert(Assigned(fObjectIDImage),
-   'Object Select image NOT created', self);
+// CustomAssert(Assigned(fScene),'Scene NOT connected',self);
 
- SampleX := X;
- SampleY := Y;
+ CustomAssert(Assigned(fObjectIDImage), 'Object Select image NOT created', self);
+
  if Assigned(fLinker) and (fLinker.RenderTarget = RT_FRAME) then
  begin
-   SampleX := (X * Integer(fLinker.FrameResolution)) +
-     (Integer(fLinker.FrameResolution) div 2);
-   SampleY := (Y * Integer(fLinker.FrameResolution)) +
-     (Integer(fLinker.FrameResolution) div 2);
- end;
+   SampleX := (X * Integer(fLinker.FrameResolution)) + (Integer(fLinker.FrameResolution) div 2);
+   SampleY := (Y * Integer(fLinker.FrameResolution)) + (Integer(fLinker.FrameResolution) div 2);
+ end else
+ Begin
+   SampleX := X;
+   SampleY := Y ;
+ End;
 
- DD := fObjectIDImage.StorageImageData[0];
+ DD := fObjectIDImage.StorageImageData[0];    //MUST be zero
  if not Assigned(DD) or
     not DD.GetPixelData(aFrameIndex, Shift, SampleX, SampleY, Pixel) then
    Exit;
 
- ObjectAddress := (UInt64(Pixel.R32G32_UINT.G) shl 32) or
-   UInt64(Pixel.R32G32_UINT.R);
+ //ObjectAddress := (UInt64(Pixel.R32G32_UINT.G) shl 32) or UInt64(Pixel.R32G32_UINT.R);
+
+ ObjectAddress := Combine32BitTo64Bit(UInt64(Pixel.R32G32_UINT.G), UInt64(Pixel.R32G32_UINT.R));   //low/high  CHECK
+
  if ObjectAddress = 0 then
    Exit;
 
  Candidate := TObject(Pointer(NativeUInt(ObjectAddress)));
+
  if IsValidObjectOfClass(Candidate, TvgObject) then
    Result := TvgObject(Candidate);
 end;
 
 procedure TvgRenderEngine.Notification(AComponent: TComponent;  Operation: TOperation);
 begin
-    inherited Notification(AComponent, Operation);
+    inherited Notification(AComponent, Operation);     //important
 
     Case Operation of
        opInsert : Begin
@@ -2327,21 +2321,13 @@ begin
                     If NotificationTestON and Not (csDesigning in ComponentState) then exit;     //don't mess with links at runtime
 
                     If (aComponent is TvgScene) and (fScene=Nil) then
-                    Begin
-                      SetActiveState(False);
-                      TvgBaseScene(aComponent).ConnectRenderEngine(Self);
-                      fScene := TvgScene(aComponent);
-                    End;
+                      SetScene(TvgScene(aComponent) );
                   End;
 
        opRemove : Begin
 
                     If (aComponent is TvgScene) and (fScene=aComponent) then
-                    Begin
-                      SetActiveState(False);
-                      TvgBaseScene(aComponent).DisConnectRenderEngine(Self);
-                      fScene := nil;
-                    End;
+                      SetScene(nil );
                   end;
 
     End;
@@ -2361,6 +2347,26 @@ begin
 
 
 
+end;
+
+procedure TvgRenderEngine.SetScene(const Value: TvgScene);
+begin
+  If fScene=Value then exit;
+  SetActiveState(False);
+
+  If assigned(fScene) then
+  Begin
+     fScene.RemoveFreeNotification(self) ;
+     fScene.DisConnectRenderEngine(Self);
+  End;
+
+  fScene := Value;
+
+  If assigned(fScene) then
+  Begin
+     fScene.FreeNotification(self) ;
+     fScene.ConnectRenderEngine(Self);
+  End;
 end;
 
 end.

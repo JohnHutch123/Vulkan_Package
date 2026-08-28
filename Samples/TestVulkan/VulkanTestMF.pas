@@ -87,6 +87,7 @@ type
     fGP       : TvgGraphicPipeline;
     fRenderer   : TvgRenderEngine;
     fScene      : TvgScene;
+    fToolManager:TvgToolManager;
 
     fMSAASample : TvgSampleCountFlagBits;
     procedure HandleMsg(const aLabel: String; const ThreadCount,
@@ -213,7 +214,7 @@ Case TestRead.ItemIndex of
                     DS.SetUpVertexAttributes( [vdtPosition, vdtColor]);
                 //    DS.AddInstanceAttributes( [idtObjID]);
 
-                  Obj := DS.AddObject;
+                  Obj := DS.AddObject(True);
 
                     // Define vertex attributes for the vertex binding: position (loc0) + color (loc1)
                    // DS.AddVertexAttributes(vBinding, [vdtPosition, vdtColor], [0, 1]);
@@ -304,8 +305,8 @@ Case TestRead.ItemIndex of
                       DS.SetUpVertexAttributes( [vdtPosition, vdtColor]);
                       DS.SetUpInstanceAttributes( [idtObjID]);
 
-                      Obj1 := DS.AddObject;
-                      Obj2 := DS.AddObject;
+                      Obj1 := DS.AddObject(True);
+                      Obj2 := DS.AddObject(True);
 
 
                       // Allocate vertex storage and instance storage for this object's bindings
@@ -619,11 +620,21 @@ begin
  //  RunComponentTests(fInstance);
 
 
+
     fScene        := TvgScene.Create(self);
     fScene.Linker := fLinker;
  //   fScene.ScreenDevice := fScreenDevice;
-
+    fRenderer.Scene := fScene;
     fScene.ConnectRenderEngine(fRenderer) ;
+
+
+    fToolManager:=TvgToolManager.create(self);
+    fLinker.ToolManager := fToolManager;
+
+    fToolManager.Linker   := fLinker;
+    fToolManager.Scene    := fScene;
+    fToolManager.Renderer := fRenderer;
+
 
     MessagesTxt.Lines.add('Build Instance complete');
 end;
@@ -631,6 +642,9 @@ end;
 procedure TTestVulkan.Button2Click(Sender: TObject);
   //Var I:Integer;
 begin
+  If assigned(fToolManager) then
+     FreeAndNil(fToolManager);
+
   if assigned(fScene) then
   Begin
      fScene.ClearScene;

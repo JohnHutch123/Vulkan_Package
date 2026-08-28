@@ -155,7 +155,6 @@ begin
    Try
      ObjStore:=self.AddObjectStore  ;
 
-
    case fMode of
      0 : Begin
 
@@ -173,7 +172,7 @@ begin
             ObjStore.SetupVertexAttributes( [vdtPosition, vdtColor]);
             ObjStore.SetUpInstanceAttributes( [idtObjID]);
 
-            Obj := ObjStore.AddObject;   //no index data
+            Obj := ObjStore.AddObject(True);   //no index data
 
             // Define vertex attributes for the vertex binding: position (loc0) + color (loc1)
            // DS.AddVertexAttributes(vBinding, [vdtPosition, vdtColor], [0, 1]);
@@ -193,7 +192,7 @@ begin
 
      2 : Begin
 
-            AddDescriptor_Texture('SimpleText', 'Image1.bmp');
+            AddDescriptor_Texture('SimpleTexture', 'Image1.bmp');
 
 
             ObjStore.Topology        := TRIANGLE_LIST;
@@ -206,9 +205,16 @@ begin
             ObjStore.SetUpVertexAttributes( [vdtPosition, vdtColor, vdtTexCoord]);
             ObjStore.SetUpInstanceAttributes( [idtObjID]);
 
-            Obj1 := ObjStore.AddObject;
-            Obj2 := ObjStore.AddObject;
+            Obj1 := ObjStore.AddObject(True);
+           // Obj1.SelectON := True;
 
+            Obj2 := ObjStore.AddObject(True);
+          //  Obj2.SelectON := True;
+
+            Obj1.AddObjectID;
+            Obj2.AddObjectID;
+
+          //  Obj1.SetInstanceObjID(Obj1.fo)  ;
          //   Obj1.SetUpObjectID;
          //   Obj2.SetUpObjectID;
 

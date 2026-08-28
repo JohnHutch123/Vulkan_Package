@@ -1,4 +1,4 @@
-(******************************************************************************
+﻿(******************************************************************************
  *                                 vgVulkan                                  *
  ******************************************************************************
  *                        Version 2021-05-01-01-01-0000                       *
@@ -69,7 +69,7 @@ Var
   ShadersUseDouble : Boolean   = True;
 
   GlobalViewProjectDescriptor : String = 'ModelViewProj';
-  GlobalObjectIDDescriptor    : String = 'outBuffer';
+  GlobalObjectIDDescriptor    : String = 'outObjectIDImage';
   GlobalObjectScreenSize      : String = 'ScreenSize';
 
 Const
@@ -1317,6 +1317,7 @@ Type
       RT_VIEWMAT,
       RT_PROJECTMAT,
       RT_MODELMAT,
+      RT_TEXTURE,
       RT_GROUPTEX,
       RT_MATERIALTEX,
       RT_SELECTVEC1,

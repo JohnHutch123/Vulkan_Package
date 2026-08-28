@@ -169,7 +169,13 @@ Type
 {$ifend}
 
     Procedure Paint ; Override;
-    procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
+
+    function MouseActivate(Button: TMouseButton; Shift: TShiftState; X, Y: Integer; HitTest: Integer): TMouseActivate; Override;
+    procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); Override;
+    procedure MouseMove(Shift: TShiftState; X, Y: Integer); Override;
+    procedure MouseUp(Button: TMouseButton; Shift: TShiftState;     X, Y: Integer); Override;
+
+//    procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
 
 
     Procedure vgWindowSizeCallback(var WinWidth, WinHeight : TpvUInt32);  //pixels
@@ -391,6 +397,28 @@ begin
   Result := fLinker;
 end;
 
+function TvgWindowVCL.MouseActivate(Button: TMouseButton; Shift: TShiftState; X, Y, HitTest: Integer): TMouseActivate;
+begin
+
+end;
+
+procedure TvgWindowVCL.MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+begin
+  inherited;
+
+  If not assigned(fLinker) then exit;
+
+  Case Button of
+     mbLeft   :fLinker.MouseDown(vgmbLeft, Shift, X, Y);
+     mbMiddle :fLinker.MouseDown(vgmbMiddle, Shift, X, Y);
+     mbRight  :fLinker.MouseDown(vgmbRight, Shift, X, Y);
+
+  End;
+
+//    TvgMouseButton  = ( vgmbLeft, vgmbRight, vgmbMiddle );
+
+end;
+
 procedure TvgWindowVCL.MouseMove(Shift: TShiftState; X, Y: Integer);
 begin
   inherited;
@@ -398,6 +426,12 @@ begin
   If not assigned(fLinker) then exit;
 
   fLinker.MouseMove(Shift, X, Y);
+
+end;
+
+procedure TvgWindowVCL.MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+begin
+  inherited;
 
 end;
 
@@ -501,10 +535,15 @@ procedure TvgWindowVCL.SetEnabled(aComp:TvgBaseComponent=nil);
 begin
   fVulkanActive:=False;
   If not assigned(fLinker) then exit;
-  If not fLinker.Active then
+
+  If assigned(fLinker) and
+    assigned(fLinker.ScreenDevice) and
+    assigned(fLinker.ScreenDevice.Instance) and
+    NOT (fLinker.ScreenDevice.Instance.Active) then
   Begin
-     fLinker.Active:=True;
-  End;
+    fLinker.ScreenDevice.Instance.Active := True;
+    exit;
+  end;
 
   fVulkanActive := True;
   vgWindowInvalidate(True);
