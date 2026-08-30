@@ -69,7 +69,8 @@ Var
   ShadersUseDouble : Boolean   = True;
 
   GlobalViewProjectDescriptor : String = 'ModelViewProj';
-  GlobalObjectIDDescriptor    : String = 'outObjectIDImage';
+  GlobalObjectIDDescriptorImg : String = 'outObjectIDImage';
+  GlobalObjectIDDescriptorBuf : String = 'outObjectIDBuffer';
   GlobalObjectScreenSize      : String = 'ScreenSize';
 
 Const
@@ -1449,6 +1450,15 @@ Type
                               vgdmWriteActiveRange
                             );
 
+ TvgToolManagerMode = (
+    TMM_NONE,           // Disabled / pass-through
+    TMM_CAMERA,         // Mouse input controls the active scene camera
+    TMM_OBJECT_EDIT     // Mouse input selects and manipulates scene objects
+  );
+
+  // Mouse-button identifier — avoids a dependency on VCL.Controls
+  TvgMouseButton  = ( vgmbLeft, vgmbRight, vgmbMiddle );
+  TvgMouseButtons = set of TvgMouseButton;
 
 
 

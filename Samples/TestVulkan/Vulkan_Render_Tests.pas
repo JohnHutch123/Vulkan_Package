@@ -177,7 +177,7 @@ begin
             // Define vertex attributes for the vertex binding: position (loc0) + color (loc1)
            // DS.AddVertexAttributes(vBinding, [vdtPosition, vdtColor], [0, 1]);
 
-            Obj.SelectON:=True;
+            Obj.Selectable:=True;
 
             // Define instance attributes for the object's instance binding: objID + instance color
             // objID uses uvec2 (two uints) at location 2, color at location 3

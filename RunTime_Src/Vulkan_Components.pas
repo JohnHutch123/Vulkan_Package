@@ -242,7 +242,7 @@ type
     procedure SetEditableON(const Value: Boolean);
     procedure SetFrozenON(const Value: Boolean);
     procedure SetLockedON(const Value: Boolean);
-    procedure SetSelectON(const Value: Boolean);
+    procedure SetSelectable(const Value: Boolean);
     procedure SetVisibleON(const Value: Boolean);
   Protected
 
@@ -265,7 +265,7 @@ type
      Property Active : Boolean read fActive write SetActiveState;
      Property ActiveChanging : Boolean read fActiveChanging;
 
-    Property SelectON  : Boolean Read fFlags.selectable  write SetSelectON;
+    Property Selectable  : Boolean Read fFlags.selectable  write SetSelectable;
     Property VisibleON : Boolean Read fFlags.visible  write SetVisibleON;
     Property LockON    : Boolean Read fFlags.Locked  write SetLockedON;
     Property FrozenON  : Boolean Read fFlags.Frozen  write SetFrozenON;
@@ -4648,16 +4648,6 @@ TvgBaseComponent = class(TComponent)
 
   End;
 
- TvgToolManagerMode = (
-    TMM_NONE,           // Disabled / pass-through
-    TMM_CAMERA,         // Mouse input controls the active scene camera
-    TMM_OBJECT_EDIT     // Mouse input selects and manipulates scene objects
-  );
-
-  // Mouse-button identifier — avoids a dependency on VCL.Controls
-  TvgMouseButton  = ( vgmbLeft, vgmbRight, vgmbMiddle );
-  TvgMouseButtons = set of TvgMouseButton;
-
 
   TvgWindowLinkEnableEvent                = procedure(Sender: TvgLinker) of object;
   TvgWindowBuildRenderPassStructureEvent  = procedure(Sender: TvgRenderPass) of object;
@@ -5171,11 +5161,11 @@ TvgBaseComponent = class(TComponent)
 
     function GetObjectCount: Integer; Virtual;
 
-    function GetEditable: Boolean;  Virtual;Abstract;
-    function GetFrozen: Boolean;  Virtual;Abstract;
-    function GetLocked: Boolean;    Virtual;Abstract;
+    function GetEditable: Boolean;   Virtual;Abstract;
+    function GetFrozen: Boolean;     Virtual;Abstract;
+    function GetLocked: Boolean;     Virtual;Abstract;
     function GetSelectable: Boolean; Virtual;Abstract;
-    function GetVisible: Boolean;  Virtual;Abstract;
+    function GetVisible: Boolean;    Virtual;Abstract;
  //these calls can be threaded and tasked
 
     Procedure ConfigureGraphicPipeline(GP:TvgGraphicPipeline);Virtual; Abstract;
@@ -5358,14 +5348,15 @@ TvgBaseComponent = class(TComponent)
     Property WorkerIndex : TvkUint32 Read fWorkerIndex ;
 
   End;
- (*
-  TvgResourceSet = (
-      RS_SelectBuffer,
-      RS_ViewProjectBuffer);
-  *)
+
+  TvgSelectMode = (
+      smNone,
+      smImageBuffer,      //use an image buffer to manage Object IDs
+      smStorageBuffer,    /// use a storage Buffer to manage Object IDs
+      smCustom);          //use a costom method
 
   TvgRenderFeatureFlags = record
-    SelectON       : Boolean;
+    SelectMode     : TvgSelectMode;
     MVPMatrixON    : Boolean;
     ShaderUseDouble: Boolean;
   end;
@@ -5386,7 +5377,7 @@ TvgBaseComponent = class(TComponent)
     function  GetViewportAspect : Single;
 
     procedure SetMVPMatrixON(const Value: Boolean);
-    procedure SetSelectON(const Value: Boolean);
+    procedure SetSelectMode(const Value: TvgSelectMode);
     procedure SetShaderUseDouble(const Value: Boolean);
 
 
@@ -5445,6 +5436,8 @@ TvgBaseComponent = class(TComponent)
 
     Procedure PrepareGlobalAndSceneDescriptors(aFrameIndex : TvkUint32);
 
+    Function SelectON : Boolean;
+
     Procedure StartRenderEnginePrepare( ImageIndex:Integer; aFrame:TvgFrame);  Virtual;
     Procedure FinishRenderEnginePrepare;                                       Virtual;
 
@@ -5487,7 +5480,7 @@ TvgBaseComponent = class(TComponent)
 
     Property GlobalRes     : TvgDescriptorSet Read GetGlobalResources ;  //hold shader resource structure and data
 
-    property SelectON       : Boolean read FFlags.SelectON write SetSelectON;
+    property SelectMode     : TvgSelectMode read FFlags.SelectMode write SetSelectMode;
     property MVPMatrixON    : Boolean read FFlags.MVPMatrixON write SetMVPMatrixON;
     property ShaderUseDouble: Boolean read FFlags.ShaderUseDouble write SetShaderUseDouble;
 
@@ -6229,7 +6222,7 @@ begin
   fFlags.Locked := Value;
 end;
 
-procedure TvgBaseObject.SetSelectON(const Value: Boolean);
+procedure TvgBaseObject.SetSelectable(const Value: Boolean);
 begin
   fFlags.selectable := Value;
   SetUpObjectID;
@@ -12874,12 +12867,12 @@ begin
 
 end;
 
-procedure TvgBaseRenderEngine.SetSelectON(const Value: Boolean);
+procedure TvgBaseRenderEngine.SetSelectMode(const Value: TvgSelectMode);
 begin
-  If FFlags.SelectON = Value  then exit;
+  If FFlags.SelectMode = Value  then exit;
   SetActiveState(False);
 
-  FFlags.SelectON := Value;
+  FFlags.SelectMode := Value;
 
   VaildateGlobalResources;
   ApplyFeatureFlagsToPipelines;
@@ -12896,6 +12889,11 @@ begin
   VaildateGlobalResources;
   ApplyFeatureFlagsToPipelines;
   FlagRebuildALLFrames;
+end;
+
+function TvgBaseRenderEngine.SelectON: Boolean;
+begin
+  Result := fFlags.SelectMode <> smNone;
 end;
 
 procedure TvgBaseRenderEngine.SetBaseScene(const Value: TvgBaseScene);
@@ -22207,7 +22205,7 @@ end;
 
 procedure TvgLinker.MouseMove(Shift: TShiftState; X, Y: Integer);
 Begin
-  If not (fState =vgcsActive) then exit;
+  If not (fState = vgcsActive) then exit;
   If X < 0 then exit;
   If Y < 0 then exit;
 

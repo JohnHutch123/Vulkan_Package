@@ -185,8 +185,8 @@ var
  // V3 : TvgVector3S;
  // V4 : TvgVector4S;
 
-  ObjHigh,ObjLow : Longword;
-  ObjPtr         : Uint64;
+//  ObjHigh,ObjLow : Longword;
+//  ObjPtr         : Uint64;
 
 begin
 
@@ -592,7 +592,9 @@ begin
     Case RendRB.ItemIndex of
       0: Begin
             fRenderer   := TvgRenderEngine_Single.create(self);
-            fRenderer.SelectON := false;//SelectionCB.checked;
+            fRenderer.SelectMode := smStorageBuffer;
+        //    fRenderer.SelectMode := smImageBuffer;
+        //    fRenderer.SelectON := false;//SelectionCB.checked;
 
 
           //  fRenderer.CreateRenderPass;
@@ -613,7 +615,7 @@ begin
     fRenderer.RenderPass.BufDepthON :=  DBCB.checked;
     fVCLWin.VulkanLink := fLinker;
 
-    fRenderer.SelectON              := True;
+    fRenderer.SelectMode              := smImageBuffer;
 
     fRenderer.RenderPass.BuildStructure;
 
@@ -634,6 +636,8 @@ begin
     fToolManager.Linker   := fLinker;
     fToolManager.Scene    := fScene;
     fToolManager.Renderer := fRenderer;
+
+    fToolManager.ToolMode :=  TMM_OBJECT_EDIT ;
 
 
     MessagesTxt.Lines.add('Build Instance complete');

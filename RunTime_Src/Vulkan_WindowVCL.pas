@@ -21,7 +21,8 @@ uses
   PasVulkan.Types,
   PasVulkan.Framework,
   Vulkan_Components,
-  Vulkan_Assert;
+  Vulkan_Assert,
+  Vulkan_Components_Lookups;
 //  Dialogs;
 
 Type
@@ -171,11 +172,10 @@ Type
     Procedure Paint ; Override;
 
     function MouseActivate(Button: TMouseButton; Shift: TShiftState; X, Y: Integer; HitTest: Integer): TMouseActivate; Override;
+
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); Override;
     procedure MouseMove(Shift: TShiftState; X, Y: Integer); Override;
     procedure MouseUp(Button: TMouseButton; Shift: TShiftState;     X, Y: Integer); Override;
-
-//    procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
 
 
     Procedure vgWindowSizeCallback(var WinWidth, WinHeight : TpvUInt32);  //pixels

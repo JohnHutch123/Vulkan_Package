@@ -836,14 +836,23 @@ begin
       if (D.StageFlags <> 0) and ((D.StageFlags and StageFlag) = 0) then
         Continue;
 
-      if SameText(aTitle, 'Global resources') and
-         SameText(DI.Name, GlobalObjectIDDescriptor) and
-         (D is TvgDescriptorArray_StorageImage) then
-      begin
-        SB.Append(Cmt('Storage Image for storage of ObjectID'));
-        SB.Append(Cmt(Format('Global descriptor SET = %d and Binding = %d',
-          [aSetIndex, D.Binding])));
-      end;
+      if SameText(aTitle, 'Global resources') then
+      Begin
+
+        If SameText(DI.Name, GlobalObjectIDDescriptorImg) and
+           (D is TvgDescriptorArray_StorageImage) then
+        begin
+          SB.Append(Cmt('Storage Image for storage of ObjectID'));
+          SB.Append(Cmt(Format('Global descriptor SET = %d and Binding = %d', [aSetIndex, D.Binding])));
+        end;
+
+        If SameText(DI.Name, GlobalObjectIDDescriptorBuf) and
+           (D is TvgDescriptorArray_SB_2UI) then
+        begin
+          SB.Append(Cmt('Storage BUFFER for storage of ObjectID'));
+          SB.Append(Cmt(Format('Global descriptor SET = %d and Binding = %d', [aSetIndex, D.Binding])));
+        end;
+      End;
 
       if SameText(aStageTag, 'Vertex') then
         Line := D.GetShaderDescriptorStringTemplate_Vertex(aSetIndex, D.Binding)
@@ -1360,16 +1369,29 @@ begin
     for I := 0 to aGP.Renderer.GlobalRes.Descriptors.Count - 1 do
     begin
       DI := aGP.Renderer.GlobalRes.Descriptors.Items[I];
-      if Assigned(DI) and
-         SameText(DI.Name, GlobalObjectIDDescriptor) and
+      if Assigned(DI) then
+      Begin
+        If SameText(DI.Name, GlobalObjectIDDescriptorImg) and
          (DI.Descriptor is TvgDescriptorArray_StorageImage) and
          ((DI.Descriptor.StageFlags = 0) or
           ((DI.Descriptor.StageFlags and
             TVkShaderStageFlags(VK_SHADER_STAGE_FRAGMENT_BIT)) <> 0)) then
-      begin
-        ObjectIDBufferName := DI.Name;
-        Break;
-      end;
+        begin
+          ObjectIDBufferName := DI.Name;
+          Break;
+        end;
+
+        If SameText(DI.Name, GlobalObjectIDDescriptorBuf) and
+         (DI.Descriptor is TvgDescriptorArray_SB_2UI) and
+         ((DI.Descriptor.StageFlags = 0) or
+          ((DI.Descriptor.StageFlags and
+            TVkShaderStageFlags(VK_SHADER_STAGE_FRAGMENT_BIT)) <> 0)) then
+        begin
+          ObjectIDBufferName := DI.Name;
+          Break;
+        end;
+
+      End;
     end;
 
   if Assigned(OS) and (RU_OBJECTSTORE in OS.ResourceUse) and
@@ -1450,7 +1472,7 @@ begin
       if ObjectIDBufferName = '' then
         raise EInvalidOperation.Create(
           'ObjectID output requires the global storage image descriptor "' +
-          GlobalObjectIDDescriptor + '"');
+          GlobalObjectIDDescriptorImg + 'or' + GlobalObjectIDDescriptorBuf + '"');
 
       SB.AppendLine('');
       if ModuleHasSpecialConstant(aGP.FragmentS, 'USE_OBJECTID') then

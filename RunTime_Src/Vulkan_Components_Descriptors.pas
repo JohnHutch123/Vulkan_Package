@@ -559,12 +559,14 @@ TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
     procedure SetSamplingDimension(const Value: TvgElementSamplingDimension);
     procedure SetElementCount(const Value: TvkUint32);
     procedure SetElementSamplingON(const Value: Boolean);
+    procedure SetWindowSync(const Value: Boolean);
 
   Protected
 
     fElementCount        : TvkUint32;    //count of data elements or size of
     fElementSub          : TvkUint32;    //Use for including Data Width eg Width and height
     fElementCountChanged : Boolean;
+    fWindowSync          : Boolean;
 
     fElementSamplingON : Boolean;
     fElementSampler    : TvgElementSampler;
@@ -582,6 +584,8 @@ TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
 
     function GetGLSLBaseTypeName: String; override;
 
+    Procedure VaildateWindowSize;
+
   Public
     constructor Create;
     destructor Destroy; override;
@@ -590,6 +594,7 @@ TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
     // On return Data points into the sampler's internal staging buffer for the
     // centre element; DataSize is ElementStride bytes.
     // Returns False when sampling is disabled, inactive, or out of range.
+
     Function GetElementData(aFrameIndex  : TvkUint32; ElementIndex : Integer; out Data : Pointer; out DataSize : TvkUint32) : Boolean;
   // Convenience 2D readback for this descriptor's current frame data
     Function GetElementData2D(aFrameIndex:TvkUint32; X, Y:Integer; out Data:Pointer; out DataSize:TvkUint32): Boolean;
@@ -598,6 +603,7 @@ TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
     Property StrideWidth       : TvkUint32                  read fElementSub        write SetStrideWidth;
     Property SamplingDimension : TvgElementSamplingDimension read fSamplingDimension write SetSamplingDimension;
     Property SamplingON        : Boolean read fElementSamplingON write SetElementSamplingON;
+    Property WindowSync        : Boolean read fWindowSync write SetWindowSync;
 
     Property StorageBufferFrameData[Index :Integer]:TvgDescriptor_PerFrame_StorageBuffer<T>  read GetStorageBufferFrame;
 
@@ -712,6 +718,7 @@ TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
     function GetDescriptorDataStorageImage(Index: Integer): TvgDescriptor_Data_StorageImage;
     function GetImageFormat: TvgFormat;
     procedure SetImageFormat(const Value: TvgFormat);
+
   protected
 
     function GetGLSLDeclarationBody: String; override;
@@ -748,12 +755,16 @@ TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
 
   end;
 
+  TvgDescriptorData_SB_2UI = Class(TvgDescriptor_Data_StorageBuffer<TvgVector2I>)
+
+  End;
+
 
   TvgDescriptorArray_SB_2UI = Class(TvgDescriptorArray_StorageBuffer<TvgVector2I>)
   Public
     Class Function GetPropertyName : String; override;
 
-    Function AddBuffer(aSize, aStride:TvkUint32; SampleON:Boolean ): Integer;   //returns the DescriptorIndex
+    Function AddBuffer: TvgDescriptorData_SB_2UI;   //returns the DescriptorIndex
 
  //   Property Buffer[aDescriptorIndex, aFrameIndex :TvkUint32]: TvgVector2I read GetBuffer write SetBuffer;
 
@@ -2681,26 +2692,26 @@ end;
 procedure TvgDescriptor_Data_StorageImage.VaildateWindowSize;
   Var Linker:TvgLinker;
 begin
-  If NOT fWindowSync then exit;
+    If NOT fWindowSync then exit;
 
-  If assigned(fDescriptor) and
-     assigned(fDescriptor.DescriptorItem) and
-     assigned(fDescriptor.DescriptorItem.DescriptorSet) and
-     assigned(fDescriptor.DescriptorItem.DescriptorSet.Linker) and
-     assigned(fDescriptor.DescriptorItem.DescriptorSet.Linker.SwapChain) then
-  Begin
-     Linker :=  fDescriptor.DescriptorItem.DescriptorSet.Linker;
+    If assigned(fDescriptor) and
+       assigned(fDescriptor.DescriptorItem) and
+       assigned(fDescriptor.DescriptorItem.DescriptorSet) and
+       assigned(fDescriptor.DescriptorItem.DescriptorSet.Linker) and
+       assigned(fDescriptor.DescriptorItem.DescriptorSet.Linker.SwapChain) then
+    Begin
+       Linker :=  fDescriptor.DescriptorItem.DescriptorSet.Linker;
 
-     fImageWidth  := Linker.SwapChain.ImageWidth;
-     fImageHeight := Linker.SwapChain.ImageHeight;
+       fImageWidth  := Linker.SwapChain.ImageWidth;
+       fImageHeight := Linker.SwapChain.ImageHeight;
 
-     if (Linker.RenderTarget = RT_FRAME) and ( Linker.FrameResolution<>1) then
-     begin
-       fImageWidth  := fImageWidth  * Linker.FrameResolution;         //check
-       fImageHeight := fImageHeight * Linker.FrameResolution;         //check
-     End;
+       if (Linker.RenderTarget = RT_FRAME) and ( Linker.FrameResolution<>1) then
+       begin
+         fImageWidth  := fImageWidth  * Linker.FrameResolution;         //check
+         fImageHeight := fImageHeight * Linker.FrameResolution;         //check
+       End;
 
-  End;
+    End;
 
 end;
 
@@ -3267,36 +3278,10 @@ begin
 end;
 
 Procedure TvgDescriptor_Data_StorageBuffer<T>.SetEnabled;
-var
-  I:Integer;
-  DF : TvgDescriptor_PerFrame_StorageBuffer<T>;
 begin
   inherited;   // activates fFrameData[] children, creating each fVulkanBuffer
 
-  if fElementSamplingON and (fElementCount > 0) then
-  begin
-    if not assigned(fElementSampler) then
-      fElementSampler := TvgElementSampler.Create
-    else
-      fElementSampler.SetActiveState(False);
-
-    fElementSampler.Device            := GetDevice;
-    fElementSampler.FrameCount        := Length(fFrameData);
-    fElementSampler.ElementStride     := SizeOf(T);
-    fElementSampler.ElementCount      := fElementCount;
-    fElementSampler.SampleRadius      := fSampleRadius;
-    fElementSampler.SamplingDimension := fSamplingDimension;
-    fElementSampler.StrideWidth       := fElementSub;
-
-    for I := 0 to Length(fFrameData) - 1 do
-    begin
-      DF := TvgDescriptor_PerFrame_StorageBuffer<T>(fFrameData[I]);
-      if assigned(DF) then
-        fElementSampler.SourceBuffer[I] := DF.fVulkanBuffer;
-    end;
-
-    fElementSampler.SetActiveState(True);
-  end;
+  VaildateWindowSize;    //if WindowSync then
 
 end;
 
@@ -3350,6 +3335,69 @@ begin
   if fElementSub = Value then exit;
   SetActiveState(False);
   fElementSub := Value;
+end;
+
+procedure TvgDescriptor_Data_StorageBuffer<T>.SetWindowSync(  const Value: Boolean);
+begin
+  If  fWindowSync = Value then exit;
+  SetActiveState(False) ;
+
+  fWindowSync := Value;
+end;
+
+procedure TvgDescriptor_Data_StorageBuffer<T>.VaildateWindowSize;
+  Var Linker : TvgLinker;
+      I:Integer;
+      DF : TvgDescriptor_PerFrame_StorageBuffer<T>;
+Begin
+
+    If fWindowSync and
+       assigned(fDescriptor) and
+       assigned(fDescriptor.DescriptorItem) and
+       assigned(fDescriptor.DescriptorItem.DescriptorSet) and
+       assigned(fDescriptor.DescriptorItem.DescriptorSet.Linker) and
+       assigned(fDescriptor.DescriptorItem.DescriptorSet.Linker.SwapChain) then
+    Begin
+       Linker :=  fDescriptor.DescriptorItem.DescriptorSet.Linker;
+
+       fElementCount :=  Linker.SwapChain.ImageWidth * Linker.SwapChain.ImageHeight;
+       fElementSub   :=  Linker.SwapChain.ImageWidth;
+
+       if (Linker.RenderTarget = RT_FRAME) and ( Linker.FrameResolution<>1) then
+       begin
+         fElementCount  := fElementCount  * Linker.FrameResolution * Linker.FrameResolution;         //check
+         fElementSub    := fElementSub * Linker.FrameResolution;         //check
+       End;
+
+    End;
+
+
+    if fElementSamplingON and (fElementCount > 0) then
+    begin
+      if not assigned(fElementSampler) then
+        fElementSampler := TvgElementSampler.Create
+      else
+        fElementSampler.SetActiveState(False);
+
+      fElementSampler.Device            := GetDevice;
+      fElementSampler.FrameCount        := Length(fFrameData);
+      fElementSampler.ElementStride     := SizeOf(T);
+      fElementSampler.ElementCount      := fElementCount;
+      fElementSampler.SampleRadius      := fSampleRadius;
+      fElementSampler.SamplingDimension := fSamplingDimension;
+      fElementSampler.StrideWidth       := fElementSub;
+
+      for I := 0 to Length(fFrameData) - 1 do
+      begin
+        DF := TvgDescriptor_PerFrame_StorageBuffer<T>(fFrameData[I]);
+        if assigned(DF) then
+          fElementSampler.SourceBuffer[I] := DF.fVulkanBuffer;
+      end;
+
+      fElementSampler.SetActiveState(True);
+    end;
+
+
 end;
 
 { TvgDescriptorArray_StorageBuffer<T> }
@@ -3626,65 +3674,29 @@ begin
 
 end;
 
-{ TvgDescriptor_Data_UBO_4x4MatrixD }
-(*
-function TvgDescriptor_Data_UBO_4x4MatrixD.GetGLSLBaseTypeName: String;
-begin
-  Result := 'mat4';
-end;
-
-function TvgDescriptor_Data_UBO_4x4MatrixD.GetMatrix(aFrameIndex:TvkUint32; aDataIndex:TvkUint32): TvgMatrix4x4D;
-  Var DF : TvgDescriptorPerFrameData;
-begin
-  Result := Default(TvgMatrix4x4D);
-  DF := FrameData[aFrameIndex];
-  If assigned(DF) and (DF is TvgDescriptor_PerFrame_UniformBuffer <TvgMatrix4x4D>) then
-  Begin
-    If (aDataIndex < TvgDescriptor_PerFrame_UniformBuffer <TvgMatrix4x4D>(DF).Data.ItemCount) then
-      Result := TvgDescriptor_PerFrame_UniformBuffer <TvgMatrix4x4D>(DF).Data.Items[aDataIndex];
-  End;
-end;
-
-procedure TvgDescriptor_Data_UBO_4x4MatrixD.SetMatrix(aFrameIndex:TvkUint32; aDataIndex:TvkUint32; const Value: TvgMatrix4x4D);
-  Var DF : TvgDescriptorPerFrameData;
-begin
-  DF := FrameData[aFrameIndex];
-  If assigned(DF) and (DF is TvgDescriptor_PerFrame_UniformBuffer <TvgMatrix4x4D>) then
-  Begin
-    If (aDataIndex < TvgDescriptor_PerFrame_UniformBuffer <TvgMatrix4x4D>(DF).Data.ItemCount) then
-      TvgDescriptor_PerFrame_UniformBuffer <TvgMatrix4x4D>(DF).Data.Items[aDataIndex] := Value;
-  End;
-end;
- *)
-
 
 { TvgDescriptorArray_SB_2UI }
 
-function TvgDescriptorArray_SB_2UI.AddBuffer(aSize, aStride: TvkUint32;  SampleON: Boolean): Integer;
+function TvgDescriptorArray_SB_2UI.AddBuffer : TvgDescriptorData_SB_2UI;
 var
-  SB : TvgDescriptor_Data_StorageBuffer<TvgVector2I>;
+  SB : TvgDescriptorData_SB_2UI;
+  I:Integer;
 begin
-  Result := -1;
-  If aSize=0 then exit;
+  Result := nil;
 
-  SB := TvgDescriptor_Data_StorageBuffer<TvgVector2I>.create;
-  SB.ElementCount:= aSize;
-  SB.StrideWidth := aStride;
+  SB := TvgDescriptorData_SB_2UI.create;
 
-  If aStride>1 then
-    SB.SamplingDimension := esdGrid2D;
+  I := AddStorageBuffer(SB);
 
-  SB.SamplingON  := True;
-
-  Result := AddStorageBuffer(SB);
-
-  If Result=-1 then
-    FreeAndNil(SB);
+  If I=-1 then
+    FreeAndNil(SB)
+  else
+    Result := SB;
 end;
 
 class function TvgDescriptorArray_SB_2UI.GetPropertyName: String;
 begin
-  Result := 'SB_2UI';
+  Result := 'StorageBuffer_2UI';
 end;
 
 Initialization

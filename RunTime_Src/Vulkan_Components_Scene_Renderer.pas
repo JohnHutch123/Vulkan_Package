@@ -48,6 +48,7 @@ type
   TvgScene = Class;
   TvgObjectStore = Class;
   TvgRenderEngine = Class;
+  TvgToolManager = Class;
 
   TvgObject = Class(TvgObject_Base)
   private
@@ -217,7 +218,7 @@ type
    //called attaching a RenderEngine to Scene
    Procedure ReConnectRenderEngines;          Override;
 
-
+   Function GetToolManager:TvgToolManager  ;
 
  Public
 
@@ -231,10 +232,6 @@ type
    Function GetObjectCount : Integer; Override;
    Function GetObjectStoreCount   : Integer; Override;
 
-
-//   Function GetObjectAtPointer(aPointer:Pointer): TvgObject;
-
- //  Function GetSceneGLSLHeaders:String;
 
    Procedure ClearScene; Override;
 
@@ -297,6 +294,7 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
    fScene                  : TvgScene;    //this is OK
 
    fObjectIDImage          : TvgDescriptorArray_StorageImage;
+   fObjectIDBuffer         : TvgDescriptorArray_SB_2UI;
 
     Function SetDisabled :Boolean; Override;
     Function SetEnabled  :Boolean; Override;
@@ -966,7 +964,7 @@ begin
   L:= self.fObjects.Count;
   If L=0 then exit;
   For I:=0 to L-1 do
-    If fObjects.Items[I].SelectON then
+    If fObjects.Items[I].Selectable then
     Begin
       Result := True;
       Exit;
@@ -1241,6 +1239,7 @@ var
   I, J : Integer;
   SD   : TvgObjectStore;
   R    : TvgBaseRenderEngine;
+  TM   : TvgToolManager;
 begin
   If NOT (fSceneState = SS_READY) then exit;
 
@@ -1248,6 +1247,12 @@ begin
   if fSceneData.Count = 0 then Exit;
 
   SetActiveState(False);
+
+  TM := GetToolManager;
+  If assigned(TM) then
+  Begin
+     TM.ClearSelection;
+  End;
 
   // STEP 1: Disconnect all stores from all renderers
   if Assigned(fRendererList) then
@@ -1402,6 +1407,17 @@ end;
 function TvgScene.GetObjectStoreCount: Integer;
 begin
   Result := fSceneData.count;
+end;
+
+function TvgScene.GetToolManager: TvgToolManager;
+begin
+ If assigned(fLinker) and
+    assigned(fLinker.ToolManager) and
+    (fLinker.ToolManager is TvgToolManager) then
+    Result := TvgToolManager(fLinker.ToolManager)
+ else
+    Result := nil;
+
 end;
 
 procedure TvgScene.Notification(AComponent: TComponent; Operation: TOperation);
@@ -1907,7 +1923,7 @@ begin
   If Assigned(Obj) then
   Begin
 
-    If Assigned(Obj) and Obj.SelectON then
+    If Assigned(Obj) and Obj.Selectable then
     Begin
       fSelectedObject := Obj;
 
@@ -2092,15 +2108,182 @@ procedure TvgRenderEngine.VaildateGlobalResources;
 //called in Create
  var     DI   : TvgDescriptorItem;
            DA  :TvgDescriptorArray;
-          SI  : TvgDescriptorArray_StorageImage;
-          SID : TvgDescriptor_Data_StorageImage;
+         FC : Integer;
 
+    Procedure SetUpForMPVMatrix;
+      Var
           Mat4: TvgDescriptorArray_UBO_4x4MatrixD;
           I: Integer;
-          FC :Integer;
           M:TvgMatrix4x4D;
+
+
+    Begin
+      DI:=fGlobalRes.Descriptors.Add ;
+
+      If assigned(DI) then
+      Begin
+        DI.Name           := GlobalViewProjectDescriptor;
+        DI.DescriptorName := TvgDescriptorArray_UBO_4x4MatrixD.GetPropertyName;   //will create the DA
+
+        If assigned(fLinker) then
+            DI.Device      := fLinker.ScreenDevice;
+
+        DA                 := DI.Descriptor;
+
+        If assigned(DA) then
+        Begin
+          DA.DescriptorItem   := DI;
+
+          DA.ResourceType :=  RT_VIEWPROJECTMAT;
+          DA.FrameCount   :=  FC;
+
+
+          If (DA is TvgDescriptorArray_UBO_4x4MatrixD)  then
+          Begin
+            Mat4 :=  TvgDescriptorArray_UBO_4x4MatrixD(DA );
+
+            Mat4.AddMatrix;      //add an new descriptor Data/frame data
+
+            M:=TvgMatrix4x4D.Identity;
+
+            For I:=0 to Mat4.frameCount-1 do
+              Mat4.Matrix[0, I, 0 ]:= M;
+          end;
+          DA.SetUploadFlags;
+        end;
+      End;
+
+    End;
+
+    Procedure SetUpForStorageImage;
+       var     SI  : TvgDescriptorArray_StorageImage;
+               SID : TvgDescriptor_Data_StorageImage;
+
+    Begin
+        DI := fGlobalRes.GetDescriptorItem(GlobalObjectIDDescriptorImg);
+        if Assigned(DI) and
+           (DI.Descriptor is TvgDescriptorArray_StorageImage) then
+          fObjectIDImage := TvgDescriptorArray_StorageImage(DI.Descriptor);
+
+
+        DI := fGlobalRes.Descriptors.Add ;
+
+        If assigned(DI) then
+        Begin
+          DI.Name          := GlobalObjectIDDescriptorImg;
+          If assigned(fLinker) then
+              DI.Device    := fLinker.ScreenDevice;
+
+          DI.DescriptorName := TvgDescriptorArray_StorageImage.GetPropertyName;
+          DA:= DI.Descriptor;
+
+          If assigned(DA) then
+          Begin
+
+            DA.ResourceType := RT_STORAGEIMAGE;
+            DA.DataFlow     := [DF_DOWN, DF_SAMPLING];
+            DA.SetStageFlags(TVkShaderStageFlags(VK_SHADER_STAGE_FRAGMENT_BIT));
+            DA.FrameCount   := FC;
+
+            If DA is TvgDescriptorArray_StorageImage then
+            Begin
+              SI := TvgDescriptorArray_StorageImage(DA);
+              SI.ImageFormat := R32G32_UINT;
+
+              SID := TvgDescriptor_Data_StorageImage.Create;
+
+           //   image width  set to swap chain size with WindowSync ON
+              SID.WindowSync  := True;
+              SID.PixelSample := True;
+              SID.PixRadius   := psr_1x1;
+
+              if SI.AddStorageImage(SID) < 0 then
+              Begin
+                SID.Free;
+                raise EInvalidOperation.Create(
+                  'Unable to create the global ObjectID storage image descriptor');
+              End;
+              fObjectIDImage := SI;
+
+            End;
+          end;
+        End;
+
+        DI := fGlobalRes.GetDescriptorItem(GlobalObjectIDDescriptorImg);
+        if Assigned(DI) and
+           (DI.Descriptor is TvgDescriptorArray_StorageImage) then
+          fObjectIDImage := TvgDescriptorArray_StorageImage(DI.Descriptor);
+
+    End;
+
+    Procedure SetUpForStorageBuffer;
+      Var SB:TvgDescriptorArray_SB_2UI;
+          DD:TvgDescriptorData_SB_2UI;
+
+           I:Integer;
+           W,H:Integer;
+    Begin
+        CustomAssert(assigned(fLinker), 'Linker NOT assigned',self);
+
+        H:=fLinker.SwapChain.ImageHeight;
+        W:=fLinker.SwapChain.ImageWidth;
+
+
+        DI := fGlobalRes.Descriptors.Add ;
+
+        If assigned(DI) then
+        Begin
+          DI.Name          := GlobalObjectIDDescriptorBuf;
+          If assigned(fLinker) then
+              DI.Device    := fLinker.ScreenDevice;
+
+          DI.DescriptorName := TvgDescriptorArray_SB_2UI.GetPropertyName;
+          DA:= DI.Descriptor;
+
+          If assigned(DA) then
+          Begin
+
+            DA.ResourceType := RT_SELECTVEC2;
+            DA.DataFlow     := [DF_UP, DF_DOWN, DF_SAMPLING];
+            DA.SetStageFlags(TVkShaderStageFlags(VK_SHADER_STAGE_FRAGMENT_BIT));
+            DA.FrameCount   := FC;
+
+
+            If DA is TvgDescriptorArray_SB_2UI then
+            Begin
+
+              SB := TvgDescriptorArray_SB_2UI(DA);
+
+              DD := SB.AddBuffer;
+              If assigned(DD) then
+              Begin
+                DD.WindowSync := True;
+                DD.SamplingON := True;
+                DD.SamplingDimension :=  esdGrid2D;
+
+              End;
+
+
+            End;
+          end;
+        End;
+
+        DI := fGlobalRes.GetDescriptorItem(GlobalObjectIDDescriptorBuf);
+        if Assigned(DI) and
+           (DI.Descriptor is TvgDescriptorArray_SB_2UI) then
+        Begin
+          fObjectIDBuffer := TvgDescriptorArray_SB_2UI(DI.Descriptor);
+        end;
+
+
+    End;
+
+
 begin
   CustomAssert(assigned(fGlobalRes),'Global Resource not assigned',Self);
+
+  fObjectIDImage :=nil;
+  fObjectIDBuffer:=nil;
 
 
   //simple Model/View/Proj Matrix
@@ -2114,41 +2297,7 @@ begin
 
   If (fGlobalRes.GetDescriptorItem(GlobalViewProjectDescriptor)=nil) then
   Begin
-
-    DI:=fGlobalRes.Descriptors.Add ;
-
-    If assigned(DI) then
-    Begin
-      DI.Name           := GlobalViewProjectDescriptor;
-      DI.DescriptorName := TvgDescriptorArray_UBO_4x4MatrixD.GetPropertyName;   //will create the DA
-
-      If assigned(fLinker) then
-          DI.Device      := fLinker.ScreenDevice;
-
-      DA                 := DI.Descriptor;
-
-      If assigned(DA) then
-      Begin
-        DA.DescriptorItem   := DI;
-
-        DA.ResourceType :=  RT_VIEWPROJECTMAT;
-        DA.FrameCount   :=  FC;
-
-
-        If (DA is TvgDescriptorArray_UBO_4x4MatrixD)  then
-        Begin
-          Mat4 :=  TvgDescriptorArray_UBO_4x4MatrixD(DA );
-
-          Mat4.AddMatrix;      //add an new descriptor Data/frame data
-
-          M:=TvgMatrix4x4D.Identity;
-
-          For I:=0 to Mat4.frameCount-1 do
-            Mat4.Matrix[0, I, 0 ]:= M;
-        end;
-        DA.SetUploadFlags;
-      end;
-    End;
+    SetUpForMPVMatrix;
   end else
   Begin
 
@@ -2156,56 +2305,19 @@ begin
   End;
 
 
-  If SelectON and (fGlobalRes.GetDescriptorItem(GlobalObjectIDDescriptor)=nil)  then     //all OK
+  If SelectON  then     //all OK
   Begin
 
-    DI := fGlobalRes.Descriptors.Add ;
+    Case fFlags.SelectMode of
+       smImageBuffer  :  SetUpForStorageImage;
+       smStorageBuffer:  SetUpForStorageBuffer;
+       smCustom: Begin
 
-    If assigned(DI) then
-    Begin
-      DI.Name          := GlobalObjectIDDescriptor;
-      If assigned(fLinker) then
-          DI.Device    := fLinker.ScreenDevice;
 
-      DI.DescriptorName := TvgDescriptorArray_StorageImage.GetPropertyName;
-      DA:= DI.Descriptor;
+       End;
 
-      If assigned(DA) then
-      Begin
 
-        DA.ResourceType := RT_STORAGEIMAGE;
-        DA.DataFlow     := [DF_DOWN, DF_SAMPLING];
-        DA.SetStageFlags(TVkShaderStageFlags(VK_SHADER_STAGE_FRAGMENT_BIT));
-        DA.FrameCount   := FC;
-
-        If DA is TvgDescriptorArray_StorageImage then
-        Begin
-          SI := TvgDescriptorArray_StorageImage(DA);
-          SI.ImageFormat := R32G32_UINT;
-
-          SID := TvgDescriptor_Data_StorageImage.Create;
-
-       //   image width  set to swap chain size with WindowSync ON
-          SID.WindowSync := True;
-          SID.PixelSample := True;
-          SID.PixRadius := psr_1x1;
-
-          if SI.AddStorageImage(SID) < 0 then
-          Begin
-            SID.Free;
-            raise EInvalidOperation.Create(
-              'Unable to create the global ObjectID storage image descriptor');
-          End;
-          fObjectIDImage := SI;
-
-        End;
-      end;
     End;
-
-    DI := fGlobalRes.GetDescriptorItem(GlobalObjectIDDescriptor);
-    if Assigned(DI) and
-       (DI.Descriptor is TvgDescriptorArray_StorageImage) then
-      fObjectIDImage := TvgDescriptorArray_StorageImage(DI.Descriptor);
 
   end;
 
