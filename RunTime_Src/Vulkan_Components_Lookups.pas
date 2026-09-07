@@ -80,6 +80,11 @@ Const
   CI_USE_DOUBLE    : Integer = 1;
   CI_POINT_SIZE_ON : Integer = 2;
 
+ //GLSL identifiers of the Specialisation Constants (shared by renderer and shader builder)
+  SC_USE_OBJECTID  = 'USE_OBJECTID';
+  SC_USE_DOUBLE    = 'USE_DOUBLE';
+  SC_POINT_SIZE_ON = 'POINT_SIZE_ON';
+
 
 Type
 

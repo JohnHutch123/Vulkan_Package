@@ -1,4 +1,4 @@
-﻿unit Vulkan_Components_ShaderBuilder;
+unit Vulkan_Components_ShaderBuilder;
 
 interface
 
@@ -32,7 +32,7 @@ Uses
 TYpe
 
 //???????????????????????????????????????????????????????????????????????????????
-//  TvgShaderBuilder � INTERFACE SECTION
+//  TvgShaderBuilder ? INTERFACE SECTION
 //  Add these declarations inside the "type" block of Vulkan_Components.pas,
 //  after the existing TvgRenderEngine forward declaration and before the
 //  TvgInstance class body.
@@ -67,14 +67,32 @@ TYpe
     Frag : TvgShaderStageResult;
   end;
 
+  // -- Resources discovered for the fragment stage ----------------------------
+  // Filled by TvgShaderBuilder.CollectFragmentResources and handed to every
+  // fragment main() hook so descendants can extend it without re-scanning.
+  TvgFragmentResources = record
+    ColorCount       : Integer;             // number of colour attachments (>= 1)
+    HasTexture       : Boolean;
+    SamplerName      : String;              // first fragment-visible sampler ("name" or "name[0]")
+    TexCoordName     : String;              // AT_TEXTURE interpolant, '' when absent
+    ColorName        : String;              // AT_COLOR   interpolant, '' when absent
+    ObjectIDName     : String;              // AT_OBJID   interpolant, '' when absent
+    ObjectIDExpr     : String;              // uvec2 expression written as the ObjectID
+    ObjectIDImage    : TvgDescriptorArray;  // global RT_STORAGEIMAGE target (smImageBuffer)
+    ObjectIDBuffer   : TvgDescriptorArray;  // global RT_SELECTVEC2 target  (smStorageBuffer)
+    ScreenSizePC     : TvgPushConstant;     // render-target size for buffer indexing
+    ScreenSizePCName : String;              // GLSL block/instance name of ScreenSizePC
+    UseObjectIDSpec  : Boolean;             // fragment module declares USE_OBJECTID
+  end;
+
   //???????????????????????????????????????????????????????????????????????????
   TvgShaderBuilder = Class(TvgBaseComponent)
   //
-  //  Links to:  TvgGraphicPipeline  (required � drives everything)
-  //             TvgRenderEngine     (optional � auto-resolved via Pipeline.Renderer)
-  //             TvgSubPass          (optional � auto-resolved via Pipeline.SubPass)
-  //             TvgBaseScene        (optional � reserved for future scene-level queries)
-  //             TvgBaseObjectStore  (optional � reserved for per-store overrides)
+  //  Links to:  TvgGraphicPipeline  (required ? drives everything)
+  //             TvgRenderEngine     (optional ? auto-resolved via Pipeline.Renderer)
+  //             TvgSubPass          (optional ? auto-resolved via Pipeline.SubPass)
+  //             TvgBaseScene        (optional ? reserved for future scene-level queries)
+  //             TvgBaseObjectStore  (optional ? reserved for per-store overrides)
   //
   //  Typical use:
   //    Builder.Pipeline := MyGraphicPipeline;
@@ -97,6 +115,8 @@ TYpe
     fLastVertexOutCount  : Integer;   // set by BuildVertexShader, checked by BuildAll
     fLastFragmentInCount : Integer;   // set by BuildFragmentShader, checked by BuildAll
 
+
+
     // ?? property setters ???????????????????????????????????????????????????
     procedure SetPipeline   (const Value: TvgGraphicPipeline);
     procedure SetScene      (const Value: TvgBaseScene);
@@ -108,95 +128,167 @@ TYpe
     Function SetDisabled:Boolean; override;
     Function SetEnabled:Boolean; override;
 
-    //?????????????????????????????????????????????????????????????????????????
-    //  Internal section builders � called by the three public Build methods
-    //?????????????????????????????????????????????????????????????????????????
+    //-------------------------------------------------------------------------
+    //  Extension model
+    //
+    //  Every section builder below is VIRTUAL.  Descendants normally only
+    //  need to override one of:
+    //    * CollectFragmentResources   - discover extra resources by name/type
+    //    * SB_FragmentColorExpression - custom shading expression
+    //    * SB_ObjectIDWrite*          - custom selection write (smCustom)
+    //    * SB_<Stage>UserCode         - append code at the end of main()
+    //  Stage tags are the strings 'Vertex' | 'Geometry' | 'Fragment' and are
+    //  shared with TvgDescriptorArray.GetShaderDescriptorStringTemplate_*.
+    //-------------------------------------------------------------------------
+
+    // Stage-tag helpers
+    function  StageTagToVkFlag(const aStageTag: String): TVkShaderStageFlags; virtual;
+    function  DescriptorVisibleToStage(aD: TvgDescriptorArray;
+                                       const aStageTag: String): Boolean; virtual;
+    function  PushConstantUsedByStage(const aPushConstant: TvgPushConstant;
+                                      const aStageTag: String): Boolean; virtual;
 
     // [FULL]  #version + required extensions
-    function  SB_Header(aUseDouble, aGeomStage, aDescriptorIndexing: Boolean): String;
+    function  SB_Header(aUseDouble, aGeomStage, aDescriptorIndexing: Boolean): String; virtual;
 
     // [FULL]  layout(constant_id=N) const <type> NAME = default;
-    //         Reads directly from a TvgShaderModule.SpecialConst collection.
-    function  SB_SpecialisationConstants(aModule: TvgShaderModule): String;
+    function  SB_SpecialisationConstants(aModule: TvgShaderModule): String; virtual;
 
-    // [FULL]  SET 0 � GlobalUBO (viewProject matrix) + optional ObjectID image
-    //         Controlled by RU_GLOBAL in GP.ResourceUse and Renderer.SelectON.
+    // [FULL]  SET 0 - GlobalUBO (viewProject matrix) + optional ObjectID target
     function  SB_GlobalSet(aRE: TvgBaseRenderEngine;
-                           const aStageTag: String): String;
+                           const aStageTag: String): String; virtual;
     function  SB_DescriptorSet(aDS: TvgDescriptorSet; aSetIndex: TvkUint32;
-                               const aStageTag, aTitle: String): String;
+                               const aStageTag, aTitle: String): String; virtual;
+    // Hook: extra comment lines emitted above a descriptor declaration.
+    function  SB_DescriptorComment(aDI: TvgDescriptorItem; aSetIndex: TvkUint32;
+                                   const aTitle: String): String; virtual;
 
-    // [INFRA] SET 1 � GraphicPipeRes descriptors
-    //         Delegates to TvgDescriptor.GetShaderDescriptorStringTemplate_*.
-    //         TvgDescriptor_Texture ? FULL.  UBO/SSBO ? stub until overridden.
-    //         aStageTag: 'Vertex' | 'Geometry' | 'Fragment'
+    // [INFRA] Object-store descriptor set
     function  SB_PipeSet(aGP: TvgGraphicPipeline; aSetIndex: TvkUint32;
-                         const aStageTag: String): String;
+                         const aStageTag: String): String; virtual;
+    function  SB_ModelSet(aGP: TvgGraphicPipeline;
+                          const aStageTag: String): String; virtual;
+    function  SB_PushConstants(aGP: TvgGraphicPipeline;
+                               const aStageTag: String): String; virtual;
 
     // [FULL]  layout(location=N) in <glsltype> <name>;
-    //         One line per TvgVertexAttributeDesc using GetShaderHeadTemplate.
-    function  SB_VertexInputs(aGP: TvgGraphicPipeline): String;
+    function  SB_VertexInputs(aGP: TvgGraphicPipeline): String; virtual;
 
     // [INFRA] layout(location=N) out <type> <name>;
-    //         Skips position (? gl_Position).  Uses AttType semantics.
     function  SB_VertexOutputs(aGP: TvgGraphicPipeline;
-                                out aOutCount: Integer): String;
+                               out aOutCount: Integer): String; virtual;
 
     // [INFRA] Matching layout(location=N) in for the fragment stage.
-    function  SB_FragmentInputs(aGP: TvgGraphicPipeline; out aInCount: Integer): String;
+    function  SB_FragmentInputs(aGP: TvgGraphicPipeline; out aInCount: Integer): String; virtual;
 
     // [FULL]  layout(location=N) out vec4 outColor[N]
-    //         + layout(location=M) out uvec2 outObjectID  when ObjectIDON.
     function  SB_FragmentOutputs(aGP: TvgGraphicPipeline;
-                                  aSP: TvgSubPass): String;
+                                 aSP: TvgSubPass): String; virtual;
 
-    // [FULL]  layout(triangles/points/lines) in/out  � from InputAssembly.Topology
-    function  SB_GeomLayout(aGP: TvgGraphicPipeline): String;
+    // Hook: fragment-stage layout qualifiers (early_fragment_tests etc.)
+    function  SB_FragmentPrologue(aGP: TvgGraphicPipeline): String; virtual;
 
-    // [INFRA] Geometry interpolant interface:
-    //         layout(loc=N) in  T nameIn[];
-    //         layout(loc=N) out T name;
-    function  SB_GeomInterface(aGP: TvgGraphicPipeline): String;
+    // [FULL]  layout(triangles/points/lines) in/out  - from InputAssembly.Topology
+    function  SB_GeomLayout(aGP: TvgGraphicPipeline): String; virtual;
 
-    function  ModuleUsesDouble(aModule: TvgShaderModule): Boolean;
+    // [INFRA] Geometry interpolant interface
+    function  SB_GeomInterface(aGP: TvgGraphicPipeline): String; virtual;
+
+    function  ModuleUsesDouble(aModule: TvgShaderModule): Boolean; virtual;
     function  ModuleHasSpecialConstant(aModule: TvgShaderModule;
                                        const aName: String): Boolean;
-    function  RequiresDescriptorIndexing(aGP: TvgGraphicPipeline): Boolean;
-    function  GlobalUsesDouble(aGP: TvgGraphicPipeline): Boolean;
-    function  ViewProjectionExpression(aGP: TvgGraphicPipeline): String;
-    function  ObjectStoreSetIndex(aGP: TvgGraphicPipeline): TvkUint32;
-    function  ModelSetIndex(aGP: TvgGraphicPipeline): TvkUint32;
-    function  SB_ModelSet(aGP: TvgGraphicPipeline;
-                          const aStageTag: String): String;
+    function  RequiresDescriptorIndexing(aGP: TvgGraphicPipeline): Boolean; virtual;
+    function  GlobalUsesDouble(aGP: TvgGraphicPipeline): Boolean; virtual;
+    function  ViewProjectionExpression(aGP: TvgGraphicPipeline): String; virtual;
+    function  ObjectStoreSetIndex(aGP: TvgGraphicPipeline): TvkUint32; virtual;
+    function  ModelSetIndex(aGP: TvgGraphicPipeline): TvkUint32; virtual;
 
-    //?????????????????????????????????????????????????????????????????????????
+    //-------------------------------------------------------------------------
+    //  Resource discovery
+    //-------------------------------------------------------------------------
+
+    // First global descriptor matching aResourceType (falls back to aName)
+    // that is visible to aStageTag.  nil when not found.
+    function  FindGlobalDescriptor(aGP: TvgGraphicPipeline;
+                                   aResourceType: TvgResourceType;
+                                   const aFallbackName, aStageTag: String): TvgDescriptorArray; virtual;
+
+    // First object-store descriptor of class aClass visible to aStageTag.
+    function  FindObjectStoreDescriptor(aGP: TvgGraphicPipeline;
+                                        aClass: TClass;
+                                        const aStageTag: String): TvgDescriptorItem; virtual;
+
+    // True when aPC carries the render-target size used by the ObjectID
+    // storage-buffer write.  Default: aPC is TvgPushConstant_2UI.
+    function  IsScreenSizePushConstant(aPC: TvgPushConstant): Boolean; virtual;
+    function  FindScreenSizePushConstant(aGP: TvgGraphicPipeline;
+                                         const aStageTag: String;
+                                         out aBlockName: String): TvgPushConstant; virtual;
+    // GLSL block/instance name for a push-constant item (Name or PushConstant_N).
+    function  PushConstantBlockName(aPCI: TvgPushConstantItem; aIndex: Integer): String; virtual;
+
+    // Interpolant name of the first attribute with aAttType, '' when absent.
+    function  FindInterpolantName(aGP: TvgGraphicPipeline;
+                                  aAttType: TvgAttributeType): String; virtual;
+
+    // Gathers everything SB_FragmentMain needs.  Override to add resources.
+    procedure CollectFragmentResources(aGP: TvgGraphicPipeline; aSP: TvgSubPass;
+                                       var R: TvgFragmentResources); virtual;
+
+    // True when the fragment stage writes an ObjectID for aGP.
+    function  ObjectIDWriteEnabled(aGP: TvgGraphicPipeline): Boolean; virtual;
+
+    //-------------------------------------------------------------------------
     //  main() builders
-    //?????????????????????????????????????????????????????????????????????????
+    //-------------------------------------------------------------------------
 
     // [MAIN]  Compilable skeleton; writes gl_Position, passes interpolants,
     //         handles POINT_SIZE_ON and USE_DOUBLE branches.
-    function  SB_VertexMain(aGP: TvgGraphicPipeline): String;
+    function  SB_VertexMain(aGP: TvgGraphicPipeline): String; virtual;
 
-    // [MAIN]  Compilable placeholder; samples first texture if present,
-    //         writes outObjectID branch when ObjectIDON.
-    function  SB_FragmentMain(aGP: TvgGraphicPipeline; aSP: TvgSubPass): String;
+    // [MAIN]  Colour + MRT + ObjectID write.
+    function  SB_FragmentMain(aGP: TvgGraphicPipeline; aSP: TvgSubPass): String; virtual;
+
+    // Expression assigned to outColor.
+    function  SB_FragmentColorExpression(aGP: TvgGraphicPipeline;
+                                         const R: TvgFragmentResources): String; virtual;
+
+    // ObjectID write.  Dispatches on Renderer.SelectMode and wraps the body
+    // in "if (USE_OBJECTID)" when that spec constant is present.
+    function  SB_ObjectIDWrite(aGP: TvgGraphicPipeline;
+                               const R: TvgFragmentResources): String; virtual;
+    function  SB_ObjectIDWriteImage (aGP: TvgGraphicPipeline;
+                                     const R: TvgFragmentResources;
+                                     const aIndent: String): String; virtual;
+    function  SB_ObjectIDWriteBuffer(aGP: TvgGraphicPipeline;
+                                     const R: TvgFragmentResources;
+                                     const aIndent: String): String; virtual;
+    function  SB_ObjectIDWriteCustom(aGP: TvgGraphicPipeline;
+                                     const R: TvgFragmentResources;
+                                     const aIndent: String): String; virtual;
 
     // [FULL]  Complete pass-through derived entirely from topology + attributes.
-    function  SB_GeometryMain(aGP: TvgGraphicPipeline): String;
+    function  SB_GeometryMain(aGP: TvgGraphicPipeline): String; virtual;
 
-    //?????????????????????????????????????????????????????????????????????????
-    //  Low-level type-mapping helpers (all deterministic)
-    //?????????????????????????????????????????????????????????????????????????
-    function  VkFmtToGLSL(aFmt: TVkFormat): String;
-    function  SpecTypeToGLSL(aST: TvgSpecialisationType): String;
-    function  TopologyGeomIn(aT: TvgPrimitiveTopology): String;
-    function  TopologyGeomOut(aT: TvgPrimitiveTopology): String;
-    function  TopologyMaxVerts(aT: TvgPrimitiveTopology): Integer;
-    function  AttIsPosition(aAT: TvgAttributeType): Boolean;
-    function  AttIsVertexOnly(aAT: TvgAttributeType): Boolean;
-    function  AttGLSLType(aAT: TvgAttributeType; aFmt: TVkFormat): String;
-    function  AttInterpolationQualifier(aFmt: TVkFormat): String;
-    function  AttInterpolantName(aAT: TvgAttributeType; aLoc: Integer): String;
+    // Hooks: extra statements emitted just before the closing brace of main().
+    function  SB_VertexUserCode  (aGP: TvgGraphicPipeline): String; virtual;
+    function  SB_GeometryUserCode(aGP: TvgGraphicPipeline): String; virtual;
+    function  SB_FragmentUserCode(aGP: TvgGraphicPipeline; aSP: TvgSubPass;
+                                  const R: TvgFragmentResources): String; virtual;
+
+    //-------------------------------------------------------------------------
+    //  Low-level type-mapping helpers
+    //-------------------------------------------------------------------------
+    function  VkFmtToGLSL(aFmt: TVkFormat): String; virtual;
+    function  SpecTypeToGLSL(aST: TvgSpecialisationType): String; virtual;
+    function  TopologyGeomIn(aT: TvgPrimitiveTopology): String; virtual;
+    function  TopologyGeomOut(aT: TvgPrimitiveTopology): String; virtual;
+    function  TopologyMaxVerts(aT: TvgPrimitiveTopology): Integer; virtual;
+    function  AttIsPosition(aAT: TvgAttributeType): Boolean; virtual;
+    function  AttIsVertexOnly(aAT: TvgAttributeType): Boolean; virtual;
+    function  AttGLSLType(aAT: TvgAttributeType; aFmt: TVkFormat): String; virtual;
+    function  AttInterpolationQualifier(aFmt: TVkFormat): String; virtual;
+    function  AttInterpolantName(aAT: TvgAttributeType; aLoc: Integer): String; virtual;
 
     // Formatting helpers
     function  Cmt(const aText: String): String;  // emits "// aText\n" or ''
@@ -205,7 +297,7 @@ TYpe
     // Resolve working pipeline (falls back to fPipeline)
     function  ResolvedGP(aGP: TvgGraphicPipeline): TvgGraphicPipeline;
     function  ResolvedSP(aGP: TvgGraphicPipeline; aSP: TvgSubPass): TvgSubPass;
-    function  ResolvedObjectStore(aGP: TvgGraphicPipeline): TvgBaseObjectStore;
+    function  ResolvedObjectStore(aGP: TvgGraphicPipeline): TvgBaseObjectStore; virtual;
 
   Public
     constructor Create(AOwner: TComponent); override;
@@ -218,13 +310,13 @@ TYpe
     // Build all active stages in one call.
     // Pass nil to use the assigned Pipeline / SubPass.
     function BuildAll(aGP: TvgGraphicPipeline = nil;
-                      aSP: TvgSubPass         = nil): TvgShaderBuildResult;
+                      aSP: TvgSubPass         = nil): TvgShaderBuildResult; virtual;
 
     // Individual stage builders.
-    function BuildVertexShader  (aGP: TvgGraphicPipeline = nil): String;
-    function BuildGeometryShader(aGP: TvgGraphicPipeline = nil): String;
+    function BuildVertexShader  (aGP: TvgGraphicPipeline = nil): String; virtual;
+    function BuildGeometryShader(aGP: TvgGraphicPipeline = nil): String; virtual;
     function BuildFragmentShader(aGP: TvgGraphicPipeline = nil;
-                                 aSP: TvgSubPass         = nil): String;
+                                 aSP: TvgSubPass         = nil): String; virtual;
 
     // Write .vert / .geom / .frag text files into OutputPath.
     procedure SaveSources(const aResult: TvgShaderBuildResult);
@@ -235,13 +327,13 @@ TYpe
                          aSP: TvgSubPass         = nil): Boolean;
 
   Published
-    // Required � the pipeline whose state is the source of truth.
+    // Required ? the pipeline whose state is the source of truth.
     property Pipeline    : TvgGraphicPipeline read fPipeline    write SetPipeline;
 
-    // Optional � for future scene-level queries (camera, lights, etc.)
+    // Optional ? for future scene-level queries (camera, lights, etc.)
     property Scene       : TvgBaseScene       read fScene       write SetScene;
 
-    // Optional � for per-store attribute overrides (future extension)
+    // Optional ? for per-store attribute overrides (future extension)
     property ObjectStore : TvgBaseObjectStore read fObjectStore write SetObjectStore
                            stored False;
 
@@ -263,7 +355,7 @@ implementation
 
 
 //???????????????????????????????????????????????????????????????????????????????
-//  TvgShaderBuilder � IMPLEMENTATION SECTION
+//  TvgShaderBuilder ? IMPLEMENTATION SECTION
 //  Paste the entire block below into the implementation section of
 //  Vulkan_Components.pas, after the existing TvgBaseObjectStore implementation.
 //???????????????????????????????????????????????????????????????????????????????
@@ -289,7 +381,25 @@ end;
 
 function TvgShaderBuilder.ModuleUsesDouble(aModule: TvgShaderModule): Boolean;
 begin
-  Result := ModuleHasSpecialConstant(aModule, 'USE_DOUBLE');
+  Result := ModuleHasSpecialConstant(aModule, SC_USE_DOUBLE);
+end;
+
+function TvgShaderBuilder.StageTagToVkFlag(const aStageTag: String): TVkShaderStageFlags;
+begin
+  if SameText(aStageTag, 'Vertex') then
+    Result := TVkShaderStageFlags(VK_SHADER_STAGE_VERTEX_BIT)
+  else if SameText(aStageTag, 'Geometry') then
+    Result := TVkShaderStageFlags(VK_SHADER_STAGE_GEOMETRY_BIT)
+  else
+    Result := TVkShaderStageFlags(VK_SHADER_STAGE_FRAGMENT_BIT);
+end;
+
+function TvgShaderBuilder.DescriptorVisibleToStage(aD: TvgDescriptorArray;
+  const aStageTag: String): Boolean;
+begin
+  Result := Assigned(aD) and
+            ((aD.StageFlags = 0) or
+             ((aD.StageFlags and StageTagToVkFlag(aStageTag)) <> 0));
 end;
 
 function TvgShaderBuilder.ModuleHasSpecialConstant(aModule: TvgShaderModule;
@@ -358,7 +468,7 @@ end;
 
 procedure TvgShaderBuilder.SetObjectStore(const Value: TvgBaseObjectStore);
 begin
-  // ObjectStore is not a TComponent � just hold the reference
+  // ObjectStore is not a TComponent ? just hold the reference
  // fObjectStore := Value;
   if fObjectStore = Value then exit;
   if Assigned(fObjectStore) and (fObjectStore is TComponent) then
@@ -433,6 +543,24 @@ begin
     Result := 1;
 end;
 
+function TvgShaderBuilder.PushConstantUsedByStage(const aPushConstant: TvgPushConstant;
+                                                  const aStageTag: String): Boolean;
+begin
+  Result := False;
+
+  if not Assigned(aPushConstant) then
+    Exit;
+
+  if SameText(aStageTag, 'Vertex') then
+    Result := (SS_VERTEX_BIT in  aPushConstant.ShaderFlags)
+  else
+  if SameText(aStageTag, 'Geometry') then
+    Result := (SS_GEOMETRY_BIT in  aPushConstant.ShaderFlags)
+  else
+  if SameText(aStageTag, 'Fragment') then
+    Result := (SS_FRAGMENT_BIT in  aPushConstant.ShaderFlags);
+end;
+
 function TvgShaderBuilder.ModelSetIndex(
   aGP: TvgGraphicPipeline): TvkUint32;
 var
@@ -483,10 +611,31 @@ end;
 function TvgShaderBuilder.ViewProjectionExpression(
   aGP: TvgGraphicPipeline): String;
 var
-  I: Integer;
-  DI: TvgDescriptorItem;
+  D: TvgDescriptorArray;
 begin
   Result := '';
+  D := FindGlobalDescriptor(aGP, RT_VIEWPROJECTMAT, GlobalViewProjectDescriptor, '');
+  if not Assigned(D) then
+    Exit;
+
+  Result := D.GetGLSLValueExpression;
+  if Result = '' then
+    Result := D.Name + '.value';
+end;
+
+//-----------------------------------------------------------------------------
+//  Resource discovery
+//-----------------------------------------------------------------------------
+
+function TvgShaderBuilder.FindGlobalDescriptor(aGP: TvgGraphicPipeline;
+  aResourceType: TvgResourceType; const aFallbackName, aStageTag: String): TvgDescriptorArray;
+var
+  I  : Integer;
+  DI : TvgDescriptorItem;
+  ByName: TvgDescriptorArray;
+begin
+  Result := nil;
+  ByName := nil;
   if not Assigned(aGP) or not Assigned(aGP.Renderer) or
      not Assigned(aGP.Renderer.GlobalRes) then
     Exit;
@@ -494,13 +643,150 @@ begin
   for I := 0 to aGP.Renderer.GlobalRes.Descriptors.Count - 1 do
   begin
     DI := aGP.Renderer.GlobalRes.Descriptors.Items[I];
+    if not Assigned(DI) or not Assigned(DI.Descriptor) then
+      Continue;
+    if (aStageTag <> '') and not DescriptorVisibleToStage(DI.Descriptor, aStageTag) then
+      Continue;
+
+    if (aResourceType <> RT_UNKNOWN) and (DI.Descriptor.ResourceType = aResourceType) then
+      Exit(DI.Descriptor);
+
+    if (ByName = nil) and (aFallbackName <> '') and SameText(DI.Name, aFallbackName) then
+      ByName := DI.Descriptor;
+  end;
+
+  Result := ByName;
+end;
+
+function TvgShaderBuilder.FindObjectStoreDescriptor(aGP: TvgGraphicPipeline;
+  aClass: TClass; const aStageTag: String): TvgDescriptorItem;
+var
+  OS : TvgBaseObjectStore;
+  I  : Integer;
+  DI : TvgDescriptorItem;
+begin
+  Result := nil;
+  OS := ResolvedObjectStore(aGP);
+  if not Assigned(OS) or not (RU_OBJECTSTORE in OS.ResourceUse) or
+     not Assigned(OS.ObjectStoreRes) then
+    Exit;
+
+  for I := 0 to OS.ObjectStoreRes.Descriptors.Count - 1 do
+  begin
+    DI := OS.ObjectStoreRes.Descriptors.Items[I];
     if Assigned(DI) and Assigned(DI.Descriptor) and
-       (DI.Descriptor.ResourceType = RT_VIEWPROJECTMAT) then
+       DI.Descriptor.InheritsFrom(aClass) and
+       DescriptorVisibleToStage(DI.Descriptor, aStageTag) then
+      Exit(DI);
+  end;
+end;
+
+function TvgShaderBuilder.IsScreenSizePushConstant(aPC: TvgPushConstant): Boolean;
+begin
+  Result := aPC is TvgPushConstant_2UI;
+end;
+
+function TvgShaderBuilder.FindScreenSizePushConstant(aGP: TvgGraphicPipeline;
+  const aStageTag: String; out aBlockName: String): TvgPushConstant;
+var
+  I  : Integer;
+  PCI: TvgPushConstantItem;
+begin
+  Result     := nil;
+  aBlockName := '';
+  if not Assigned(aGP) or not Assigned(aGP.PushConstantCol) then
+    Exit;
+
+  for I := 0 to aGP.PushConstantCol.Count - 1 do
+  begin
+    PCI := aGP.PushConstantCol[I];
+    if not Assigned(PCI) or not Assigned(PCI.PushConstant) then
+      Continue;
+    if IsScreenSizePushConstant(PCI.PushConstant) and
+       PushConstantUsedByStage(PCI.PushConstant, aStageTag) then
     begin
-      Result := DI.Name + '.value';
-      Exit;
+      aBlockName := PushConstantBlockName(PCI, I);
+      Exit(PCI.PushConstant);
     end;
   end;
+end;
+
+function TvgShaderBuilder.PushConstantBlockName(aPCI: TvgPushConstantItem;
+  aIndex: Integer): String;
+begin
+  Result := '';
+  if Assigned(aPCI) then
+    Result := Trim(aPCI.Name);
+  if Result = '' then
+    Result := 'PushConstant_' + IntToStr(aIndex);
+end;
+
+function TvgShaderBuilder.FindInterpolantName(aGP: TvgGraphicPipeline;
+  aAttType: TvgAttributeType): String;
+var
+  I   : Integer;
+  A   : TvgVertexAttributeDesc;
+  Loc : Integer;
+begin
+  Result := '';
+  if not Assigned(aGP) then
+    Exit;
+
+  Loc := 0;
+  for I := 0 to aGP.VertexInput.Attributes.Count - 1 do
+  begin
+    A := aGP.VertexInput.Attributes.Items[I];
+    if not Assigned(A) or AttIsVertexOnly(A.AttType) then
+      Continue;
+    if A.AttType = aAttType then
+      Exit(AttInterpolantName(A.AttType, Loc));
+    Inc(Loc);
+  end;
+end;
+
+procedure TvgShaderBuilder.CollectFragmentResources(aGP: TvgGraphicPipeline;
+  aSP: TvgSubPass; var R: TvgFragmentResources);
+var
+  DI: TvgDescriptorItem;
+begin
+  R := Default(TvgFragmentResources);
+
+  R.ColorCount := 1;
+  if Assigned(aSP) and (aSP.ColorAttachments.Count > 1) then
+    R.ColorCount := aSP.ColorAttachments.Count;
+
+  DI := FindObjectStoreDescriptor(aGP, TvgDescriptorArray_Texture, 'Fragment');
+  if Assigned(DI) then
+  begin
+    R.HasTexture  := True;
+    R.SamplerName := DI.Name;
+    if DI.Descriptor.BindingMode <> vgdbmSingle then
+      R.SamplerName := R.SamplerName + '[0]';
+  end;
+
+  R.TexCoordName := FindInterpolantName(aGP, AT_TEXTURE);
+  R.ColorName    := FindInterpolantName(aGP, AT_COLOR);
+  R.ObjectIDName := FindInterpolantName(aGP, AT_OBJID);
+
+  if R.ObjectIDName <> '' then
+    R.ObjectIDExpr := R.ObjectIDName + '.xy'
+  else
+    R.ObjectIDExpr := 'uvec2(0u)';
+
+  R.ObjectIDImage  := FindGlobalDescriptor(aGP, RT_STORAGEIMAGE,
+                        GlobalObjectIDDescriptorImg, 'Fragment');
+  R.ObjectIDBuffer := FindGlobalDescriptor(aGP, RT_SELECTVEC2,
+                        GlobalObjectIDDescriptorBuf, 'Fragment');
+  R.ScreenSizePC   := FindScreenSizePushConstant(aGP, 'Fragment', R.ScreenSizePCName);
+
+  R.UseObjectIDSpec := Assigned(aGP) and
+                       ModuleHasSpecialConstant(aGP.FragmentS, SC_USE_OBJECTID);
+end;
+
+function TvgShaderBuilder.ObjectIDWriteEnabled(aGP: TvgGraphicPipeline): Boolean;
+begin
+  Result := Assigned(aGP) and aGP.SelectON and Assigned(aGP.Renderer) and
+            (aGP.Renderer.SelectMode in [smImageBuffer, smStorageBuffer]);
 end;
 
 //???????????????????????????????????????????????????????????????????????????????
@@ -678,9 +964,9 @@ begin
     AT_INDEX:     BaseName := 'fragIndex';
   else  BaseName := 'fragAttr';
   end;
-  // aLoc is the running interpolant-location counter � unique per non-position
+  // aLoc is the running interpolant-location counter ? unique per non-position
   // attribute and identical across SB_VertexOutputs/SB_FragmentInputs/
-  // SB_GeomInterface/SB_VertexMain/SB_GeometryMain � so suffixing guarantees
+  // SB_GeomInterface/SB_VertexMain/SB_GeometryMain ? so suffixing guarantees
   // distinct identifiers even with two attributes of the same semantic type
   // (e.g. two TEXCOORD channels), and doubles as a readable location tag.
   Result := Format('%s%d', [BaseName, aLoc]);
@@ -782,10 +1068,10 @@ begin
 end;
 
 //???????????????????????????????????????????????????????????????????????????????
-//  [FULL]  SET 0 � global resources
+//  [FULL]  SET 0 ? global resources
 //
-//  Binding 0 : GlobalUBO  (viewProject mat4) � always when RU_GLOBAL
-//  Binding 1 : objectIDImage (rg32ui storage) � only when Renderer.SelectON
+//  Binding 0 : GlobalUBO  (viewProject mat4) ? always when RU_GLOBAL
+//  Binding 1 : objectIDImage (rg32ui storage) ? only when Renderer.SelectON
 //
 //  The actual set index is 0 because BindPipelineDescriptors binds GlobalRes
 //  first (SN starts at 0) and GraphicPipeRes second.
@@ -801,6 +1087,28 @@ begin
     'Global resources');
 end;
 
+function TvgShaderBuilder.SB_DescriptorComment(aDI: TvgDescriptorItem;
+  aSetIndex: TvkUint32; const aTitle: String): String;
+var
+  D: TvgDescriptorArray;
+begin
+  Result := '';
+  if not Assigned(aDI) or not Assigned(aDI.Descriptor) then
+    Exit;
+
+  D := aDI.Descriptor;
+  case D.ResourceType of
+    RT_STORAGEIMAGE:
+      Result := Cmt('Storage image target for ObjectID (selection)') +
+                Cmt(Format('SET = %d  Binding = %d', [aSetIndex, D.Binding]));
+    RT_SELECTVEC1,
+    RT_SELECTVEC2,
+    RT_SELECTVEC3:
+      Result := Cmt('Storage buffer target for ObjectID (selection)') +
+                Cmt(Format('SET = %d  Binding = %d', [aSetIndex, D.Binding]));
+  end;
+end;
+
 function TvgShaderBuilder.SB_DescriptorSet(aDS: TvgDescriptorSet;
   aSetIndex: TvkUint32; const aStageTag, aTitle: String): String;
 var
@@ -809,18 +1117,10 @@ var
   D: TvgDescriptorArray;
   Line: String;
   I: Integer;
-  StageFlag: TVkShaderStageFlags;
 begin
   Result := '';
   if not Assigned(aDS) or (aDS.Descriptors.Count = 0) then
     Exit;
-
-  if SameText(aStageTag, 'Vertex') then
-    StageFlag := TVkShaderStageFlags(VK_SHADER_STAGE_VERTEX_BIT)
-  else if SameText(aStageTag, 'Geometry') then
-    StageFlag := TVkShaderStageFlags(VK_SHADER_STAGE_GEOMETRY_BIT)
-  else
-    StageFlag := TVkShaderStageFlags(VK_SHADER_STAGE_FRAGMENT_BIT);
 
   SB := TStringBuilder.Create;
   try
@@ -833,26 +1133,10 @@ begin
         Continue;
 
       D := DI.Descriptor;
-      if (D.StageFlags <> 0) and ((D.StageFlags and StageFlag) = 0) then
+      if not DescriptorVisibleToStage(D, aStageTag) then
         Continue;
 
-      if SameText(aTitle, 'Global resources') then
-      Begin
-
-        If SameText(DI.Name, GlobalObjectIDDescriptorImg) and
-           (D is TvgDescriptorArray_StorageImage) then
-        begin
-          SB.Append(Cmt('Storage Image for storage of ObjectID'));
-          SB.Append(Cmt(Format('Global descriptor SET = %d and Binding = %d', [aSetIndex, D.Binding])));
-        end;
-
-        If SameText(DI.Name, GlobalObjectIDDescriptorBuf) and
-           (D is TvgDescriptorArray_SB_2UI) then
-        begin
-          SB.Append(Cmt('Storage BUFFER for storage of ObjectID'));
-          SB.Append(Cmt(Format('Global descriptor SET = %d and Binding = %d', [aSetIndex, D.Binding])));
-        end;
-      End;
+      SB.Append(SB_DescriptorComment(DI, aSetIndex, aTitle));
 
       if SameText(aStageTag, 'Vertex') then
         Line := D.GetShaderDescriptorStringTemplate_Vertex(aSetIndex, D.Binding)
@@ -881,7 +1165,7 @@ begin
 end;
 
 //???????????????????????????????????????????????????????????????????????????????
-//  [INFRA]  SET 1 � GraphicPipeRes descriptor bindings
+//  [INFRA]  SET 1 ? GraphicPipeRes descriptor bindings
 //
 //  Iterates GP.GraphicPipeRes.Descriptors and calls each TvgDescriptor's
 //  GetShaderDescriptorStringTemplate_<Stage>(set, binding) virtual.
@@ -913,6 +1197,48 @@ begin
     'Object-store resources');
 end;
 
+function TvgShaderBuilder.SB_PushConstants( aGP: TvgGraphicPipeline; const aStageTag: String): String;
+var
+  I: Integer;
+  PC: TvgPushConstantItem;
+  Line: String;
+  SB: TStringBuilder;
+begin
+  Result := '';
+  if not Assigned(aGP) or not Assigned(aGP.PushConstantCol) then
+    Exit;
+
+  SB := TStringBuilder.Create;
+  try
+    for I := 0 to aGP.PushConstantCol.Count - 1 do
+    begin
+      PC := aGP.PushConstantCol[I];
+
+      if not Assigned(PC) or not Assigned(PC.PushConstant) then
+        Continue;
+
+      if not PushConstantUsedByStage(PC.PushConstant, aStageTag) then
+        Continue;
+
+      Line := PC.PushConstant.GetGLSLDeclaration(PushConstantBlockName(PC, I));
+      if Trim(Line) = '' then
+        raise EArgumentException.CreateFmt(
+          '%s cannot generate a GLSL push constant declaration (item "%s")',
+          [PC.PushConstant.ClassName, PushConstantBlockName(PC, I)]);
+
+      if SB.Length = 0 then
+        SB.Append(Sep('Push constants'));
+      SB.Append(TrimRight(Line));
+      SB.AppendLine('');
+    end;
+
+    if SB.Length > 0 then
+      SB.AppendLine('');
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
 //???????????????????????????????????????????????????????????????????????????????
 //  [FULL]  Vertex attribute input declarations
 //  Uses TvgVertexAttributeDesc.GetShaderHeadTemplate which already produces
@@ -1033,7 +1359,7 @@ begin
 end;
 
 //???????????????????????????????????????????????????????????????????????????????
-//  [INFRA]  Fragment inputs � exact mirror of vertex outputs
+//  [INFRA]  Fragment inputs ? exact mirror of vertex outputs
 //???????????????????????????????????????????????????????????????????????????????
 
 function TvgShaderBuilder.SB_FragmentInputs(aGP: TvgGraphicPipeline;
@@ -1100,13 +1426,13 @@ begin
     SB.Append(Sep('Fragment outputs'));
 
     // Count color outputs from SubPass attachment collections
-    ColCount := 1;  // safe minimum � one output always exists
+    ColCount := 1;  // safe minimum ? one output always exists
 
     if Assigned(aSP) then
     begin
       ColCount := aSP.ColorAttachments.Count;
       // Resolve attachments are resolved automatically by the driver during
-      // the subpass � the fragment shader never writes to them directly, so
+      // the subpass ? the fragment shader never writes to them directly, so
       // they must NOT add extra output locations.
       if ColCount < 1 then ColCount := 1;
     end;
@@ -1126,6 +1452,18 @@ begin
   finally
     SB.Free;
   end;
+end;
+
+function TvgShaderBuilder.SB_FragmentPrologue(aGP: TvgGraphicPipeline): String;
+begin
+  Result := '';
+  if not ObjectIDWriteEnabled(aGP) then
+    Exit;
+
+  // Side-effect writes (imageStore / SSBO) are not discarded by a failed
+  // depth test unless the test is forced to run before the shader.
+  Result := Cmt('ObjectID writes must occur only after depth tests pass') +
+            'layout(early_fragment_tests) in;' + sLineBreak + sLineBreak;
 end;
 
 //???????????????????????????????????????????????????????????????????????????????
@@ -1211,13 +1549,13 @@ end;
 //  [MAIN]  Vertex main()
 //
 //  Deterministic parts (generated from state):
-//    � gl_Position = globalUBO.viewProject * vec4(<position_attr>, 1.0)
-//    � Pass-through assignments for every non-position interpolant
-//    � gl_PointSize branch guarded by the POINT_SIZE_ON spec constant
-//    � USE_DOUBLE branch with dvec4 cast
+//    ? gl_Position = globalUBO.viewProject * vec4(<position_attr>, 1.0)
+//    ? Pass-through assignments for every non-position interpolant
+//    ? gl_PointSize branch guarded by the POINT_SIZE_ON spec constant
+//    ? USE_DOUBLE branch with dvec4 cast
 //
 //  Stub parts (require application logic):
-//    � The model-space transform (currently identity / viewProject only)
+//    ? The model-space transform (currently identity / viewProject only)
 //???????????????????????????????????????????????????????????????????????????????
 function TvgShaderBuilder.SB_VertexMain(aGP: TvgGraphicPipeline): String;
 var
@@ -1303,18 +1641,20 @@ begin
       end;
     end;
 
-    //?? point size ???????????????????????????????????????????????????????????
+    //-- point size -----------------------------------------------------------
     if UsePoints then
     begin
       SB.AppendLine('');
-      if ModuleHasSpecialConstant(aGP.VertexS, 'POINT_SIZE_ON') then
+      if ModuleHasSpecialConstant(aGP.VertexS, SC_POINT_SIZE_ON) then
       begin
-        SB.AppendLine('    if (POINT_SIZE_ON)');
+        SB.AppendLine('    if (' + SC_POINT_SIZE_ON + ')');
         SB.AppendLine('        gl_PointSize = 4.0;');
       end
       else
         SB.AppendLine('    gl_PointSize = 4.0;');
     end;
+
+    SB.Append(SB_VertexUserCode(aGP));
 
     SB.AppendLine('}');
     Result := SB.ToString;
@@ -1323,16 +1663,32 @@ begin
   end;
 end;
 
+function TvgShaderBuilder.SB_VertexUserCode(aGP: TvgGraphicPipeline): String;
+begin
+  Result := '';
+end;
+
+function TvgShaderBuilder.SB_GeometryUserCode(aGP: TvgGraphicPipeline): String;
+begin
+  Result := '';
+end;
+
+function TvgShaderBuilder.SB_FragmentUserCode(aGP: TvgGraphicPipeline;
+  aSP: TvgSubPass; const R: TvgFragmentResources): String;
+begin
+  Result := '';
+end;
+
 //???????????????????????????????????????????????????????????????????????????????
 //  [MAIN]  Fragment main()
 //
 //  Deterministic parts:
-//    � Texture sample when a TvgDescriptor_Texture is present in GraphicPipeRes
-//    � Multi-render-target zero-fill for extra color outputs
-//    � ObjectID write branch when GP.ObjectIDON
+//    ? Texture sample when a TvgDescriptor_Texture is present in GraphicPipeRes
+//    ? Multi-render-target zero-fill for extra color outputs
+//    ? ObjectID write branch when GP.ObjectIDON
 //
 //  Stub parts:
-//    � Actual lighting / shading calculation
+//    ? Actual lighting / shading calculation
 //
 //  Outputs magenta (1,0,1,1) as a visible "not implemented" signal when
 //  no texture is present.
@@ -1340,166 +1696,33 @@ end;
 function TvgShaderBuilder.SB_FragmentMain(aGP: TvgGraphicPipeline;
                                           aSP: TvgSubPass): String;
 var
-  SB          : TStringBuilder;
-  I           : Integer;
-  DI          : TvgDescriptorItem;
-  SamplerName : String;
-  ColCount    : Integer;
-  HasTexture  : Boolean;
-  TexCoordName: String;
-  ColorName   : String;
-  ObjectIDName: String;
-  ObjectIDBufferName: String;
-  Loc         : Integer;
-  A           : TvgVertexAttributeDesc;
-  OS          : TvgBaseObjectStore;
-  ColorExpression: String;
+  SB : TStringBuilder;
+  R  : TvgFragmentResources;
+  I  : Integer;
 begin
-  SB          := TStringBuilder.Create;
-  SamplerName := '';
-  HasTexture  := False;
-  TexCoordName := '';
-  ColorName := '';
-  ObjectIDName := '';
-  ObjectIDBufferName := '';
-  OS := ResolvedObjectStore(aGP);
+  CollectFragmentResources(aGP, aSP, R);
 
-  if Assigned(aGP) and Assigned(aGP.Renderer) and
-     Assigned(aGP.Renderer.GlobalRes) then
-    for I := 0 to aGP.Renderer.GlobalRes.Descriptors.Count - 1 do
-    begin
-      DI := aGP.Renderer.GlobalRes.Descriptors.Items[I];
-      if Assigned(DI) then
-      Begin
-        If SameText(DI.Name, GlobalObjectIDDescriptorImg) and
-         (DI.Descriptor is TvgDescriptorArray_StorageImage) and
-         ((DI.Descriptor.StageFlags = 0) or
-          ((DI.Descriptor.StageFlags and
-            TVkShaderStageFlags(VK_SHADER_STAGE_FRAGMENT_BIT)) <> 0)) then
-        begin
-          ObjectIDBufferName := DI.Name;
-          Break;
-        end;
-
-        If SameText(DI.Name, GlobalObjectIDDescriptorBuf) and
-         (DI.Descriptor is TvgDescriptorArray_SB_2UI) and
-         ((DI.Descriptor.StageFlags = 0) or
-          ((DI.Descriptor.StageFlags and
-            TVkShaderStageFlags(VK_SHADER_STAGE_FRAGMENT_BIT)) <> 0)) then
-        begin
-          ObjectIDBufferName := DI.Name;
-          Break;
-        end;
-
-      End;
-    end;
-
-  if Assigned(OS) and (RU_OBJECTSTORE in OS.ResourceUse) and
-     Assigned(OS.ObjectStoreRes) and
-     (OS.ObjectStoreRes.Descriptors.Count > 0) then
-  begin
-    for I := 0 to OS.ObjectStoreRes.Descriptors.Count - 1 do
-    begin
-      DI := OS.ObjectStoreRes.Descriptors.Items[I];
-      if Assigned(DI) and
-         (DI.Descriptor is TvgDescriptorArray_Texture) and
-         ((DI.Descriptor.StageFlags = 0) or
-          ((DI.Descriptor.StageFlags and
-            TVkShaderStageFlags(VK_SHADER_STAGE_FRAGMENT_BIT)) <> 0)) then
-      begin
-        SamplerName := DI.Name;
-        if DI.Descriptor.BindingMode <> vgdbmSingle then
-          SamplerName := SamplerName + '[0]';
-        HasTexture  := True;
-        break;
-      end;
-    end;
-  end;
-
-  ColCount := 1;
-  if Assigned(aSP) then
-  begin
-    ColCount := aSP.ColorAttachments.Count;
-    if ColCount < 1 then ColCount := 1;
-  end;
-
-  Loc := 0;
-  if Assigned(aGP) then
-    for I := 0 to aGP.VertexInput.Attributes.Count - 1 do
-    begin
-      A := aGP.VertexInput.Attributes.Items[I];
-      if not Assigned(A) or AttIsVertexOnly(A.AttType) then
-        Continue;
-
-      if (A.AttType = AT_TEXTURE) and (TexCoordName = '') then
-        TexCoordName := AttInterpolantName(A.AttType, Loc);
-      if (A.AttType = AT_COLOR) and (ColorName = '') then
-        ColorName := AttInterpolantName(A.AttType, Loc);
-      if (A.AttType = AT_OBJID) and (ObjectIDName = '') then
-        ObjectIDName := AttInterpolantName(A.AttType, Loc);
-      Inc(Loc);
-    end;
-
-  if Assigned(OS) then
-    ColorExpression := OS.GetShaderFragmentColorExpression(
-      SamplerName, TexCoordName, ColorName)
-  else if HasTexture and (TexCoordName <> '') then
-    ColorExpression := 'texture(' + SamplerName + ', ' + TexCoordName + ')'
-  else if ColorName <> '' then
-    ColorExpression := ColorName
-  else
-    ColorExpression := 'vec4(1.0)';
-
+  SB := TStringBuilder.Create;
   try
     SB.AppendLine('void main()');
     SB.AppendLine('{');
 
-    //?? primary color output ??????????????????????????????????????????????????
-    SB.AppendLine('    outColor = ' + ColorExpression + ';');
+    //-- primary colour output ------------------------------------------------
+    SB.AppendLine('    outColor = ' + SB_FragmentColorExpression(aGP, R) + ';');
 
-    //?? additional MRT outputs ?????????????????????????????????????????????????
-    if ColCount > 1 then
+    //-- additional MRT outputs -----------------------------------------------
+    if R.ColorCount > 1 then
     begin
       SB.AppendLine('');
       SB.AppendLine('    // TODO: fill additional G-Buffer render targets');
-      for I := 1 to ColCount - 1 do
+      for I := 1 to R.ColorCount - 1 do
         SB.AppendLine(Format('    outColor%d = vec4(0.0);', [I]));
     end;
 
-    //?? ObjectID output ????????????????????????????????????????????????????????
-    if Assigned(aGP) and aGP.SelectON then
-    begin
-      if ObjectIDBufferName = '' then
-        raise EInvalidOperation.Create(
-          'ObjectID output requires the global storage image descriptor "' +
-          GlobalObjectIDDescriptorImg + 'or' + GlobalObjectIDDescriptorBuf + '"');
+    //-- ObjectID output ------------------------------------------------------
+    SB.Append(SB_ObjectIDWrite(aGP, R));
 
-      SB.AppendLine('');
-      if ModuleHasSpecialConstant(aGP.FragmentS, 'USE_OBJECTID') then
-      begin
-        SB.AppendLine('    if (USE_OBJECTID) {');
-        if ObjectIDName <> '' then
-          SB.AppendLine('        uvec4 ObjID = uvec4(' +
-            ObjectIDName + '.xy, 0u, 0u);')
-        else
-          SB.AppendLine('        uvec4 ObjID = uvec4(0u);');
-        SB.AppendLine('        ivec2 coord = ivec2(gl_FragCoord.xy);');
-        SB.AppendLine('        imageStore(' + ObjectIDBufferName +
-          ', coord, ObjID);');
-        SB.AppendLine('    }');
-      end
-      else
-      begin
-        if ObjectIDName <> '' then
-          SB.AppendLine('    uvec4 ObjID = uvec4(' +
-            ObjectIDName + '.xy, 0u, 0u);')
-        else
-          SB.AppendLine('    uvec4 ObjID = uvec4(0u);');
-        SB.AppendLine('    ivec2 coord = ivec2(gl_FragCoord.xy);');
-        SB.AppendLine('    imageStore(' + ObjectIDBufferName +
-          ', coord, ObjID);');
-      end;
-    end;
+    SB.Append(SB_FragmentUserCode(aGP, aSP, R));
 
     SB.AppendLine('}');
     Result := SB.ToString;
@@ -1508,8 +1731,122 @@ begin
   end;
 end;
 
+function TvgShaderBuilder.SB_FragmentColorExpression(aGP: TvgGraphicPipeline;
+  const R: TvgFragmentResources): String;
+var
+  OS: TvgBaseObjectStore;
+begin
+  OS := ResolvedObjectStore(aGP);
+  if Assigned(OS) then
+    Result := OS.GetShaderFragmentColorExpression(
+      R.SamplerName, R.TexCoordName, R.ColorName)
+  else if R.HasTexture and (R.TexCoordName <> '') then
+    Result := 'texture(' + R.SamplerName + ', ' + R.TexCoordName + ')'
+  else if R.ColorName <> '' then
+    Result := R.ColorName
+  else
+    Result := 'vec4(1.0)';
+end;
+
+//-----------------------------------------------------------------------------
+//  ObjectID write
+//
+//  SB_ObjectIDWrite selects the body by Renderer.SelectMode and wraps it in
+//  "if (USE_OBJECTID) { ... }" when the fragment module declares that spec
+//  constant.  Each body receives the indent to use for its statements.
+//-----------------------------------------------------------------------------
+function TvgShaderBuilder.SB_ObjectIDWrite(aGP: TvgGraphicPipeline;
+  const R: TvgFragmentResources): String;
+var
+  Body   : String;
+  Indent : String;
+begin
+  Result := '';
+  if not Assigned(aGP) or not aGP.SelectON or not Assigned(aGP.Renderer) then
+    Exit;
+
+  if R.UseObjectIDSpec then
+    Indent := '        '
+  else
+    Indent := '    ';
+
+  case aGP.Renderer.SelectMode of
+    smImageBuffer   : Body := SB_ObjectIDWriteImage (aGP, R, Indent);
+    smStorageBuffer : Body := SB_ObjectIDWriteBuffer(aGP, R, Indent);
+  else
+    Body := SB_ObjectIDWriteCustom(aGP, R, Indent);
+  end;
+
+  if Body = '' then
+    Exit;
+
+  Result := sLineBreak;
+  if R.UseObjectIDSpec then
+    Result := Result + '    if (' + SC_USE_OBJECTID + ') {' + sLineBreak +
+              Body +
+              '    }' + sLineBreak
+  else
+    Result := Result + Body;
+end;
+
+function TvgShaderBuilder.SB_ObjectIDWriteImage(aGP: TvgGraphicPipeline;
+  const R: TvgFragmentResources; const aIndent: String): String;
+begin
+  if not Assigned(R.ObjectIDImage) then
+    raise EInvalidOperation.Create(
+      'ObjectID output requires a global RT_STORAGEIMAGE descriptor ("' +
+      GlobalObjectIDDescriptorImg + '") visible to the fragment stage');
+
+  Result :=
+    aIndent + 'uvec4 ObjID = uvec4(' + R.ObjectIDExpr + ', 0u, 0u);' + sLineBreak +
+    aIndent + 'ivec2 coord = ivec2(gl_FragCoord.xy);' + sLineBreak +
+    aIndent + 'imageStore(' + R.ObjectIDImage.Name + ', coord, ObjID);' + sLineBreak;
+end;
+
+function TvgShaderBuilder.SB_ObjectIDWriteBuffer(aGP: TvgGraphicPipeline;
+  const R: TvgFragmentResources; const aIndent: String): String;
+var
+  SizeExpr : String;
+  ElemExpr : String;
+begin
+  if not Assigned(R.ObjectIDBuffer) then
+    raise EInvalidOperation.Create(
+      'ObjectID output requires a global RT_SELECTVEC2 storage buffer descriptor ("' +
+      GlobalObjectIDDescriptorBuf + '") visible to the fragment stage');
+
+  if not Assigned(R.ScreenSizePC) or (R.ScreenSizePCName = '') then
+    raise EInvalidOperation.Create(
+      'ObjectID storage buffer output requires a screen-size push constant ' +
+      '(TvgPushConstant_2UI) visible to the fragment stage');
+
+  SizeExpr := R.ScreenSizePC.GetGLSLValueExpression(R.ScreenSizePCName);
+  ElemExpr := R.ObjectIDBuffer.GetGLSLValueExpression('screenIndex');
+  if ElemExpr = '' then
+    raise EInvalidOperation.CreateFmt(
+      '%s does not provide a GLSL element expression for ObjectID output',
+      [R.ObjectIDBuffer.ClassName]);
+
+  Result :=
+    aIndent + 'ivec2 screenCoord = ivec2(gl_FragCoord.xy);' + sLineBreak +
+    aIndent + 'ivec2 screenSize  = ivec2(' + SizeExpr + ');' + sLineBreak +
+    aIndent + 'if (screenCoord.x >= 0 && screenCoord.y >= 0 &&' + sLineBreak +
+    aIndent + '    screenCoord.x < screenSize.x && screenCoord.y < screenSize.y)' + sLineBreak +
+    aIndent + '{' + sLineBreak +
+    aIndent + '    uint screenIndex = uint(screenCoord.y * screenSize.x + screenCoord.x);' + sLineBreak +
+    aIndent + '    ' + ElemExpr + ' = ' + R.ObjectIDExpr + ';' + sLineBreak +
+    aIndent + '}' + sLineBreak;
+end;
+
+function TvgShaderBuilder.SB_ObjectIDWriteCustom(aGP: TvgGraphicPipeline;
+  const R: TvgFragmentResources; const aIndent: String): String;
+begin
+  // smCustom: descendants override this (and ObjectIDWriteEnabled) to emit
+  // their own selection write.
+  Result := '';
+end;
+
 //???????????????????????????????????????????????????????????????????????????????
-//  [FULL]  Geometry main() � complete pass-through
+//  [FULL]  Geometry main() ? complete pass-through
 //
 //  This is the only main() that requires zero application-specific logic.
 //  The topology drives the vertex count, and every interpolant is forwarded
@@ -1560,6 +1897,7 @@ begin
     SB.AppendLine('        EmitVertex();');
     SB.AppendLine('    }');
     SB.AppendLine('    EndPrimitive();');
+    SB.Append(SB_GeometryUserCode(aGP));
     SB.AppendLine('}');
     Result := SB.ToString;
   finally
@@ -1614,6 +1952,7 @@ begin
     SB.Append(SB_GlobalSet(GP.Renderer, 'Vertex'));
     SB.Append(SB_PipeSet(GP, ObjectStoreSetIndex(GP), 'Vertex'));
     SB.Append(SB_ModelSet(GP, 'Vertex'));
+    SB.Append(SB_PushConstants(GP, 'Vertex'));
     SB.Append(SB_VertexInputs(GP));                            // [FULL]
     SB.Append(SB_VertexOutputs(GP, OutCount));                    // [INFRA]
     fLastVertexOutCount := OutCount;
@@ -1665,6 +2004,7 @@ begin
     SB.Append(SB_GlobalSet(GP.Renderer, 'Geometry'));
     SB.Append(SB_PipeSet(GP, ObjectStoreSetIndex(GP), 'Geometry'));
     SB.Append(SB_ModelSet(GP, 'Geometry'));
+    SB.Append(SB_PushConstants(GP, 'Geometry'));
     SB.Append(SB_GeomInterface(GP));                           // [INFRA]
     SB.AppendLine('');
     SB.Append(SB_GeometryMain(GP));                            // [FULL]
@@ -1714,15 +2054,11 @@ begin
     SB.Append(SB_Header(GlobalUsesDouble(GP), False,
       RequiresDescriptorIndexing(GP)));
     SB.Append(SB_SpecialisationConstants(GP.FragmentS));       // [FULL]
-    if GP.SelectON then
-    begin
-      SB.Append(Cmt('ObjectID image writes must occur only after depth tests pass'));
-      SB.AppendLine('layout(early_fragment_tests) in;');
-      SB.AppendLine('');
-    end;
+    SB.Append(SB_FragmentPrologue(GP));
     SB.Append(SB_GlobalSet(GP.Renderer, 'Fragment'));
     SB.Append(SB_PipeSet(GP, ObjectStoreSetIndex(GP), 'Fragment'));
     SB.Append(SB_ModelSet(GP, 'Fragment'));
+    SB.Append(SB_PushConstants(GP, 'Fragment'));
     SB.Append(SB_FragmentInputs(GP,InCount));                  // [INFRA]
     fLastFragmentInCount := InCount;
     SB.Append(SB_FragmentOutputs(GP, SP));                     // [FULL]
@@ -1779,7 +2115,7 @@ begin
  end;
 
 //???????????????????????????????????????????????????????????????????????????????
-//  SaveSources  �  write .vert / .geom / .frag text files
+//  SaveSources  ?  write .vert / .geom / .frag text files
 //???????????????????????????????????????????????????????????????????????????????
 procedure TvgShaderBuilder.SaveSources(const aResult: TvgShaderBuildResult);
 
@@ -1806,7 +2142,7 @@ begin
 end;
 
 //???????????????????????????????????????????????????????????????????????????????
-//  CompileAll  �  save sources then call OnCompile for every active stage
+//  CompileAll  ?  save sources then call OnCompile for every active stage
 //???????????????????????????????????????????????????????????????????????????????
 function TvgShaderBuilder.CompileAll(aGP: TvgGraphicPipeline;
                                       aSP: TvgSubPass): Boolean;

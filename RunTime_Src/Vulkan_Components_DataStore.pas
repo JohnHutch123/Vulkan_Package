@@ -154,13 +154,7 @@ type
                                  out ABufferInfo: TVulkanBufferInfo);
 
     procedure DestroyVulkanBuffer(var ABufferInfo: TVulkanBufferInfo);
- (*
-    procedure CopyBufferToDevice(aTransferPool: TvgCommandBufferPool;
-                                 const ASrcData: TBytes;
-                                 ASize, AOffset: TVkDeviceSize;
-                                 aFrameIndex: Integer;
-                                 ABuffer: TpvVulkanBuffer);
-  *)
+
     procedure SetFrameCount(const Value: Integer);
 
     // Generic data setters (work on global indices)

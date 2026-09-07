@@ -1,4 +1,4 @@
-ï»¿unit Vulkan_Components_Scene_Renderer;
+unit Vulkan_Components_Scene_Renderer;
 
 {------------------------------------------------------------------------------
   Vulkan_Components_Scene.pas - REFACTORED VERSION
@@ -288,7 +288,6 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
     fSceene: TvgScene;
     procedure SetScene(const Value: TvgScene);
 
-
  Protected
 
    fScene                  : TvgScene;    //this is OK
@@ -450,7 +449,7 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
     property OrbitButton   : TvgMouseButton     read fOrbitButton  write SetOrbitButton  default vgmbLeft;
     property PanButton     : TvgMouseButton     read fPanButton    write SetPanButton    default vgmbMiddle;
     property DollyButton   : TvgMouseButton     read fDollyButton  write SetDollyButton  default vgmbRight;
-    // 0=XZ(horizontal), 1=XY(vertical), 2=YZ(side) â€” used for object drag
+    // 0=XZ(horizontal), 1=XY(vertical), 2=YZ(side) — used for object drag
     property DragPlaneAxis : Integer            read fDragPlaneAxis write SetDragPlaneAxis default 0;
 
     property OnObjectPicked : TvgObjectPickedEvent     read fOnObjectPicked write fOnObjectPicked;
@@ -1087,7 +1086,7 @@ procedure TvgObjectStore.ClearData;
   Var J,I:Integer;
 begin
 
-// ClearGraphicPipes is unsafe â€” use DisConnectDataFromSceneandRenderer instead
+// ClearGraphicPipes is unsafe — use DisConnectDataFromSceneandRenderer instead
   // which calls SP.RemoveGraphicPipe before clearing the dictionary.
   If assigned(fScene) and assigned(fScene.fRendererList) then
     for J := 0 to fScene.fRendererList.Count-1 do
@@ -1115,26 +1114,26 @@ var
   SHS: TvgShaderSpecialisationItem;
 begin
 
-    // Shader files â€” ObjectStore owns these
+    // Shader files — ObjectStore owns these
     GP.BuildShaderVertexName( fShaderBaseVertName);
  //   GP.GeometryS.FileName := fGe                      FINISH
     GP.BuildShaderFRagmentName(fShaderBaseFragName);
 
     GP.UseShaders         := fUseShaders;        // new property, not hardcoded [PS_VERTEX, PS_FRAGMENT]
 
-    // Topology â€” ObjectStore owns this
+    // Topology — ObjectStore owns this
     GP.InputAssembly.Topology := GetVGPrimitiveTopology(fTopology);
 
     if GP.InputAssembly.Topology = POINT_LIST then
     begin
       SHS := GP.VertexS.SpecialConst.Add;
-      SHS.Name := 'POINT_SIZE_ON';
+      SHS.Name := SC_POINT_SIZE_ON;
       SHS.SpecType := TS_BOOLEAN;
       SHS.SpecTValue := 'TRUE';
       SHS.ConstantID := CI_POINT_SIZE_ON;
     end;
 
-    // Rasterizer â€” ObjectStore owns these (new properties)
+    // Rasterizer — ObjectStore owns these (new properties)
     GP.Rasterizer.PolygonMode := GetVGPolygonMode(fPolygonMode);   // default POLYGON_FILL
     GP.Rasterizer.CullMode    := GetVGCullMode(fCullMode);      // default CULL_BACK (not NONE)
     GP.Rasterizer.FrontFace   := GetVGFrontFace(fFrontFace);     // default FF_CLOCKWISE
@@ -1210,8 +1209,8 @@ begin
       if assigned(ObjStr) then
       begin
         ObjStr.BuildAGraphicPipeline(aRenderer, SP);
-        // Note: do NOT activate here â€” ActivateGraphicPipeLines does that
-        // Note: do NOT set ObjStr.Active := True here â€” it may already be active
+        // Note: do NOT activate here — ActivateGraphicPipeLines does that
+        // Note: do NOT set ObjStr.Active := True here — it may already be active
         //       for another renderer and its SetEnabled would re-run UpdateGraphicPipelines
       end;
     end;
@@ -1469,12 +1468,12 @@ begin
   Aspect := aTarget.GetViewportAspect;
 
   // Build a VP matrix correct for this renderer's viewport.
-  // FAspectRatio on the camera is NEVER written â€” it remains the camera's
+  // FAspectRatio on the camera is NEVER written — it remains the camera's
   // "design" aspect (used for tools, ray-casting, frustum culling etc.)
   // Each renderer gets its own freshly-computed projection every frame.
   aTarget.SetViewProjectMatrix(aFrameIndex,  Cam.GetViewProjectionMatrixForAspect(Aspect));
 
-  // Future global data â€” each also receives the correct per-renderer context:
+  // Future global data — each also receives the correct per-renderer context:
   // aTarget.SetLightData(aFrameIndex, fLights.BuildShaderBlock);
   // aTarget.SetTimeData(aFrameIndex, fTimeAccumulator);
 end;
@@ -1773,9 +1772,9 @@ end;
 function TvgToolManager.GetDragPlaneNormal: TpvVector3;
 begin
   case fDragPlaneAxis of
-    0 : Result := TpvVector3.Create(0, 1, 0);   // XZ  â€” horizontal (Y-up world)
-    1 : Result := TpvVector3.Create(0, 0, 1);   // XY  â€” vertical, facing +Z
-    2 : Result := TpvVector3.Create(1, 0, 0);   // YZ  â€” vertical, facing +X
+    0 : Result := TpvVector3.Create(0, 1, 0);   // XZ  — horizontal (Y-up world)
+    1 : Result := TpvVector3.Create(0, 0, 1);   // XY  — vertical, facing +Z
+    2 : Result := TpvVector3.Create(1, 0, 0);   // YZ  — vertical, facing +X
   else
     Result := TpvVector3.Create(0, 1, 0);
   end;
@@ -1805,7 +1804,7 @@ begin
   Ray  := Cam.ScreenToWorldRay(aX, aY, W, H);
   Orig := Cam.Position;
 
-  // Rayâ€“plane intersection:  t = dot(planePoint - rayOrigin, planeNormal)
+  // Ray–plane intersection:  t = dot(planePoint - rayOrigin, planeNormal)
   //                              / dot(ray, planeNormal)
   Denom := aPlaneNormal.x * Ray.x +
            aPlaneNormal.y * Ray.y +
@@ -1940,7 +1939,7 @@ begin
   End
   else
   Begin
-    // Clicked on background â€” deselect
+    // Clicked on background — deselect
     ClearSelection;
   End;
 end;
@@ -2014,7 +2013,7 @@ begin
           TAM_CAMERA_ORBIT,
           TAM_CAMERA_PAN,
           TAM_CAMERA_DOLLY:
-            ; // Camera-gesture sub-modes â€” handled in DoMouseMove
+            ; // Camera-gesture sub-modes — handled in DoMouseMove
         end;
       End;
     end;
@@ -2160,13 +2159,22 @@ procedure TvgRenderEngine.VaildateGlobalResources;
                SID : TvgDescriptor_Data_StorageImage;
 
     Begin
+    //tidy up
+        DI := fGlobalRes.GetDescriptorItem(GlobalObjectIDDescriptorBuf);
+        if Assigned(DI) and assigned(fObjectIDBuffer) and (fObjectIDBuffer.ClassType = DI.ClassType) then
+           FreeAndNil(fObjectIDBuffer);   //will free from TCollection
+
         DI := fGlobalRes.GetDescriptorItem(GlobalObjectIDDescriptorImg);
+        If not assigned(DI) then
+          DI               := fGlobalRes.Descriptors.Add ;
+
         if Assigned(DI) and
-           (DI.Descriptor is TvgDescriptorArray_StorageImage) then
-          fObjectIDImage := TvgDescriptorArray_StorageImage(DI.Descriptor);
-
-
-        DI := fGlobalRes.Descriptors.Add ;
+           (DI.Descriptor is TvgDescriptorArray_SB_2UI)
+           and assigned(fObjectIDBuffer) then
+        Begin
+          fObjectIDBuffer.free;
+          fObjectIDBuffer:=nil;
+        End;
 
         If assigned(DI) then
         Begin
@@ -2219,17 +2227,22 @@ procedure TvgRenderEngine.VaildateGlobalResources;
     Procedure SetUpForStorageBuffer;
       Var SB:TvgDescriptorArray_SB_2UI;
           DD:TvgDescriptorData_SB_2UI;
-
            I:Integer;
-           W,H:Integer;
+
+
+          GP : TvgGraphicPipeline;
+
     Begin
-        CustomAssert(assigned(fLinker), 'Linker NOT assigned',self);
 
-        H:=fLinker.SwapChain.ImageHeight;
-        W:=fLinker.SwapChain.ImageWidth;
+    //tidy up
+        DI := fGlobalRes.GetDescriptorItem(GlobalObjectIDDescriptorImg);
+        if Assigned(DI) and assigned(fObjectIDImage) and  (fObjectIDImage.ClassType = DI.ClassType) then
+           FreeAndNil(fObjectIDImage);
 
+        DI := fGlobalRes.GetDescriptorItem(GlobalObjectIDDescriptorBuf);
+        If not assigned(DI) then
+          DI               := fGlobalRes.Descriptors.Add ;
 
-        DI := fGlobalRes.Descriptors.Add ;
 
         If assigned(DI) then
         Begin
@@ -2244,7 +2257,7 @@ procedure TvgRenderEngine.VaildateGlobalResources;
           Begin
 
             DA.ResourceType := RT_SELECTVEC2;
-            DA.DataFlow     := [DF_UP, DF_DOWN, DF_SAMPLING];
+            DA.DataFlow     := [ DF_DOWN, DF_SAMPLING];
             DA.SetStageFlags(TVkShaderStageFlags(VK_SHADER_STAGE_FRAGMENT_BIT));
             DA.FrameCount   := FC;
 
@@ -2257,9 +2270,9 @@ procedure TvgRenderEngine.VaildateGlobalResources;
               DD := SB.AddBuffer;
               If assigned(DD) then
               Begin
-                DD.WindowSync := True;
+                DD.WindowSync := True;   //important to track render window size
                 DD.SamplingON := True;
-                DD.SamplingDimension :=  esdGrid2D;
+              //  DD.SamplingDimension :=  esdGrid2D;
 
               End;
 
@@ -2274,6 +2287,7 @@ procedure TvgRenderEngine.VaildateGlobalResources;
         Begin
           fObjectIDBuffer := TvgDescriptorArray_SB_2UI(DI.Descriptor);
         end;
+
 
 
     End;
@@ -2312,8 +2326,6 @@ begin
        smImageBuffer  :  SetUpForStorageImage;
        smStorageBuffer:  SetUpForStorageBuffer;
        smCustom: Begin
-
-
        End;
 
 
@@ -2328,7 +2340,9 @@ end;
 
 procedure TvgRenderEngine.ConfigureGraphicPipelineFromRenderPass( GP: TvgGraphicPipeline);
    Var SHS : TvgShaderSpecialisationItem;
-
+       PCI:TvgPushConstantItem;
+       PCUI: TvgPushConstant_2UI;
+       V:   TvgVector2I;
 begin
   // MSAA from RenderPass
   if fRenderPass.MSAAOn then
@@ -2348,7 +2362,7 @@ begin
     SHS := GP.VertexS.SpecialConst.add;    //vertex
     If assigned(SHS) then
     Begin
-      SHS.Name       :=  'USE_OBJECTID' ;
+      SHS.Name       := SC_USE_OBJECTID;
       SHS.SpecType   :=  TS_BOOLEAN;
       SHS.SpecTValue := 'TRUE';
       SHS.ConstantID := CI_USE_OBJECTID;
@@ -2357,11 +2371,29 @@ begin
     SHS := GP.FragmentS.SpecialConst.add;  //Fragment
     If assigned(SHS) then
     Begin
-      SHS.Name       := 'USE_OBJECTID';
+      SHS.Name       := SC_USE_OBJECTID;
       SHS.SpecType   :=  TS_BOOLEAN;
       SHS.SpecTValue := 'TRUE';
       SHS.ConstantID := CI_USE_OBJECTID;
     end;
+
+    If fFlags.SelectMode = smStorageBuffer then
+    Begin
+      PCI:=GP.PushConstantCol.add;
+      PCI.Name := Format( 'inScreenSize_%d',[PCI.Index]);
+
+      If assigned(PCI) then
+      Begin
+        PCI.PushConstantName := TvgPushConstant_2UI.GetPropertyName;
+
+
+        If assigned(PCI.PushConstant) and (PCI.PushConstant is  TvgPushConstant_2UI) then
+        Begin
+          PCUI := TvgPushConstant_2UI(PCI.PushConstant);
+          PCUI.ShaderFlags := [SS_FRAGMENT_BIT];
+        End;
+      End;
+    End;
   end;
 
   if ShaderUseDouble then
@@ -2369,21 +2401,84 @@ begin
     SHS := GP.VertexS.SpecialConst.add;    //vertex only
     If assigned(SHS) then
     Begin
-      SHS.Name       :=  'USE_DOUBLE' ;
+      SHS.Name       := SC_USE_DOUBLE;
       SHS.SpecType   :=  TS_BOOLEAN;
       SHS.SpecTValue := 'TRUE';
       SHS.ConstantID := CI_USE_DOUBLE;
     end;
   end;
+
+
 end;
 
 function TvgRenderEngine.GetObjectAtLocation(aFrameIndex: TvkUint32; Shift: TShiftState; X, Y: Integer): TvgObject;
 var
-  DD: TvgDescriptor_Data_StorageImage;
-  Pixel: TvgPixelData;
-  ObjectAddress: UInt64;
   Candidate: TObject;
   SampleX, SampleY: Integer;
+      ObjectAddress: UInt64;
+
+
+  Procedure HandleImageLookup;
+  Var
+      DD: TvgDescriptor_Data_StorageImage;
+      Pixel: TvgPixelData;
+
+  Begin
+       CustomAssert(Assigned(fObjectIDImage), 'Object Select image NOT created', self);
+
+       if Assigned(fLinker) and (fLinker.RenderTarget = RT_FRAME) then
+       begin
+         SampleX := (X * Integer(fLinker.FrameResolution)) + (Integer(fLinker.FrameResolution) div 2);
+         SampleY := (Y * Integer(fLinker.FrameResolution)) + (Integer(fLinker.FrameResolution) div 2);
+       end else
+       Begin
+         SampleX := X;
+         SampleY := Y ;
+       End;
+
+       DD := fObjectIDImage.StorageImageData[0];    //MUST be zero
+       if not Assigned(DD) or
+          not DD.GetPixelData(aFrameIndex, Shift, SampleX, SampleY, Pixel) then
+         Exit;
+
+       ObjectAddress := Combine32BitTo64Bit(UInt64(Pixel.R32G32_UINT.G), UInt64(Pixel.R32G32_UINT.R));   //low/high  CHECK
+  End;
+
+  Procedure HandleBufferLookup;
+    Var DD: TvgDescriptorData_SB_2UI;
+        aData:Pointer;
+        aDataSize:TvkUint32;
+        Vec2 : TvgVector2I;
+
+  Begin
+       CustomAssert(Assigned(fObjectIDBuffer), 'Object Select BUFFER NOT created', self);
+
+       if Assigned(fLinker) and (fLinker.RenderTarget = RT_FRAME) then
+       begin
+         SampleX := (X * Integer(fLinker.FrameResolution)) + (Integer(fLinker.FrameResolution) div 2);
+         SampleY := (Y * Integer(fLinker.FrameResolution)) + (Integer(fLinker.FrameResolution) div 2);
+       end else
+       Begin
+         SampleX := X;
+         SampleY := Y ;
+       End;
+
+       DD := TvgDescriptorData_SB_2UI(fObjectIDBuffer.SB_Descriptor[0]);    //MUST be zero
+       if not Assigned(DD) and
+          DD.GetElementData2D(aFrameIndex,  SampleX, SampleY, aData, aDataSize) and
+          (aDataSize=SizeOf(TvgVector2I)) then
+       Begin
+          Vec2:= TvgVector2I(aData^);
+          ObjectAddress := Combine32BitTo64Bit(UInt64(Vec2.X), UInt64(Vec2.Y));   //low/high  CHECK
+       End;
+
+  End;
+
+  Procedure HandleCustomLookup;
+  Begin
+
+
+  End;
 begin
   Result := Nil;
 
@@ -2391,28 +2486,18 @@ begin
   if not SelectON then exit;
   If not assigned(fScene) or (fScene.GetObjectCount=0) then exit;
 
-// CustomAssert(Assigned(fScene),'Scene NOT connected',self);
+  ObjectAddress:=0;
 
- CustomAssert(Assigned(fObjectIDImage), 'Object Select image NOT created', self);
+ // fix image/buffer
 
- if Assigned(fLinker) and (fLinker.RenderTarget = RT_FRAME) then
- begin
-   SampleX := (X * Integer(fLinker.FrameResolution)) + (Integer(fLinker.FrameResolution) div 2);
-   SampleY := (Y * Integer(fLinker.FrameResolution)) + (Integer(fLinker.FrameResolution) div 2);
- end else
- Begin
-   SampleX := X;
-   SampleY := Y ;
- End;
+  case self.FFlags.SelectMode of
+      smImageBuffer   : HandleImageLookup;      //use an image buffer to manage Object IDs
+      smStorageBuffer : HandleBufferLookup;    /// use a storage Buffer to manage Object IDs
+      smCustom        : HandleCustomLookup;            //use a costom method
 
- DD := fObjectIDImage.StorageImageData[0];    //MUST be zero
- if not Assigned(DD) or
-    not DD.GetPixelData(aFrameIndex, Shift, SampleX, SampleY, Pixel) then
-   Exit;
 
- //ObjectAddress := (UInt64(Pixel.R32G32_UINT.G) shl 32) or UInt64(Pixel.R32G32_UINT.R);
+  end;
 
- ObjectAddress := Combine32BitTo64Bit(UInt64(Pixel.R32G32_UINT.G), UInt64(Pixel.R32G32_UINT.R));   //low/high  CHECK
 
  if ObjectAddress = 0 then
    Exit;
@@ -2455,9 +2540,6 @@ end;
 function TvgRenderEngine.SetEnabled: Boolean;
 begin
   Result := Inherited;
-
-
-
 
 end;
 

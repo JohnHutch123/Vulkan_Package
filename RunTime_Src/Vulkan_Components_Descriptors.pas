@@ -198,9 +198,7 @@ Type
     procedure SetItem(Index: Integer; const Value: T);
   Protected
 
-    fDataArray    : Array of TvgGenericDataArray<T>;
-//    fDataArray    : TvgGenericDataArray<T>;
-    //match the Frames in Flight
+    fDataArray    : Array of TvgGenericDataArray<T>;  //frame data
 
     Function SetDisabled :Boolean; Override;
     Function SetEnabled  :Boolean; Override;
@@ -245,6 +243,8 @@ Type
     Procedure UpLoadDescriptorData (aFrameIndex:TvkUint32;
                                     aGraphicPool:TvgCommandBufferPool;
                                     aTransferPool:TvgCommandBufferPool);   Override;
+     procedure ClearDataOnGPU(aIndex:Integer; aTransferPool: TvgCommandBufferPool; aCommandBuffer: TvgCommandBuffer = nil); Override;
+
 
     Property Data : TvgGenericDataArray<T> Read fData;
   End;
@@ -280,6 +280,7 @@ Type
     function GetGLSLLayoutQualifier: String; Override;
 
   Public
+    function GetGLSLValueExpression(const aIndexExpr: String = ''): String; Override;
     constructor Create(AOwner: TComponent); override;
 
     Function AddUniformBuffer( aDescriptorData: TvgDescriptor_Data_UniformBuffer<T>):Integer;
@@ -331,6 +332,9 @@ Type
     Procedure UpLoadDescriptorData(aFrameIndex:TvkUint32;
                                    aGraphicPool:TvgCommandBufferPool;
                                    aTransferPool:TvgCommandBufferPool);  Override;
+
+     procedure ClearDataOnGPU(aIndex:Integer;aTransferPool: TvgCommandBufferPool; aCommandBuffer: TvgCommandBuffer = nil); Override;
+
 
 
     Function LoadTexture(aFileName:String;    Var aGLSLIndex:TvkUint32):Boolean;   Overload;
@@ -408,9 +412,8 @@ Type
     Function AddSharedTexture(aTextureName, aFileName: String): Integer;
     Function RemoveTexture(aDataTexture : TvgDescriptor_Data_Texture):Boolean;
 
+
     Property TextureData[Index:Integer] : TvgDescriptor_Data_Texture  Read GetDescriptor_Data_Texture ;
-
-
 
   end;
 
@@ -548,6 +551,9 @@ TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
                                     aGraphicPool  : TvgCommandBufferPool;
                                     aTransferPool : TvgCommandBufferPool); Override;
 
+    procedure ClearDataOnGPU(aIndex:Integer; aTransferPool: TvgCommandBufferPool; aCommandBuffer: TvgCommandBuffer = nil); Override;
+
+
     Property Data : TvgGenericDataArray<T> Read fData;
 
   End;
@@ -619,6 +625,7 @@ TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
     function GetGLSLLayoutQualifier: String; Override;
 
   Public
+    function GetGLSLValueExpression(const aIndexExpr: String = ''): String; Override;
     constructor Create(AOwner: TComponent); override;
 
     Function AddStorageBuffer( aData_SB: TvgDescriptor_Data_StorageBuffer<T>):Integer;
@@ -652,11 +659,13 @@ TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
     Constructor Create;
     Destructor Destroy; Override;
 
-    Procedure ClearDescriptor(aCommandBuffer:TvgCommandBuffer) ;  //Clear the value in Vulkan
+  //  Procedure ClearDescriptor(aCommandBuffer:TvgCommandBuffer) ;  //Clear the value in Vulkan
+
 
     Procedure UpLoadDescriptorData (aFrameIndex:TvkUint32;
                                     aGraphicPool:TvgCommandBufferPool;
                                     aTransferPool:TvgCommandBufferPool);   Override;
+     procedure ClearDataOnGPU(aIndex:Integer;aTransferPool: TvgCommandBufferPool; aCommandBuffer: TvgCommandBuffer = nil); Override;
 
 
   End;
@@ -727,7 +736,7 @@ TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
   public
     class function GetPropertyName: String; override;
     constructor Create(AOwner: TComponent); override;
-    procedure ClearDescriptor(aCommandBuffer: TvgCommandBuffer); override;
+  //  procedure ClearDescriptor(aCommandBuffer: TvgCommandBuffer); override;
 
     function AddStorageImage(aStorageImageData: TvgDescriptor_Data_StorageImage): Integer;
     function RemoveStorageImage(aStorageImageData: TvgDescriptor_Data_StorageImage): Boolean;
@@ -774,17 +783,34 @@ TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
 
 
 
- (*
-  //Matrix 4x4 Push Constant
-  TvgPushConstant_Matrix4x4D = Class(TvgPushConstant_Data<TvgMatrix4x4D>)
+
+  //2x Unsigned Integer Push Constant (e.g. object/instance IDs, per-draw indices, etc.)
+  //Shader-stage visibility is inherited from TvgPushConstant.ShaderFlags -
+  //set that (design-time in the Object Inspector, or in code) to target
+  //the Vertex Shader, Fragment Shader, or both.
+
+  TvgPushConstant_2UI = Class(TvgPushConstant_Data<TvgVector2I>)
+  Private
+    Function  GetValue : TvgVector2I;
+    Procedure SetValue(const Value : TvgVector2I);
+
   Protected
-    Function SetDisabled :Boolean; Override;
-    Function SetEnabled  :Boolean; Override;
+
+
   Public
     Class Function GetPropertyName : String; Override;
 
+    Constructor Create(AOwner: TComponent);  Override;
+
+    function GetGLSLDeclaration(const aBlockName: String): String; Override;
+
+    Procedure SetValues(const aX, aY : Cardinal);  //convenience helper - sets both components in one call
+
+    Procedure SetupData(FrameIndex:TvkUint32;Linker:TvgLinker);Override;
+
+    Property Value : TvgVector2I read GetValue write SetValue;  //the single struct pushed to the shader
   End;
- *)
+
 
 function GetGLSLTypeNameForPascalType(const aTypeName: String): String;  //must be global
 
@@ -1024,6 +1050,12 @@ begin
    Result :=  SizeOf(T);
 end;
 
+
+procedure TvgDescriptor_PerFrame_UniformBuffer<T>.ClearDataOnGPU(aIndex:Integer; aTransferPool: TvgCommandBufferPool; aCommandBuffer: TvgCommandBuffer = nil);
+begin
+
+
+end;
 
 {TvgDescriptor_FrameData_UBO<T>}
 
@@ -2071,7 +2103,8 @@ var
 begin
   Inherited;
 
-  If not ((DF_UP in GetDataFlow) or (DF_DOWN in GetDataFlow)) then exit;
+  If Not(DF_UP   in GetDataFlow) and
+     Not(DF_DOWN in GetDataFlow) then exit;
 
   If assigned(fDescriptorData) and (fDescriptorData is TvgDescriptor_Data_StorageBuffer<T>) then
     DD := TvgDescriptor_Data_StorageBuffer<T>(fDescriptorData)
@@ -2202,6 +2235,123 @@ begin
   End;
 end;
 
+procedure TvgDescriptor_PerFrame_StorageBuffer<T>.ClearDataOnGPU(aIndex:Integer; aTransferPool: TvgCommandBufferPool; aCommandBuffer: TvgCommandBuffer = nil);
+var
+  aCommand : TvgCommandBuffer;
+  Queue    : TpvVulkanQueue;
+  Barrier  : TVkBufferMemoryBarrier;
+  Size     : TVkDeviceSize;
+  aFrameIndex : Integer;
+begin
+
+  if not Assigned(fVulkanBuffer) then   Exit;
+  If aIndex<0 then exit;
+
+  Size := fVulkanBuffer.Size;
+
+  if Size = 0 then  Exit;
+
+  If assigned(aCommandBuffer) then
+  Begin
+     aCommand := aCommandBuffer  ;
+
+  end else
+  Begin
+     if not Assigned(aTransferPool) then  Exit;
+     Queue := aTransferPool.Queue[aIndex];
+     CustomAssert(Assigned(Queue), 'Transfer Queue NOT available.');
+
+     aCommand := aTransferPool.AcquireUploadCommand(aIndex);
+     aCommand.Active := True;
+     aCommand.BeginRecording;
+
+  End;
+  if not Assigned(aCommand) then   Exit;
+
+  try
+
+    // ------------------------------------------------------------
+    // 1. Make previous buffer accesses visible to the transfer
+    //    operation.
+    //
+    //    This is important if this particular per-frame buffer
+    //    has previously been used as a shader storage buffer.
+    // ------------------------------------------------------------
+    Barrier                     := Default(TVkBufferMemoryBarrier);
+
+    Barrier.sType               :=  VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+    Barrier.srcAccessMask       := TVkAccessFlags(VK_ACCESS_SHADER_READ_BIT) or
+                                   TVkAccessFlags(VK_ACCESS_SHADER_WRITE_BIT);
+    Barrier.dstAccessMask       := TVkAccessFlags(VK_ACCESS_TRANSFER_WRITE_BIT);
+    Barrier.srcQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
+    Barrier.dstQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
+    Barrier.buffer              :=   fVulkanBuffer.Handle;
+    Barrier.offset              := 0;
+    Barrier.size                := Size;
+
+    aCommand.CmdPipelineBarrier(  TVkPipelineStageFlags(VK_PIPELINE_STAGE_VERTEX_SHADER_BIT) or
+                                  TVkPipelineStageFlags(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) or
+                                  TVkPipelineStageFlags(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
+                                  TVkPipelineStageFlags(VK_PIPELINE_STAGE_TRANSFER_BIT),
+                                  0,
+                                  0, nil,
+                                  1, @Barrier,
+                                  0, nil
+                                );
+
+
+    // ------------------------------------------------------------
+    // 2. Fill the entire buffer with zero.
+    // ------------------------------------------------------------
+    aCommand.CmdFillBuffer(fVulkanBuffer.Handle,
+                            0,
+                            Size,
+                            0
+                          );
+
+
+    // ------------------------------------------------------------
+    // 3. Make the transfer writes available to subsequent shader
+    //    reads/writes.
+    // ------------------------------------------------------------
+    Barrier.srcAccessMask := TVkAccessFlags(VK_ACCESS_TRANSFER_WRITE_BIT);
+    Barrier.dstAccessMask :=  TVkAccessFlags(VK_ACCESS_SHADER_READ_BIT) or
+                              TVkAccessFlags(VK_ACCESS_SHADER_WRITE_BIT);
+
+    aCommand.CmdPipelineBarrier( TVkPipelineStageFlags(VK_PIPELINE_STAGE_TRANSFER_BIT),
+                                TVkPipelineStageFlags(VK_PIPELINE_STAGE_VERTEX_SHADER_BIT) or
+                                TVkPipelineStageFlags(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) or
+                                TVkPipelineStageFlags(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
+                                0,
+                                0, nil,
+                                1, @Barrier,
+                                0, nil
+                              );
+
+
+    If NOT assigned(aCommandBuffer) then
+    Begin
+
+      aCommand.EndRecording;
+      if aCommand.CommandCount > 0 then
+
+        aCommand.ExecuteCommand(  Queue,
+                                  TVkPipelineStageFlags(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT),
+                                  nil,
+                                  nil,
+                                  True,
+                                  True
+                                );
+
+      aTransferPool.ReleaseCommand(aCommand);
+    End;
+
+  finally
+
+  end;
+
+end;
+
 function TvgDescriptor_PerFrame_StorageBuffer<T>.GetWriteDescriptorPayload(
   out aBufInfo: TVkDescriptorBufferInfo;
   out aImgInfo: TVkDescriptorImageInfo): Boolean;
@@ -2223,46 +2373,86 @@ end;
 
 { TvgDescriptor_PerFrame_StorageImage }
 
-procedure TvgDescriptor_PerFrame_StorageImage.ClearDescriptor(aCommandBuffer: TvgCommandBuffer);
+procedure TvgDescriptor_PerFrame_StorageImage.ClearDataOnGPU(aIndex:Integer; aTransferPool: TvgCommandBufferPool; aCommandBuffer: TvgCommandBuffer = nil);
 var
- DD: TvgDescriptor_Data_StorageImage;
- Barrier: TVkImageMemoryBarrier;
+ DD            : TvgDescriptor_Data_StorageImage;
+ Barrier       : TVkImageMemoryBarrier;
+ aCommand    : TvgCommandBuffer;
+  Queue    : TpvVulkanQueue;
+
+
 begin
- if not Assigned(aCommandBuffer) or not Active or
-    not Assigned(fStorageImageBuffer) or
-    not (DescriptorData is TvgDescriptor_Data_StorageImage) then
-   Exit;
+   if not Active or
+      not Assigned(fStorageImageBuffer) or
+      not (DescriptorData is TvgDescriptor_Data_StorageImage) then  Exit;
 
- DD := TvgDescriptor_Data_StorageImage(DescriptorData);
- Barrier := Default(TVkImageMemoryBarrier);
- Barrier.sType := VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
- Barrier.srcAccessMask := TVkAccessFlags(VK_ACCESS_SHADER_WRITE_BIT);
- Barrier.dstAccessMask := TVkAccessFlags(VK_ACCESS_TRANSFER_WRITE_BIT);
- Barrier.oldLayout := VK_IMAGE_LAYOUT_GENERAL;
- Barrier.newLayout := VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
- Barrier.srcQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
- Barrier.dstQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
- Barrier.image := fStorageImageBuffer.Image.Handle;
- Barrier.subresourceRange := DD.fSubRange;
- aCommandBuffer.CmdPipelineBarrier(
-   TVkPipelineStageFlags(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT),
-   TVkPipelineStageFlags(VK_PIPELINE_STAGE_TRANSFER_BIT),
-   0, 0, nil, 0, nil, 1, @Barrier);
+    If assigned(aCommandBuffer) then
+    Begin
+       aCommand:=aCommandBuffer;
+    end else
+    Begin
+       if not Assigned(aTransferPool) then  Exit;
+       Queue := aTransferPool.Queue[aIndex];
+       CustomAssert(Assigned(Queue), 'Transfer Queue NOT available.');
 
- aCommandBuffer.CmdClearColorImage(
-   fStorageImageBuffer.Image.Handle,
-   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-   @DD.fClearCol,
-   1, @DD.fSubRange);
+       aCommand := aTransferPool.AcquireUploadCommand(aIndex);
+       aCommand.Active := True;
+       aCommand.BeginRecording;
 
- Barrier.srcAccessMask := TVkAccessFlags(VK_ACCESS_TRANSFER_WRITE_BIT);
- Barrier.dstAccessMask := TVkAccessFlags(VK_ACCESS_SHADER_WRITE_BIT);
- Barrier.oldLayout := VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
- Barrier.newLayout := VK_IMAGE_LAYOUT_GENERAL;
- aCommandBuffer.CmdPipelineBarrier(
-   TVkPipelineStageFlags(VK_PIPELINE_STAGE_TRANSFER_BIT),
-   TVkPipelineStageFlags(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT),
-   0, 0, nil, 0, nil, 1, @Barrier);
+    End;
+
+    if not Assigned(aCommand) then   Exit;
+
+
+    DD := TvgDescriptor_Data_StorageImage(DescriptorData);
+
+     Barrier                      := Default(TVkImageMemoryBarrier);
+     Barrier.sType                := VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+     Barrier.srcAccessMask        := TVkAccessFlags(VK_ACCESS_SHADER_WRITE_BIT);
+     Barrier.dstAccessMask        := TVkAccessFlags(VK_ACCESS_TRANSFER_WRITE_BIT);
+     Barrier.oldLayout            := VK_IMAGE_LAYOUT_GENERAL;
+     Barrier.newLayout            := VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+     Barrier.srcQueueFamilyIndex  := VK_QUEUE_FAMILY_IGNORED;
+     Barrier.dstQueueFamilyIndex  := VK_QUEUE_FAMILY_IGNORED;
+     Barrier.image                := fStorageImageBuffer.Image.Handle;
+     Barrier.subresourceRange     := DD.fSubRange;
+
+     aCommand.CmdPipelineBarrier( TVkPipelineStageFlags(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT),
+                                       TVkPipelineStageFlags(VK_PIPELINE_STAGE_TRANSFER_BIT),
+                                       0, 0, nil, 0, nil, 1, @Barrier);
+
+     aCommand.CmdClearColorImage( fStorageImageBuffer.Image.Handle,
+                                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                       @DD.fClearCol,
+                                       1, @DD.fSubRange);
+
+     Barrier.srcAccessMask := TVkAccessFlags(VK_ACCESS_TRANSFER_WRITE_BIT);
+     Barrier.dstAccessMask := TVkAccessFlags(VK_ACCESS_SHADER_WRITE_BIT);
+     Barrier.oldLayout     := VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+     Barrier.newLayout     := VK_IMAGE_LAYOUT_GENERAL;
+
+     aCommand.CmdPipelineBarrier( TVkPipelineStageFlags(VK_PIPELINE_STAGE_TRANSFER_BIT),
+                                       TVkPipelineStageFlags(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT),
+                                       0, 0, nil, 0, nil, 1, @Barrier);
+
+
+    If NOT assigned(aCommandBuffer) then
+    Begin
+
+      aCommand.EndRecording;
+      if aCommand.CommandCount > 0 then
+
+        aCommand.ExecuteCommand(  Queue,
+                                  TVkPipelineStageFlags(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT),
+                                  nil,
+                                  nil,
+                                  True,
+                                  True
+                                );
+
+      aTransferPool.ReleaseCommand(aCommand);
+    End;
+
 end;
 
 constructor TvgDescriptor_PerFrame_StorageImage.Create;
@@ -2529,8 +2719,9 @@ begin
   If fFrameCount=0 then
      fFrameCount := MaxFramesInFlight;
 
+  SetLength(fDataArray, fFrameCount);            //one slot per frame-in-flight - was never sized before, so Items[] always raised "Index out of range"
   For I:=0 to Length(fDataArray)-1 do
-    fDataArray[I].SetItemCapacity(fFrameCount) ;
+    fDataArray[I].SetItemCapacity(1) ;            //one struct per frame - was wrongly using fFrameCount as the item count
 
 end;
 
@@ -2539,13 +2730,75 @@ procedure TvgPushConstant_Data<T>.SetFrameCount(const Value: TvkUint32);
 begin
   inherited;
 
+  SetLength(fDataArray, Value);                   //resize to match the new frame count
   For I:=0 to Length(fDataArray)-1 do
-    fDataArray[I].SetItemCapacity(Value) ;
+    fDataArray[I].SetItemCapacity(1) ;             //one struct per frame - was wrongly using Value (frame count) as the item count
 end;
 
 procedure TvgPushConstant_Data<T>.SetItem(Index: Integer; const Value: T);
 begin
   fDataArray[fCurrentFrameIndex].Items[Index] := Value  ;
+end;
+
+
+{ TvgPushConstant_2UI }
+
+function TvgPushConstant_2UI.GetValue: TvgVector2I;
+begin
+  Result := Items[0];
+end;
+
+constructor TvgPushConstant_2UI.Create(AOwner: TComponent);
+begin
+  inherited;
+
+  ShaderFlags := [SS_VERTEX_BIT];
+
+end;
+
+function TvgPushConstant_2UI.GetGLSLDeclaration(  const aBlockName: String): String;
+begin
+
+ Result :=
+    'layout(push_constant, std430) uniform ' + aBlockName +   sLineBreak +
+    '{' + sLineBreak +
+    '    ivec2 value;' + sLineBreak +
+    '} ' + aBlockName + ';' + sLineBreak;
+
+end;
+
+class function TvgPushConstant_2UI.GetPropertyName: String;
+begin
+  Result := 'PushConstant_2UI';
+end;
+
+procedure TvgPushConstant_2UI.SetupData(FrameIndex: TvkUint32; Linker: TvgLinker);
+  Var W,H:Cardinal;
+begin
+  inherited;
+
+  If assigned(Linker) and
+     assigned(Linker.SwapChain) then
+
+  Begin
+    W:= Linker.SwapChain.ImageWidth;
+    H:= Linker.SwapChain.ImageHeight;
+    SetValues(W,H);
+  End;
+
+end;
+
+procedure TvgPushConstant_2UI.SetValue(const Value: TvgVector2I);
+begin
+  Items[0] := Value;
+end;
+
+procedure TvgPushConstant_2UI.SetValues(const aX, aY: Cardinal);
+  Var V : TvgVector2I;
+begin
+  V.X := aX;
+  V.Y := aY;
+  Items[0] := V;
 end;
 
 
@@ -2772,6 +3025,11 @@ begin
   Result := 'std140';
 end;
 
+function TvgDescriptorArray_UniformBuffer<T>.GetGLSLValueExpression(const aIndexExpr: String): String;
+begin
+  Result := Name + '.value';
+end;
+
 function TvgDescriptorArray_UniformBuffer<T>.RemoveUBO( aDD_UBO: TvgDescriptor_Data_UniformBuffer<T>): Boolean;
 
 begin
@@ -2949,6 +3207,12 @@ begin
   Result := LoadTexture(FS, aGLSLIndex);
 
   FreeAndNil(FS);
+end;
+
+procedure TvgDescriptor_PerFrame_Texture.ClearDataOnGPU(aIndex:Integer; aTransferPool: TvgCommandBufferPool; aCommandBuffer: TvgCommandBuffer = nil);
+begin
+
+
 end;
 
 constructor TvgDescriptor_PerFrame_Texture.Create;
@@ -3278,10 +3542,24 @@ begin
 end;
 
 Procedure TvgDescriptor_Data_StorageBuffer<T>.SetEnabled;
+  Var I:Integer;
+      DF :TvgDescriptor_PerFrame_StorageBuffer<T> ;
 begin
+  VaildateWindowSize;    //if WindowSync then
+
   inherited;   // activates fFrameData[] children, creating each fVulkanBuffer
 
-  VaildateWindowSize;    //if WindowSync then
+  for I := 0 to Length(fFrameData) - 1 do
+  begin
+    If assigned(fFrameData[I]) and (fFrameData[I] is TvgDescriptor_PerFrame_StorageBuffer<T>) then
+    Begin
+      DF := TvgDescriptor_PerFrame_StorageBuffer<T>(fFrameData[I]);
+      if assigned(DF) then
+        fElementSampler.SourceBuffer[I] := DF.fVulkanBuffer;
+    End;
+  end;
+
+  fElementSampler.SetActiveState(True);
 
 end;
 
@@ -3387,14 +3665,6 @@ Begin
       fElementSampler.SamplingDimension := fSamplingDimension;
       fElementSampler.StrideWidth       := fElementSub;
 
-      for I := 0 to Length(fFrameData) - 1 do
-      begin
-        DF := TvgDescriptor_PerFrame_StorageBuffer<T>(fFrameData[I]);
-        if assigned(DF) then
-          fElementSampler.SourceBuffer[I] := DF.fVulkanBuffer;
-      end;
-
-      fElementSampler.SetActiveState(True);
     end;
 
 
@@ -3464,6 +3734,14 @@ begin
   Result := 'std430';
 end;
 
+function TvgDescriptorArray_StorageBuffer<T>.GetGLSLValueExpression(const aIndexExpr: String): String;
+begin
+  if aIndexExpr = '' then
+    Result := Name + '.values'
+  else
+    Result := Name + '.values[' + aIndexExpr + ']';
+end;
+
 function TvgDescriptorArray_StorageBuffer<T>.RemoveStorageBuffer(  aData_SB: TvgDescriptor_Data_StorageBuffer<T>): Boolean;
 begin
   Result := RemoveAndFreeDescriptor(aData_SB);
@@ -3485,9 +3763,8 @@ begin
     Result := IndexOfDescriptorData(aStorageImageData);
   End;
 end;
-
-procedure TvgDescriptorArray_StorageImage.ClearDescriptor(
-  aCommandBuffer: TvgCommandBuffer);
+(*
+procedure TvgDescriptorArray_StorageImage.ClearDescriptor( aCommandBuffer: TvgCommandBuffer);
 var
   I: Integer;
   DD: TvgDescriptor_Data_StorageImage;
@@ -3506,18 +3783,18 @@ begin
           aCommandBuffer);
     end;
 end;
-
+*)
 constructor TvgDescriptorArray_StorageImage.Create(AOwner: TComponent);
 begin
 
   inherited Create(AOwner);
   fDescriptorType := VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-  fStageFlags := TVkShaderStageFlags(VK_SHADER_STAGE_FRAGMENT_BIT) or TVkShaderStageFlags(VK_SHADER_STAGE_COMPUTE_BIT);
+  fStageFlags           := TVkShaderStageFlags(VK_SHADER_STAGE_FRAGMENT_BIT) or TVkShaderStageFlags(VK_SHADER_STAGE_COMPUTE_BIT);
   fImageProps.ImageType := VK_IMAGE_TYPE_2D;
-  fImageProps.Tiling := VK_IMAGE_TILING_OPTIMAL;
-  fImageProps.Usage := TVkImageUsageFlags(VK_IMAGE_USAGE_STORAGE_BIT) or
-                       TVkImageUsageFlags(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) or
-                       TVkImageUsageFlags(VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+  fImageProps.Tiling    := VK_IMAGE_TILING_OPTIMAL;
+  fImageProps.Usage     := TVkImageUsageFlags(VK_IMAGE_USAGE_STORAGE_BIT) or
+                           TVkImageUsageFlags(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) or
+                           TVkImageUsageFlags(VK_IMAGE_USAGE_TRANSFER_DST_BIT);
   fImageProps.Samples := VK_SAMPLE_COUNT_1_BIT;
 end;
 
@@ -3708,7 +3985,8 @@ Initialization
   RegisterDescriptorType(TvgDescriptorArray_SB_2UI);
 
 
-// RegisterPushConstantType(TvgPushConstant_Data_Matrix4x4D);
+  RegisterPushConstantType(TvgPushConstant_2UI);
+
 
 Finalization
 

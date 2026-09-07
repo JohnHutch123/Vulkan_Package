@@ -592,13 +592,6 @@ begin
     Case RendRB.ItemIndex of
       0: Begin
             fRenderer   := TvgRenderEngine_Single.create(self);
-            fRenderer.SelectMode := smStorageBuffer;
-        //    fRenderer.SelectMode := smImageBuffer;
-        //    fRenderer.SelectON := false;//SelectionCB.checked;
-
-
-          //  fRenderer.CreateRenderPass;
-         //   TvgRenderPass_Simple(fRenderer.RenderPass).RenderType := RP_TWOPASSRES;
 
       End;
       1: Begin
@@ -606,21 +599,19 @@ begin
 
            If TryStrToInt(ThreadC.Text,TC) then
               fRenderer.WorkerCount := TC;
-          // TvgRenderEngine_CommThread(fRenderer).OnHandleMessage :=  HandleMsg;
+
          End;
     End;
 
     fRenderer.Linker                := fLinker;
+    fRenderer.SelectMode            := smStorageBuffer;
     fRenderer.RenderPass.MSAASample := fMSAASample;
-    fRenderer.RenderPass.BufDepthON :=  DBCB.checked;
-    fVCLWin.VulkanLink := fLinker;
+    fRenderer.RenderPass.BufDepthON := DBCB.checked;
+    fRenderer.ShaderUseDouble       := True;
 
-    fRenderer.SelectMode              := smImageBuffer;
+    fVCLWin.VulkanLink   := fLinker;
 
     fRenderer.RenderPass.BuildStructure;
-
- //  RunComponentTests(fInstance);
-
 
 
     fScene        := TvgScene.Create(self);
