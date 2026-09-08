@@ -2306,6 +2306,7 @@ TvgBaseComponent = class(TComponent)
     Function AddDescriptorDataToArray(aDescriptorData:TvgDescriptorData):Boolean;
     Function IndexOfDescriptorData(aDescriptorData:TvgDescriptorData):Integer;
     Function RemoveAndFreeDescriptor(saDescriptor:TvgDescriptorData):Boolean;
+
     Function GetDescriptorDataForGLSLIndex(aGLSLIndex:TvkUint32): TvgDescriptorData;  //slow
 
 
@@ -2352,7 +2353,7 @@ TvgBaseComponent = class(TComponent)
     // GLSL expression that reads/writes this descriptor's payload from a shader,
     // e.g. "name.value" (UBO) or "name.values[idx]" (SSBO). '' when the
     // descriptor is accessed by built-in functions (images, samplers).
-    function GetGLSLValueExpression(const aIndexExpr: String = ''): String; virtual;
+    function GetGLSLValueExpression(const aArrayIndexExpr : String = '';  aIndexExpr: String = ''): String; virtual;
 
 
     property Device         : TvgLogicalDevice read GetDevice write SetDevice;
@@ -2605,7 +2606,7 @@ TvgBaseComponent = class(TComponent)
 
     function GetGLSLDeclaration(const aBlockName: String): String; Virtual;
     // GLSL expression that reads this push constant's payload, e.g. "block.value".
-    function GetGLSLValueExpression(const aBlockName: String): String; Virtual;
+    function GetGLSLValueExpression(const aBlockName:String): String; Virtual;
 
     function GetDataStride: TVkUInt32; Virtual;  Abstract;
     function GetDataPointer: Pointer; Virtual; Abstract;
@@ -28384,7 +28385,7 @@ begin
   Result := '';
 end;
 
-function TvgDescriptorArray.GetGLSLValueExpression(const aIndexExpr: String): String;
+function TvgDescriptorArray.GetGLSLValueExpression(const aArrayIndexExpr : String = '';  aIndexExpr: String = ''): String;
 begin
   Result := '';
 end;

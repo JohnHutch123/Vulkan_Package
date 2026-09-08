@@ -2192,6 +2192,7 @@ procedure TvgRenderEngine.VaildateGlobalResources;
             DA.DataFlow     := [DF_DOWN, DF_SAMPLING];
             DA.SetStageFlags(TVkShaderStageFlags(VK_SHADER_STAGE_FRAGMENT_BIT));
             DA.FrameCount   := FC;
+            DA.BindingMode  := vgdbmSingle;
 
             If DA is TvgDescriptorArray_StorageImage then
             Begin
@@ -2260,7 +2261,7 @@ procedure TvgRenderEngine.VaildateGlobalResources;
             DA.DataFlow     := [ DF_DOWN, DF_SAMPLING];
             DA.SetStageFlags(TVkShaderStageFlags(VK_SHADER_STAGE_FRAGMENT_BIT));
             DA.FrameCount   := FC;
-
+            DA.BindingMode  := vgdbmSingle;
 
             If DA is TvgDescriptorArray_SB_2UI then
             Begin
@@ -2272,7 +2273,7 @@ procedure TvgRenderEngine.VaildateGlobalResources;
               Begin
                 DD.WindowSync := True;   //important to track render window size
                 DD.SamplingON := True;
-              //  DD.SamplingDimension :=  esdGrid2D;
+              //  DD.SamplingDimension :=  esdGrid2D;   not needed
 
               End;
 
@@ -2298,7 +2299,6 @@ begin
 
   fObjectIDImage :=nil;
   fObjectIDBuffer:=nil;
-
 
   //simple Model/View/Proj Matrix
   //Should to the initial Model/View/Project multiplation in Dpouble precision in CPU
@@ -2327,14 +2327,9 @@ begin
        smStorageBuffer:  SetUpForStorageBuffer;
        smCustom: Begin
        End;
-
-
     End;
 
   end;
-
-
-
 
 end;
 
@@ -2363,7 +2358,7 @@ begin
     If assigned(SHS) then
     Begin
       SHS.Name       := SC_USE_OBJECTID;
-      SHS.SpecType   :=  TS_BOOLEAN;
+      SHS.SpecType   := TS_BOOLEAN;
       SHS.SpecTValue := 'TRUE';
       SHS.ConstantID := CI_USE_OBJECTID;
     end;
@@ -2372,7 +2367,7 @@ begin
     If assigned(SHS) then
     Begin
       SHS.Name       := SC_USE_OBJECTID;
-      SHS.SpecType   :=  TS_BOOLEAN;
+      SHS.SpecType   := TS_BOOLEAN;
       SHS.SpecTValue := 'TRUE';
       SHS.ConstantID := CI_USE_OBJECTID;
     end;
@@ -2380,12 +2375,11 @@ begin
     If fFlags.SelectMode = smStorageBuffer then
     Begin
       PCI:=GP.PushConstantCol.add;
-      PCI.Name := Format( 'inScreenSize_%d',[PCI.Index]);
+      PCI.Name := 'inScreenSize';
 
       If assigned(PCI) then
       Begin
         PCI.PushConstantName := TvgPushConstant_2UI.GetPropertyName;
-
 
         If assigned(PCI.PushConstant) and (PCI.PushConstant is  TvgPushConstant_2UI) then
         Begin
@@ -2464,12 +2458,12 @@ var
        End;
 
        DD := TvgDescriptorData_SB_2UI(fObjectIDBuffer.SB_Descriptor[0]);    //MUST be zero
-       if not Assigned(DD) and
+       if Assigned(DD) and
           DD.GetElementData2D(aFrameIndex,  SampleX, SampleY, aData, aDataSize) and
           (aDataSize=SizeOf(TvgVector2I)) then
        Begin
           Vec2:= TvgVector2I(aData^);
-          ObjectAddress := Combine32BitTo64Bit(UInt64(Vec2.X), UInt64(Vec2.Y));   //low/high  CHECK
+          ObjectAddress := Combine32BitTo64Bit(UInt64(Vec2.Y), UInt64(Vec2.X));   //low/high  CHECK
        End;
 
   End;

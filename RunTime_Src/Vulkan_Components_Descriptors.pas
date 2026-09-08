@@ -280,11 +280,11 @@ Type
     function GetGLSLLayoutQualifier: String; Override;
 
   Public
-    function GetGLSLValueExpression(const aIndexExpr: String = ''): String; Override;
     constructor Create(AOwner: TComponent); override;
 
     Function AddUniformBuffer( aDescriptorData: TvgDescriptor_Data_UniformBuffer<T>):Integer;
     Function RemoveUBO(aDD_UBO : TvgDescriptor_Data_UniformBuffer<T>):Boolean;
+    function GetGLSLValueExpression(const aArrayIndexExpr : String = '';  aIndexExpr: String = ''): String; Override;
 
     Property UBODescriptor[Index:Integer] : TvgDescriptor_Data_UniformBuffer<T>  Read GetDescriptor_Data_UBO  ;
 
@@ -534,7 +534,6 @@ TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
     // device-local Vulkan buffers (owned)
     fVulkanBuffer  : TpvVulkanBuffer ;
     fData          : TvgGenericDataArray<T>; //One per frame of Descriptor Data with Data Items
-//    fItem          : T;
 
 
     Procedure SetDisabled ; Override;
@@ -625,11 +624,12 @@ TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
     function GetGLSLLayoutQualifier: String; Override;
 
   Public
-    function GetGLSLValueExpression(const aIndexExpr: String = ''): String; Override;
     constructor Create(AOwner: TComponent); override;
 
     Function AddStorageBuffer( aData_SB: TvgDescriptor_Data_StorageBuffer<T>):Integer;
     Function RemoveStorageBuffer(aData_SB : TvgDescriptor_Data_StorageBuffer<T>):Boolean;
+
+    function GetGLSLValueExpression(const aArrayIndexExpr : String = '';  aIndexExpr: String = ''): String; Override;
 
     Property SB_Descriptor[Index:Integer] : TvgDescriptor_Data_StorageBuffer<T>  Read GetDescriptor_Data_StorageBuffer  ;
 
@@ -1929,8 +1929,8 @@ function TvgElementSampler.SampleElementXY(CentreX, CentreY: Integer): Boolean;
 begin
   Result := False;
   if not Active then exit;
-  CustomAssert(fSamplingDimension = esdGrid2D,
-    'SampleElementXY requires SamplingDimension = esdGrid2D');
+
+  CustomAssert(fSamplingDimension = esdGrid2D, 'SampleElementXY requires SamplingDimension = esdGrid2D');
 
   CopyElementsToStaging2D(CentreX, CentreY);
   Result := ReadElementsFromStaging;
@@ -1988,6 +1988,7 @@ begin
 
   Data      := @fSampledData[ByteOffset];
   ByteCount := fElementStride;
+  Result    := True;
 end;
 
 procedure TvgElementSampler.SetCurrentFrame(const Value: TvkUint32);
@@ -2760,7 +2761,7 @@ function TvgPushConstant_2UI.GetGLSLDeclaration(  const aBlockName: String): Str
 begin
 
  Result :=
-    'layout(push_constant, std430) uniform ' + aBlockName +   sLineBreak +
+    'layout(push_constant) uniform ' + GetPropertyName +   sLineBreak +
     '{' + sLineBreak +
     '    ivec2 value;' + sLineBreak +
     '} ' + aBlockName + ';' + sLineBreak;
@@ -3025,7 +3026,7 @@ begin
   Result := 'std140';
 end;
 
-function TvgDescriptorArray_UniformBuffer<T>.GetGLSLValueExpression(const aIndexExpr: String): String;
+function TvgDescriptorArray_UniformBuffer<T>.GetGLSLValueExpression(const aArrayIndexExpr : String = '';  aIndexExpr: String = ''): String;
 begin
   Result := Name + '.value';
 end;
@@ -3539,6 +3540,8 @@ begin
   SetActiveState(False);
 
   fElementSamplingON := Value;
+
+
 end;
 
 Procedure TvgDescriptor_Data_StorageBuffer<T>.SetEnabled;
@@ -3559,7 +3562,11 @@ begin
     End;
   end;
 
-  fElementSampler.SetActiveState(True);
+  If assigned(fElementSampler) then
+  Begin
+    fElementSampler.SamplingDimension := fSamplingDimension;
+    fElementSampler.SetActiveState(True);
+  End;
 
 end;
 
@@ -3621,6 +3628,11 @@ begin
   SetActiveState(False) ;
 
   fWindowSync := Value;
+
+  If fWindowSync then
+     fSamplingDimension :=  esdGrid2D
+  else
+     fSamplingDimension :=  esdLinear1D;
 end;
 
 procedure TvgDescriptor_Data_StorageBuffer<T>.VaildateWindowSize;
@@ -3718,11 +3730,12 @@ var
 begin
   ElementTypeInfo := TypeInfo(T);
   ElementType := GetGLSLTypeNameForPascalType(ElementTypeInfo.Name);
-  if SameText(ElementType, 'vec3') or SameText(ElementType, 'ivec3') or
-     SameText(ElementType, 'uvec3') or SameText(ElementType, 'dvec3') then
-    raise EArgumentException.CreateFmt(
-      '%s requires a padded std430 GPU type; SizeOf(T) is not layout-compatible',
-      [ClassName]);
+
+  if SameText(ElementType, 'vec3') or
+     SameText(ElementType, 'ivec3') or
+     SameText(ElementType, 'uvec3') or
+     SameText(ElementType, 'dvec3') then
+    raise EArgumentException.CreateFmt(  '%s requires a padded std430 GPU type; SizeOf(T) is not layout-compatible', [ClassName]);
 
   Result := 'buffer ' + Name + 'Block {' + sLineBreak +
             '    ' + ElementType + ' values[];' + sLineBreak +
@@ -3734,21 +3747,27 @@ begin
   Result := 'std430';
 end;
 
-function TvgDescriptorArray_StorageBuffer<T>.GetGLSLValueExpression(const aIndexExpr: String): String;
+function TvgDescriptorArray_StorageBuffer<T>.GetGLSLValueExpression(const aArrayIndexExpr : String = '';  aIndexExpr: String = ''): String;
 begin
   if aIndexExpr = '' then
-    Result := Name + '.values'
+      Result := Name + '.values'
   else
-    Result := Name + '.values[' + aIndexExpr + ']';
+  Begin
+      case fBindingMode of
+        vgdbmSingle       : Result := Name + '.values[' + aIndexExpr + ']';
+        vgdbmFixedArray   : Result := Name + '[nonuniformEXT('+aArrayIndexExpr+')].values[' + aIndexExpr + ']';
+        vgdbmVariableArray,
+        vgdbmRuntimeArray : Result := Name + '[nonuniformEXT('+aArrayIndexExpr+')].values[' + aIndexExpr + ']';
+      else
+         Result := Name + '.values[' + aIndexExpr + ']';
+      end;
+  End;
 end;
 
 function TvgDescriptorArray_StorageBuffer<T>.RemoveStorageBuffer(  aData_SB: TvgDescriptor_Data_StorageBuffer<T>): Boolean;
 begin
   Result := RemoveAndFreeDescriptor(aData_SB);
 end;
-
-//matrix
-
 
 { TvgDescriptorArray_StorageImage }
 
@@ -3813,17 +3832,16 @@ begin
   case fImageProps.Format of
     VK_FORMAT_R32_UINT,
     VK_FORMAT_R32G32_UINT,
-    VK_FORMAT_R32G32B32A32_UINT:
-      Result := 'uniform uimage2D';
+    VK_FORMAT_R32G32B32A32_UINT: Result := 'uniform uimage2D';
+
     VK_FORMAT_R32_SINT,
     VK_FORMAT_R32G32_SINT,
-    VK_FORMAT_R32G32B32A32_SINT:
-      Result := 'uniform iimage2D';
+    VK_FORMAT_R32G32B32A32_SINT: Result := 'uniform iimage2D';
+
     VK_FORMAT_R32_SFLOAT,
     VK_FORMAT_R32G32_SFLOAT,
     VK_FORMAT_R32G32B32A32_SFLOAT,
-    VK_FORMAT_R8G8B8A8_UNORM:
-      Result := 'uniform image2D';
+    VK_FORMAT_R8G8B8A8_UNORM:    Result := 'uniform image2D';
   else
     raise EArgumentException.CreateFmt(
       '%s does not support storage-image format %d',

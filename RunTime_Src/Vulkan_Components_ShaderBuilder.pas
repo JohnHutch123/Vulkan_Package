@@ -116,7 +116,6 @@ TYpe
     fLastFragmentInCount : Integer;   // set by BuildFragmentShader, checked by BuildAll
 
 
-
     // ?? property setters ???????????????????????????????????????????????????
     procedure SetPipeline   (const Value: TvgGraphicPipeline);
     procedure SetScene      (const Value: TvgBaseScene);
@@ -573,8 +572,7 @@ begin
     Inc(Result);
 end;
 
-function TvgShaderBuilder.SB_ModelSet(aGP: TvgGraphicPipeline;
-  const aStageTag: String): String;
+function TvgShaderBuilder.SB_ModelSet(aGP: TvgGraphicPipeline; const aStageTag: String): String;
 var
   OS: TvgBaseObjectStore;
 begin
@@ -587,8 +585,7 @@ begin
     aStageTag, 'Per-object model resources');
 end;
 
-function TvgShaderBuilder.GlobalUsesDouble(
-  aGP: TvgGraphicPipeline): Boolean;
+function TvgShaderBuilder.GlobalUsesDouble(  aGP: TvgGraphicPipeline): Boolean;
 var
   I: Integer;
   DI: TvgDescriptorItem;
@@ -608,8 +605,7 @@ begin
   end;
 end;
 
-function TvgShaderBuilder.ViewProjectionExpression(
-  aGP: TvgGraphicPipeline): String;
+function TvgShaderBuilder.ViewProjectionExpression( aGP: TvgGraphicPipeline): String;
 var
   D: TvgDescriptorArray;
 begin
@@ -711,14 +707,14 @@ begin
   end;
 end;
 
-function TvgShaderBuilder.PushConstantBlockName(aPCI: TvgPushConstantItem;
-  aIndex: Integer): String;
+function TvgShaderBuilder.PushConstantBlockName(aPCI: TvgPushConstantItem; aIndex: Integer): String;
 begin
   Result := '';
   if Assigned(aPCI) then
     Result := Trim(aPCI.Name);
   if Result = '' then
-    Result := 'PushConstant_' + IntToStr(aIndex);
+    Result := 'PushConstant_' ;
+  Result := Result + IntToStr(aIndex);
 end;
 
 function TvgShaderBuilder.FindInterpolantName(aGP: TvgGraphicPipeline;
@@ -1099,12 +1095,14 @@ begin
   D := aDI.Descriptor;
   case D.ResourceType of
     RT_STORAGEIMAGE:
-      Result := Cmt('Storage image target for ObjectID (selection)') +
+      Result := Cmt('  ')+
+                Cmt('Storage image target for ObjectID (selection)') +
                 Cmt(Format('SET = %d  Binding = %d', [aSetIndex, D.Binding]));
     RT_SELECTVEC1,
     RT_SELECTVEC2,
     RT_SELECTVEC3:
-      Result := Cmt('Storage buffer target for ObjectID (selection)') +
+      Result := Cmt('  ')+
+                Cmt('Storage buffer target for ObjectID (selection)') +
                 Cmt(Format('SET = %d  Binding = %d', [aSetIndex, D.Binding]));
   end;
 end;
@@ -1221,10 +1219,9 @@ begin
         Continue;
 
       Line := PC.PushConstant.GetGLSLDeclaration(PushConstantBlockName(PC, I));
+
       if Trim(Line) = '' then
-        raise EArgumentException.CreateFmt(
-          '%s cannot generate a GLSL push constant declaration (item "%s")',
-          [PC.PushConstant.ClassName, PushConstantBlockName(PC, I)]);
+        raise EArgumentException.CreateFmt(  '%s cannot generate a GLSL push constant declaration (item "%s")',  [PC.PushConstant.ClassName, PushConstantBlockName(PC, I)]);
 
       if SB.Length = 0 then
         SB.Append(Sep('Push constants'));
@@ -1614,11 +1611,9 @@ begin
     if ViewProjectExpr <> '' then
     begin
       if GlobalUsesDouble(aGP) then
-        SB.AppendLine('    gl_Position = vec4(' + ViewProjectExpr +
-          ' * dvec4(' + PositionExpr + '));')
+        SB.AppendLine('    gl_Position = vec4(' + ViewProjectExpr + ' * dvec4(' + PositionExpr + '));')
       else
-        SB.AppendLine('    gl_Position = ' + ViewProjectExpr +
-          ' * ' + PositionExpr + ';');
+        SB.AppendLine('    gl_Position = ' + ViewProjectExpr + ' * ' + PositionExpr + ';');
     end
     else
       SB.AppendLine('    gl_Position = ' + PositionExpr + ';');
@@ -1934,8 +1929,7 @@ begin
   end;
 
   // Detect USE_DOUBLE spec constant in the vertex module
-  UseDouble := ModuleUsesDouble(GP.VertexS) or GP.DoubleOn or
-               GlobalUsesDouble(GP);
+  UseDouble := ModuleUsesDouble(GP.VertexS) or GP.DoubleOn or GlobalUsesDouble(GP);
 
   SB := TStringBuilder.Create;
   try
@@ -2051,8 +2045,7 @@ begin
 
     SB.AppendLine('');
 
-    SB.Append(SB_Header(GlobalUsesDouble(GP), False,
-      RequiresDescriptorIndexing(GP)));
+    SB.Append(SB_Header(False{GlobalUsesDouble(GP)}, False,   RequiresDescriptorIndexing(GP)));
     SB.Append(SB_SpecialisationConstants(GP.FragmentS));       // [FULL]
     SB.Append(SB_FragmentPrologue(GP));
     SB.Append(SB_GlobalSet(GP.Renderer, 'Fragment'));
