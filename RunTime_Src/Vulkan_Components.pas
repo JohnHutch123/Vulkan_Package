@@ -1268,6 +1268,8 @@ TvgBaseComponent = class(TComponent)
     Procedure SetUpFeatures; Virtual;
 
     Procedure SetUpDescriptorIndexing;
+    Procedure SetUpDynamicRendering;
+    Procedure SetUpDynamicRenderingExtensions;
 
     Procedure SetUpQueueFamilies;
     Function GetSurface:TpvVulkanSurface;  Virtual;//used when creating the device
@@ -1293,6 +1295,8 @@ TvgBaseComponent = class(TComponent)
     Procedure BuildAllFeatures;
 
     Procedure WaitIdle;Virtual;
+
+    Function IsDynamicRenderingActive: Boolean;
 
     Property VulkanDevice     : TpvVulkanDevice read fVulkanDevice;
 
@@ -2865,6 +2869,10 @@ TvgBaseComponent = class(TComponent)
                                        const aPipelineStatistics:TVkQueryPipelineStatisticFlags
                                        {const aFlags:TVkCommandBufferUsageFlags=TVkCommandBufferUsageFlags(VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT)}
                                        );
+     procedure BeginRecordingSecondaryDynamic(const aColorFormat:TVkFormat;
+                                              const aDepthFormat:TVkFormat;
+                                              const aStencilFormat:TVkFormat;
+                                              const aRasterizationSamples:TVkSampleCountFlagBits);
      procedure EndRecording;
 
      procedure ExecuteCommand(const aQueue:TpvVulkanQueue;
@@ -2918,8 +2926,10 @@ TvgBaseComponent = class(TComponent)
      procedure CmdCopyQueryPoolResults(queryPool:TVkQueryPool;firstQuery:TvkUint32;queryCount:TvkUint32;dstBuffer:TVkBuffer;dstOffset:TVkDeviceSize;stride:TVkDeviceSize;flags:TVkQueryResultFlags);
      procedure CmdPushConstants(layout:TVkPipelineLayout;stageFlags:TVkShaderStageFlags;offset:TvkUint32;size:TvkUint32;const aValues:PVkVoid);
      procedure CmdBeginRenderPass(const aRenderPassBegin:PVkRenderPassBeginInfo;contents:TVkSubpassContents);
+     procedure CmdBeginRendering(const aRenderingInfo:PVkRenderingInfo);
      procedure CmdNextSubpass(contents:TVkSubpassContents);
      procedure CmdEndRenderPass;
+     procedure CmdEndRendering;
      procedure CmdExecuteCommands(commandBufferCount:TvkUint32;const aCommandBuffers:PVkCommandBuffer);
      procedure CmdExecute(const aCommandBuffer:TpvVulkanCommandBuffer);
 
@@ -4627,6 +4637,10 @@ TvgBaseComponent = class(TComponent)
 
     function IsMSAAOn : Boolean;
 
+    Procedure GetDynamicRenderingFormats(out aColorFormat, aDepthFormat, aStencilFormat: TVkFormat;
+                                         out aSamples: TVkSampleCountFlagBits);
+    Function UsesDynamicRendering: Boolean;
+
     Property RenderPassHandle: TVkRenderPass Read fRenderPassHandle;
 
     Property MSAAOn       : Boolean Read IsMSAAOn;
@@ -5379,6 +5393,20 @@ TvgBaseComponent = class(TComponent)
     ShaderUseDouble: Boolean;
   end;
 
+  TvgDynamicRenderingState = record
+    RenderingInfo : TVkRenderingInfo;
+    ColorAtt      : TVkRenderingAttachmentInfo;
+    DepthAtt      : TVkRenderingAttachmentInfo;
+    StencilAtt    : TVkRenderingAttachmentInfo;
+    ColorImage    : TVkImage;
+    DepthImage    : TVkImage;
+    MSAAImage     : TVkImage;
+    HasDepth      : Boolean;
+    HasStencil    : Boolean;
+    HasMSAA       : Boolean;
+    Active        : Boolean;
+  end;
+
 
   TvgBaseRenderEngine   =  class(TvgBaseComponent, IvgGlobalDataTarget)
   //handles graphics and rendering framework
@@ -5427,6 +5455,8 @@ TvgBaseComponent = class(TComponent)
     fRenderLock           : Boolean;
     //true if the Linker is running a Prepare Frame Loop
 
+    fDRState              : TvgDynamicRenderingState;
+
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
 
     Function SetDisabled : Boolean;  override;
@@ -5458,6 +5488,9 @@ TvgBaseComponent = class(TComponent)
     Procedure StartRenderEnginePrepare( ImageIndex:Integer; aFrame:TvgFrame);  Virtual;
     Procedure FinishRenderEnginePrepare;                                       Virtual;
 
+    Procedure PrepareDynamicRenderingState(ImageIndex:Integer; aFrame:TvgFrame; const aRenderArea:TVkRect2D);
+    Procedure CmdDynamicRenderingLayoutBarriers(aCB:TvgCommandBuffer; aToAttachment:Boolean);
+
     Procedure ConfigureGraphicPipelineFromRenderPass(GP:TvgGraphicPipeline);  Virtual;
 
   Public
@@ -5477,6 +5510,10 @@ TvgBaseComponent = class(TComponent)
     Procedure ClearSceneLinks;
 
     Function GetRenderWindowSize(Var aWidth,aHeight:TvkUint32):Boolean;
+
+    Function UseDynamicRendering: Boolean;
+    Procedure CmdBeginDynamicRendering(aCB:TvgCommandBuffer; ImageIndex:Integer; aFrame:TvgFrame);
+    Procedure CmdEndDynamicRendering(aCB:TvgCommandBuffer);
 
     Procedure TriggerWindowRepaint;
     Procedure FlagRebuildALLFrames;
@@ -6660,6 +6697,7 @@ begin
    fengineVersion     := 1;
 
    fapiVersion        := VG_API_VERSION_1_3;
+   fDynamicRendering  := True;
 
    fAllocationStatus  := VG_SELF_MANAGE; //Is it best to let Vulkan do it???
 
@@ -7255,7 +7293,8 @@ end;
 
 procedure TvgInstance.SetUpDynamicRenderingExtensions;
 begin
-
+  // VK_KHR_dynamic_rendering is a device extension (core in Vulkan 1.3).
+  // Instance-level enablement is not required; SetDynamicRendering bumps API to 1.3.
 end;
 
 procedure TvgInstance.SetUpExtensions;
@@ -7545,6 +7584,9 @@ begin
   SetActiveState(False) ;
 
   fDynamicRendering := Value;
+
+  If fDynamicRendering and (fAPIVersion < VG_API_VERSION_1_3) then
+     fAPIVersion := VG_API_VERSION_1_3;
 end;
 
 Function TvgInstance.SetDisabled:Boolean;
@@ -9874,7 +9916,31 @@ end;
 
 procedure TvgLogicalDevice.SetDynamicRenderingON(const Value: Boolean);
 begin
+  If fDynamicRenderingON=Value then exit;
+  SetActiveState(False);
+
   fDynamicRenderingON := Value;
+
+  If assigned(fInstance) and not(fInstance.DynamicRendering) and fDynamicRenderingON then
+     fInstance.DynamicRendering := fDynamicRenderingON;
+
+  If fDynamicRenderingON then
+  Begin
+    If assigned(fInstance) then
+      CustomAssert(fInstance.GetAPIVersion >= VK_API_VERSION_1_3,
+                   'DynamicRendering requires Instance.APIVersion to be at least VG_API_VERSION_1_3', self);
+    If assigned(fFeatures) then
+      fFeatures.DynamicRendering := True;
+  End else
+  If assigned(fFeatures) then
+    fFeatures.DynamicRendering := False;
+end;
+
+function TvgLogicalDevice.IsDynamicRenderingActive: Boolean;
+begin
+  Result := fDynamicRenderingON and
+            assigned(fFeatures) and
+            fFeatures.DynamicRendering;
 end;
 
 Function TvgLogicalDevice.SetEnabled : Boolean;
@@ -9941,6 +10007,9 @@ begin
 
   If assigned(fInstance) and not (fInstance.DescriptorIndexing) and fDescriptorIndexingON then
     fInstance.DescriptorIndexing := fDescriptorIndexingON ;
+
+  If assigned(fInstance) and not (fInstance.DynamicRendering) and fDynamicRenderingON then
+    fInstance.DynamicRendering := fDynamicRenderingON ;
 
   fSetUpComplete:=False;
 
@@ -10108,6 +10177,8 @@ begin
 
 //   SetUpScreenExtensions;  //Must stay here will handle RenderToScreen and NOT RenderToScreen
 
+   SetUpDynamicRenderingExtensions;
+
    DeleteNotRequired;    //tidy up before creating the instance
 
    For I:=0 to fExtensions.count-1 do
@@ -10147,12 +10218,52 @@ begin
 
 end;
 
+procedure TvgLogicalDevice.SetUpDynamicRendering;
+begin
+  CustomAssert(assigned(fFeatures),'Features object not assigned',self);
+  CustomAssert(assigned(fInstance),'Instance not assigned',self);
+
+  If not fDynamicRenderingON then
+  Begin
+    fFeatures.DynamicRendering := False;
+    exit;
+  End;
+
+  // Do NOT assign Instance.DynamicRendering here. That setter calls
+  // InvalidateStates/SetActiveState and re-enters ApplyState while
+  // LogicalDevice.SetEnabled is already in a state transition.
+  CustomAssert(fInstance.GetAPIVersion >= VK_API_VERSION_1_3,
+               'DynamicRendering requires Instance.APIVersion to be at least VG_API_VERSION_1_3', self);
+
+  fFeatures.DynamicRendering := True;
+end;
+
+procedure TvgLogicalDevice.SetUpDynamicRenderingExtensions;
+  Var S1 : String;
+      E  : TvgExtension;
+      I  : Integer;
+begin
+  If not fDynamicRenderingON then exit;
+  If not assigned(fInstance) then exit;
+  If fInstance.GetAPIVersion >= VK_API_VERSION_1_3 then exit; // core in 1.3
+  If not assigned(fExtensions) or (fExtensions.Count=0) then exit;
+
+  S1 := VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME;
+  For I:=0 to fExtensions.Count-1 do
+  Begin
+    E := TvgExtension(fExtensions.Items[I]);
+    If CompareText(String(E.fExtensionName), S1)=0 then
+      E.fExtMode := VGE_MUST_HAVE;
+  End;
+end;
+
 procedure TvgLogicalDevice.SetUpFeatures;
 begin
   CustomAssert(assigned(fVulkanDevice), 'Vulkan Device NOT created',self);
   CustomAssert(assigned(fFeatures), 'Features NOT created',self);
 
   SetUpDescriptorIndexing;
+  SetUpDynamicRendering;
 
 //  fFeatures.QuerySupportedFeatures;
   fFeatures.Active:=True;
@@ -12495,6 +12606,324 @@ begin
 
 end;
 
+function TvgBaseRenderEngine.UseDynamicRendering: Boolean;
+begin
+  Result := False;
+  If not assigned(fLinker) then exit;
+  If not assigned(fLinker.ScreenDevice) then exit;
+  If not fLinker.ScreenDevice.IsDynamicRenderingActive then exit;
+  If not assigned(fRenderPass) then exit;
+  If assigned(fRenderPass.SubPasses) and (fRenderPass.SubPasses.Count > 1) then exit;
+  Result := True;
+end;
+
+procedure TvgBaseRenderEngine.PrepareDynamicRenderingState(ImageIndex:Integer; aFrame:TvgFrame; const aRenderArea:TVkRect2D);
+  Var
+      AttIndex : Integer;
+      ColorView, ResolveView, DepthView : TVkImageView;
+      MSAAAtt, DepthAtt : TvgAttachment;
+      IB : TvgResourceImageBuffer;
+
+  procedure GetBufferImageAndView(aBuf: TvgResourceImageBuffer; out aImage: TVkImage; out aView: TVkImageView);
+  begin
+    aImage := VK_NULL_HANDLE;
+    aView  := VK_NULL_HANDLE;
+    If not assigned(aBuf) then exit;
+    If assigned(aBuf.FrameBufferAttachment) then
+    Begin
+      If assigned(aBuf.FrameBufferAttachment.Image) then
+        aImage := aBuf.FrameBufferAttachment.Image.Handle;
+      If assigned(aBuf.FrameBufferAttachment.ImageView) then
+        aView := aBuf.FrameBufferAttachment.ImageView.Handle;
+    End else
+    Begin
+      If assigned(aBuf.Image) then
+        aImage := aBuf.Image.Handle;
+      If assigned(aBuf.ImageView) then
+        aView := aBuf.ImageView.Handle;
+    End;
+  end;
+
+begin
+  FillChar(fDRState, SizeOf(fDRState), #0);
+
+  If fLinker.RenderTarget = RT_FRAME then
+    AttIndex := aFrame.FrameIndex
+  else
+    AttIndex := ImageIndex;
+
+  ColorView   := VK_NULL_HANDLE;
+  ResolveView := VK_NULL_HANDLE;
+  DepthView   := VK_NULL_HANDLE;
+  fDRState.ColorImage := VK_NULL_HANDLE;
+  fDRState.DepthImage := VK_NULL_HANDLE;
+  fDRState.MSAAImage  := VK_NULL_HANDLE;
+
+  if fLinker.RenderTarget = RT_FRAME then
+  Begin
+    CustomAssert(assigned(aFrame.FrameImageBuffer),'Frame image buffer not assigned',Self);
+    GetBufferImageAndView(aFrame.FrameImageBuffer, fDRState.ColorImage, ColorView);
+  end else
+  Begin
+    CustomAssert(assigned(fLinker.SwapChain.Image[AttIndex]),'Swap chain image not assigned',Self);
+    CustomAssert(assigned(fLinker.SwapChain.ImageView[AttIndex]),'Swap chain image view not assigned',Self);
+    fDRState.ColorImage := fLinker.SwapChain.Image[AttIndex].Handle;
+    ColorView           := fLinker.SwapChain.ImageView[AttIndex].Handle;
+  End;
+
+  fDRState.HasMSAA := assigned(fRenderPass) and fRenderPass.IsMSAAOn;
+  If fDRState.HasMSAA then
+  Begin
+    MSAAAtt := fRenderPass.GetAttachmentOfType(atMSAA);
+    If assigned(MSAAAtt) then
+    Begin
+      IB := MSAAAtt.ImageBuffer[AttIndex];
+      GetBufferImageAndView(IB, fDRState.MSAAImage, ResolveView);
+    End;
+    CustomAssert(ResolveView <> VK_NULL_HANDLE,
+                 'MSAA attachment view not available for dynamic rendering', Self);
+  End;
+
+  If fDRState.HasMSAA then
+  Begin
+    fDRState.ColorAtt.imageView          := ResolveView;
+    fDRState.ColorAtt.resolveImageView   := ColorView;
+    fDRState.ColorAtt.resolveMode        := VK_RESOLVE_MODE_AVERAGE_BIT;
+    fDRState.ColorAtt.resolveImageLayout := VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    fDRState.ColorAtt.storeOp            := VK_ATTACHMENT_STORE_OP_DONT_CARE;
+  End else
+  Begin
+    fDRState.ColorAtt.imageView          := ColorView;
+    fDRState.ColorAtt.resolveImageView   := VK_NULL_HANDLE;
+    fDRState.ColorAtt.resolveMode        := VK_RESOLVE_MODE_NONE;
+    fDRState.ColorAtt.resolveImageLayout := VK_IMAGE_LAYOUT_UNDEFINED;
+    fDRState.ColorAtt.storeOp            := VK_ATTACHMENT_STORE_OP_STORE;
+  End;
+
+  fDRState.ColorAtt.sType       := VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+  fDRState.ColorAtt.pNext       := nil;
+  fDRState.ColorAtt.imageLayout := VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  fDRState.ColorAtt.loadOp      := VK_ATTACHMENT_LOAD_OP_CLEAR;
+  If assigned(fRenderPass) and (fRenderPass.ClearColCount > 0) then
+    fDRState.ColorAtt.clearValue := fRenderPass.ClearCol[0];
+
+  fDRState.HasDepth   := assigned(fRenderPass) and fRenderPass.fDepthBufOn;
+  fDRState.HasStencil := assigned(fRenderPass) and fRenderPass.fStencilBufOn;
+
+  If fDRState.HasDepth or fDRState.HasStencil then
+  Begin
+    DepthAtt := fRenderPass.GetAttachmentOfType(atDepthStencil);
+    If assigned(DepthAtt) then
+    Begin
+      IB := DepthAtt.ImageBuffer[AttIndex];
+      GetBufferImageAndView(IB, fDRState.DepthImage, DepthView);
+    End;
+    CustomAssert(DepthView <> VK_NULL_HANDLE,
+                 'Depth/stencil attachment view not available for dynamic rendering', Self);
+
+    fDRState.DepthAtt.sType       := VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    fDRState.DepthAtt.pNext       := nil;
+    fDRState.DepthAtt.imageView   := DepthView;
+    fDRState.DepthAtt.imageLayout := VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    fDRState.DepthAtt.resolveMode := VK_RESOLVE_MODE_NONE;
+    fDRState.DepthAtt.loadOp      := VK_ATTACHMENT_LOAD_OP_CLEAR;
+    fDRState.DepthAtt.storeOp     := VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    fDRState.DepthAtt.clearValue.depthStencil.depth   := fRenderPass.fDepthClear;
+    fDRState.DepthAtt.clearValue.depthStencil.stencil := fRenderPass.fStencilClear;
+
+    If fDRState.HasStencil then
+      fDRState.StencilAtt := fDRState.DepthAtt;
+  End;
+
+  fDRState.RenderingInfo.sType                := VK_STRUCTURE_TYPE_RENDERING_INFO;
+  fDRState.RenderingInfo.pNext                := nil;
+  fDRState.RenderingInfo.flags                := TVkRenderingFlags(VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT);
+  fDRState.RenderingInfo.renderArea           := aRenderArea;
+  fDRState.RenderingInfo.layerCount           := 1;
+  fDRState.RenderingInfo.viewMask             := 0;
+  fDRState.RenderingInfo.colorAttachmentCount := 1;
+  fDRState.RenderingInfo.pColorAttachments    := @fDRState.ColorAtt;
+  If fDRState.HasDepth then
+    fDRState.RenderingInfo.pDepthAttachment   := @fDRState.DepthAtt
+  else
+    fDRState.RenderingInfo.pDepthAttachment   := nil;
+  If fDRState.HasStencil then
+    fDRState.RenderingInfo.pStencilAttachment := @fDRState.StencilAtt
+  else
+    fDRState.RenderingInfo.pStencilAttachment := nil;
+
+  fDRState.Active := True;
+end;
+
+procedure TvgBaseRenderEngine.CmdDynamicRenderingLayoutBarriers(aCB:TvgCommandBuffer; aToAttachment:Boolean);
+  Var
+      Barriers : array[0..2] of TVkImageMemoryBarrier;
+      Count    : Integer;
+      Sub      : TVkImageSubresourceRange;
+      PresentQ, GraphicsQ : TvkInt32;
+      SameQ    : Boolean;
+      FinalLayout : TVkImageLayout;
+      ColorImg : TVkImage;
+
+  procedure AddBarrier(aImage: TVkImage; aAspect: TVkImageAspectFlags;
+                       aSrcAccess, aDstAccess: TVkAccessFlags;
+                       aOldLayout, aNewLayout: TVkImageLayout;
+                       aSrcFamily, aDstFamily: TvkInt32);
+  begin
+    If aImage = VK_NULL_HANDLE then exit;
+    FillChar(Barriers[Count], SizeOf(TVkImageMemoryBarrier), #0);
+    Barriers[Count].sType               := VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    Barriers[Count].pNext               := nil;
+    Barriers[Count].srcAccessMask       := aSrcAccess;
+    Barriers[Count].dstAccessMask       := aDstAccess;
+    Barriers[Count].oldLayout           := aOldLayout;
+    Barriers[Count].newLayout           := aNewLayout;
+    Barriers[Count].srcQueueFamilyIndex := TvkUint32(aSrcFamily);
+    Barriers[Count].dstQueueFamilyIndex := TvkUint32(aDstFamily);
+    Barriers[Count].image               := aImage;
+    Barriers[Count].subresourceRange.aspectMask     := aAspect;
+    Barriers[Count].subresourceRange.baseMipLevel   := 0;
+    Barriers[Count].subresourceRange.levelCount     := 1;
+    Barriers[Count].subresourceRange.baseArrayLayer := 0;
+    Barriers[Count].subresourceRange.layerCount     := 1;
+    Inc(Count);
+  end;
+
+begin
+  If not assigned(aCB) then exit;
+  Count := 0;
+
+  PresentQ  := fLinker.ScreenDevice.QueuePresentation.FamilyIndex;
+  GraphicsQ := fLinker.ScreenDevice.QueueGraphics.FamilyIndex;
+  SameQ     := PresentQ = GraphicsQ;
+
+  If fLinker.RenderTarget = RT_SCREEN then
+    FinalLayout := VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+  else
+    FinalLayout := VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+  ColorImg := fDRState.ColorImage;
+
+  If aToAttachment then
+  Begin
+    If fDRState.HasMSAA then
+    Begin
+      AddBarrier(fDRState.MSAAImage,
+                 TVkImageAspectFlags(VK_IMAGE_ASPECT_COLOR_BIT),
+                 0, TVkAccessFlags(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT),
+                 VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                 Integer(VK_QUEUE_FAMILY_IGNORED), Integer(VK_QUEUE_FAMILY_IGNORED));
+      If SameQ then
+        AddBarrier(ColorImg,
+                   TVkImageAspectFlags(VK_IMAGE_ASPECT_COLOR_BIT),
+                   0, TVkAccessFlags(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT),
+                   VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                   Integer(VK_QUEUE_FAMILY_IGNORED), Integer(VK_QUEUE_FAMILY_IGNORED))
+      else
+        AddBarrier(ColorImg,
+                   TVkImageAspectFlags(VK_IMAGE_ASPECT_COLOR_BIT),
+                   TVkAccessFlags(VK_ACCESS_MEMORY_READ_BIT),
+                   TVkAccessFlags(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT),
+                   VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                   PresentQ, GraphicsQ);
+    End else
+    Begin
+      If SameQ then
+        AddBarrier(ColorImg,
+                   TVkImageAspectFlags(VK_IMAGE_ASPECT_COLOR_BIT),
+                   0, TVkAccessFlags(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT),
+                   VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                   Integer(VK_QUEUE_FAMILY_IGNORED), Integer(VK_QUEUE_FAMILY_IGNORED))
+      else
+        AddBarrier(ColorImg,
+                   TVkImageAspectFlags(VK_IMAGE_ASPECT_COLOR_BIT),
+                   TVkAccessFlags(VK_ACCESS_MEMORY_READ_BIT),
+                   TVkAccessFlags(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT),
+                   VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                   PresentQ, GraphicsQ);
+    End;
+
+    If fDRState.DepthImage <> VK_NULL_HANDLE then
+    Begin
+      Sub.aspectMask := TVkImageAspectFlags(VK_IMAGE_ASPECT_DEPTH_BIT);
+      If fDRState.HasStencil then
+        Sub.aspectMask := Sub.aspectMask or TVkImageAspectFlags(VK_IMAGE_ASPECT_STENCIL_BIT);
+      AddBarrier(fDRState.DepthImage,
+                 Sub.aspectMask,
+                 0, TVkAccessFlags(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT),
+                 VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                 Integer(VK_QUEUE_FAMILY_IGNORED), Integer(VK_QUEUE_FAMILY_IGNORED));
+    End;
+
+    If Count > 0 then
+      aCB.CmdPipelineBarrier(
+        TVkPipelineStageFlags(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT),
+        TVkPipelineStageFlags(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT) or
+        TVkPipelineStageFlags(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT),
+        0, 0, nil, 0, nil, Count, @Barriers[0]);
+  End else
+  Begin
+    If (fLinker.RenderTarget = RT_SCREEN) or (not SameQ) then
+    Begin
+      If SameQ then
+        AddBarrier(ColorImg,
+                   TVkImageAspectFlags(VK_IMAGE_ASPECT_COLOR_BIT),
+                   TVkAccessFlags(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT),
+                   TVkAccessFlags(VK_ACCESS_MEMORY_READ_BIT),
+                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, FinalLayout,
+                   Integer(VK_QUEUE_FAMILY_IGNORED), Integer(VK_QUEUE_FAMILY_IGNORED))
+      else
+        AddBarrier(ColorImg,
+                   TVkImageAspectFlags(VK_IMAGE_ASPECT_COLOR_BIT),
+                   TVkAccessFlags(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT),
+                   TVkAccessFlags(VK_ACCESS_MEMORY_READ_BIT),
+                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, FinalLayout,
+                   GraphicsQ, PresentQ);
+    End;
+
+    If Count > 0 then
+      aCB.CmdPipelineBarrier(
+        TVkPipelineStageFlags(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT),
+        TVkPipelineStageFlags(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT),
+        0, 0, nil, 0, nil, Count, @Barriers[0]);
+  End;
+end;
+
+procedure TvgBaseRenderEngine.CmdBeginDynamicRendering(aCB:TvgCommandBuffer; ImageIndex:Integer; aFrame:TvgFrame);
+  Var aRenderArea : TVkRect2D;
+begin
+  CustomAssert(assigned(aCB),'Command buffer not assigned',Self);
+  CustomAssert(assigned(aFrame),'Frame not assigned',Self);
+  CustomAssert(assigned(fLinker),'Linker not assigned',Self);
+  CustomAssert(assigned(fLinker.SwapChain),'Swap chain not assigned',Self);
+
+  aRenderArea.offset.x := 0;
+  aRenderArea.offset.y := 0;
+  if fLinker.RenderTarget = RT_FRAME then
+  Begin
+    aRenderArea.extent.width  := fLinker.SwapChain.ImageWidth  * fLinker.FrameResolution;
+    aRenderArea.extent.height := fLinker.SwapChain.ImageHeight * fLinker.FrameResolution;
+  end else
+  Begin
+    aRenderArea.extent.width  := fLinker.SwapChain.ImageWidth;
+    aRenderArea.extent.height := fLinker.SwapChain.ImageHeight;
+  End;
+
+  PrepareDynamicRenderingState(ImageIndex, aFrame, aRenderArea);
+  CmdDynamicRenderingLayoutBarriers(aCB, True);
+  aCB.CmdBeginRendering(@fDRState.RenderingInfo);
+end;
+
+procedure TvgBaseRenderEngine.CmdEndDynamicRendering(aCB:TvgCommandBuffer);
+begin
+  CustomAssert(assigned(aCB),'Command buffer not assigned',Self);
+  CustomAssert(fDRState.Active,'Dynamic rendering was not begun',Self);
+
+  aCB.CmdEndRendering;
+  CmdDynamicRenderingLayoutBarriers(aCB, False);
+  fDRState.Active := False;
+end;
+
 procedure TvgBaseRenderEngine.StartRenderEnginePrepare(ImageIndex:Integer; aFrame:TvgFrame);
   Var
       VK_presentToClear  : TVkImageMemoryBarrier  ;
@@ -12603,6 +13032,16 @@ begin
         fCurrentPrepareFrame.FrameCommandBuffer.PrepareForRecording ;
         fCurrentPrepareFrame.FrameCommandBuffer.BeginRecording;
 
+        If UseDynamicRendering then
+        Begin
+          CmdBeginDynamicRendering(fCurrentPrepareFrame.FrameCommandBuffer, ImageIndex, aFrame);
+
+          If assigned(fRenderPass) and assigned(fRenderPass.SubPasses) and (fRenderPass.SubPasses.count>0) then
+            AddSceneRenderCommands(ImageIndex, aFrame, 0);
+
+          CmdEndDynamicRendering(fCurrentPrepareFrame.FrameCommandBuffer);
+        End else
+        Begin
 
       If   (fLinker.RenderTarget=RT_SCREEN) and
            (fLinker.ScreenDevice.fPresentQueue.fQueueFamilyIndex<>fLinker.ScreenDevice.fGraphicsQueue.fQueueFamilyIndex) then
@@ -12669,6 +13108,8 @@ begin
                                  @VK_ClearToPresent);  // aImageMemoryBarriers:PVkImageMemoryBarrier
 
         end;
+
+        End;
 
        fCurrentPrepareFrame.FrameCommandBuffer.EndRecording;
 
@@ -12776,6 +13217,12 @@ begin
   Begin
      fRenderPass.Active := True;
      If not fRenderPass.Active then Exit(False);   //RenderPass failed to activate
+     If UseDynamicRendering then
+       CustomAssert(fRenderPass.RenderPassHandle = VK_NULL_HANDLE,
+                    'Dynamic rendering must not create a VkRenderPass', Self)
+     else
+       CustomAssert(fRenderPass.RenderPassHandle <> VK_NULL_HANDLE,
+                    'Classic render path requires a VkRenderPass', Self);
   End;
 
   If fRenderWorkerCount=0 then
@@ -13513,6 +13960,60 @@ begin
   fBufferState  := cbsRecording;
 end;
 
+procedure TvgCommandBuffer.BeginRecordingSecondaryDynamic(
+  const aColorFormat: TVkFormat;
+  const aDepthFormat: TVkFormat;
+  const aStencilFormat: TVkFormat;
+  const aRasterizationSamples: TVkSampleCountFlagBits);
+  Var
+      BeginInfo   : TVkCommandBufferBeginInfo;
+      Inherit     : TVkCommandBufferInheritanceInfo;
+      InheritRend : TVkCommandBufferInheritanceRenderingInfo;
+      ColorFmt    : TVkFormat;
+begin
+  RequireState([cbsInitial], 'BeginRecordingSecondaryDynamic requires INITIAL state');
+  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(fCommandLevel=CB_SECONDARY ,'Command Buffer is NOT Secondary');
+  CustomAssert(assigned(fCommandPool),'Command Pool not assigned');
+  CustomAssert(assigned(fCommandPool.Device),'Device not assigned');
+  CustomAssert(assigned(fCommandPool.Device.VulkanDevice),'Vulkan Device not assigned');
+
+  ColorFmt := aColorFormat;
+
+  FillChar(InheritRend, SizeOf(InheritRend), #0);
+  InheritRend.sType                   := VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_RENDERING_INFO;
+  InheritRend.pNext                   := nil;
+  InheritRend.flags                   := 0;
+  InheritRend.viewMask                := 0;
+  InheritRend.colorAttachmentCount    := 1;
+  InheritRend.pColorAttachmentFormats := @ColorFmt;
+  InheritRend.depthAttachmentFormat   := aDepthFormat;
+  InheritRend.stencilAttachmentFormat := aStencilFormat;
+  InheritRend.rasterizationSamples    := aRasterizationSamples;
+
+  FillChar(Inherit, SizeOf(Inherit), #0);
+  Inherit.sType                := VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
+  Inherit.pNext                := @InheritRend;
+  Inherit.renderPass           := VK_NULL_HANDLE;
+  Inherit.subpass              := 0;
+  Inherit.framebuffer          := VK_NULL_HANDLE;
+  Inherit.occlusionQueryEnable := VK_FALSE;
+  Inherit.queryFlags           := 0;
+  Inherit.pipelineStatistics   := 0;
+
+  FillChar(BeginInfo, SizeOf(BeginInfo), #0);
+  BeginInfo.sType            := VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  BeginInfo.pNext            := nil;
+  BeginInfo.flags            := TVkCommandBufferUsageFlags(VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT) or fBufferUse;
+  BeginInfo.pInheritanceInfo := @Inherit;
+
+  VulkanCheckResult(fCommandPool.Device.VulkanDevice.Commands.BeginCommandBuffer(
+                      fVulkanCommandBuffer.Handle, @BeginInfo));
+
+  fCommandCount := 0;
+  fBufferState  := cbsRecording;
+end;
+
 procedure TvgCommandBuffer.CmdBeginQuery(queryPool: TVkQueryPool; query: TvkUint32; flags: TVkQueryControlFlags);
 begin
   RequireState([cbsRecording], 'Command requires Recording state');
@@ -13531,6 +14032,20 @@ begin
   fVulkanCommandBuffer.CmdBeginRenderPass(aRenderPassBegin,contents);
   Inc(fCommandCount);
 
+end;
+
+procedure TvgCommandBuffer.CmdBeginRendering(const aRenderingInfo: PVkRenderingInfo);
+begin
+  RequireState([cbsRecording], 'Command requires Recording state');
+  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(assigned(aRenderingInfo),'RenderingInfo not assigned');
+  CustomAssert(assigned(fCommandPool),'Command Pool not assigned');
+  CustomAssert(assigned(fCommandPool.Device),'Device not assigned');
+  CustomAssert(assigned(fCommandPool.Device.VulkanDevice),'Vulkan Device not assigned');
+
+  fCommandPool.Device.VulkanDevice.Commands.CmdBeginRendering(
+    fVulkanCommandBuffer.Handle, aRenderingInfo);
+  Inc(fCommandCount);
 end;
 
 procedure TvgCommandBuffer.CmdBindDescriptorSets(
@@ -13865,6 +14380,18 @@ begin
   Inc(fCommandCount);
 
 
+end;
+
+procedure TvgCommandBuffer.CmdEndRendering;
+begin
+  RequireState([cbsRecording], 'Command requires Recording state');
+  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(assigned(fCommandPool),'Command Pool not assigned');
+  CustomAssert(assigned(fCommandPool.Device),'Device not assigned');
+  CustomAssert(assigned(fCommandPool.Device.VulkanDevice),'Vulkan Device not assigned');
+
+  fCommandPool.Device.VulkanDevice.Commands.CmdEndRendering(fVulkanCommandBuffer.Handle);
+  Inc(fCommandCount);
 end;
 
 procedure TvgCommandBuffer.CmdExecute( const aCommandBuffer: TpvVulkanCommandBuffer);
@@ -15466,7 +15993,9 @@ Function TvgGraphicPipeline.SetEnabled:Boolean;
       SD   : TvgScreenRenderDevice;
       SDVD : TpvVulkanDevice;
       Info : Array of TVkGraphicsPipelineCreateInfo;
-
+      PipeRend : TVkPipelineRenderingCreateInfo;
+      ColorFmt : TVkFormat;
+      UseDR    : Boolean;
 
       Width,Height : TvkUint32;
 begin
@@ -15688,6 +16217,26 @@ begin
     For I:=0 to High(fPipelineHandles) do
         SetLength(fPipelineHandles[I], fFrameCount);
 
+    UseDR := fRenderEngine.UseDynamicRendering;
+    FillChar(PipeRend, SizeOf(PipeRend), #0);
+    ColorFmt := fRenderEngine.RenderPass.fColourFormat;
+    If UseDR then
+    Begin
+      PipeRend.sType                   := VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+      PipeRend.pNext                   := nil;
+      PipeRend.viewMask                := 0;
+      PipeRend.colorAttachmentCount    := 1;
+      PipeRend.pColorAttachmentFormats := @ColorFmt;
+      If fRenderEngine.RenderPass.fDepthBufOn then
+        PipeRend.depthAttachmentFormat := fRenderEngine.RenderPass.fDepthStencilFormat
+      else
+        PipeRend.depthAttachmentFormat := VK_FORMAT_UNDEFINED;
+      If fRenderEngine.RenderPass.fStencilBufOn then
+        PipeRend.stencilAttachmentFormat := fRenderEngine.RenderPass.fDepthStencilFormat
+      else
+        PipeRend.stencilAttachmentFormat := VK_FORMAT_UNDEFINED;
+    End;
+
     SetLength(Info, fFrameCount);
     For I:=0 to fFrameCount-1 do
     Begin
@@ -15704,9 +16253,17 @@ begin
         Info[I].pRasterizationState := @fRasterizerState.fRastCreateInfo ;
         Info[I].pMultisampleState   := @fMultisamplingState.fPipelineMSCreateInfo;
         Info[I].pColorBlendState    := @fColorBlendingState.fBlendCreateInfo;
-        Info[I].renderPass          := fRenderEngine.RenderPass.RenderPassHandle; //RENDERPASS Handle  check
-        If assigned(fSubPass) then
-        Info[I].subpass             := fSubPass.Index;
+        If UseDR then
+        Begin
+          Info[I].pNext      := @PipeRend;
+          Info[I].renderPass := VK_NULL_HANDLE;
+          Info[I].subpass    := 0;
+        End else
+        Begin
+          Info[I].renderPass := fRenderEngine.RenderPass.RenderPassHandle; //RENDERPASS Handle  check
+          If assigned(fSubPass) then
+            Info[I].subpass  := fSubPass.Index;
+        End;
         Info[I].basePipelineIndex   := VK_NULL_HANDLE;
         Info[I].layout              := fPipelineLayoutHandle;
         If fDynamicStates.Count>0 then
@@ -18517,6 +19074,32 @@ begin
   Result := fMSAASampleCount <> VK_SAMPLE_COUNT_1_BIT;
 end;
 
+procedure TvgRenderPass.GetDynamicRenderingFormats(out aColorFormat, aDepthFormat, aStencilFormat: TVkFormat;
+                                                   out aSamples: TVkSampleCountFlagBits);
+begin
+  aColorFormat := fColourFormat;
+
+  If fDepthBufOn then
+    aDepthFormat := fDepthStencilFormat
+  else
+    aDepthFormat := VK_FORMAT_UNDEFINED;
+
+  If fStencilBufOn then
+    aStencilFormat := fDepthStencilFormat
+  else
+    aStencilFormat := VK_FORMAT_UNDEFINED;
+
+  If IsMSAAOn then
+    aSamples := fMSAASampleCount
+  else
+    aSamples := VK_SAMPLE_COUNT_1_BIT;
+end;
+
+function TvgRenderPass.UsesDynamicRendering: Boolean;
+begin
+  Result := assigned(fRenderEngine) and fRenderEngine.UseDynamicRendering;
+end;
+
 function TvgRenderPass.GetSampleCount: TvgSampleCountFlagBits;
 begin
   Result :=  GetVGSampleCountFlagBit(fMSAASampleCount);
@@ -18952,13 +19535,20 @@ begin
 
   EnableAttachments;
 
+  SetUpClearColorArray;
+
+  If UsesDynamicRendering then
+  Begin
+    fRenderPassHandle := VK_NULL_HANDLE;
+    Result := True;
+    Exit;
+  End;
+
   SetUpAttachments;
 
   SetUpDependancies;
 
   SetUpSubPasses;
-
-  SetUpClearColorArray;
 
   FillChar(RenderPassCreateInfo,Sizeof(TVkRenderPassCreateInfo),#0);
   RenderPassCreateInfo.sType           := VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -23829,6 +24419,7 @@ begin
    SetUpScreenExtensions;//Must stay here will handle RenderToScreen and NOT RenderToScreen
    SetUpDynamicStateExtensions; //Must stay here will handle Dynamic State extension requirements
    SetUpDescriptorIndexing;
+   SetUpDynamicRenderingExtensions;
 
    DeleteNotRequired;    //tidy up before creating the instance
 
@@ -29469,6 +30060,8 @@ end;
 
 function TvgRenderWorker.BuildCommandAndStartRecording: Boolean;
   Var  SPI : TvkUint32;
+       ColorFmt, DepthFmt, StencilFmt : TVkFormat;
+       Samples : TVkSampleCountFlagBits;
 begin
 
   fRenderCount := 0;
@@ -29484,12 +30077,17 @@ begin
   fCurrentGraphicCommandBuffer.Active := True;
   SPI :=  tvkUint32(fSubPassIndex);
 
-  fCurrentGraphicCommandBuffer.BeginRecordingSecondary(fRenderer.Renderpass.RenderPassHandle,
-                                                      SPI,
-                                                      0,
-                                                      false,
-                                                      0,
-                                                      0 );
+  If fRenderer.UseDynamicRendering then
+  Begin
+    fRenderer.RenderPass.GetDynamicRenderingFormats(ColorFmt, DepthFmt, StencilFmt, Samples);
+    fCurrentGraphicCommandBuffer.BeginRecordingSecondaryDynamic(ColorFmt, DepthFmt, StencilFmt, Samples);
+  End else
+    fCurrentGraphicCommandBuffer.BeginRecordingSecondary(fRenderer.Renderpass.RenderPassHandle,
+                                                        SPI,
+                                                        0,
+                                                        false,
+                                                        0,
+                                                        0 );
 
   Result := (fCurrentGraphicCommandBuffer.fBufferState = cbsRECORDING);
 

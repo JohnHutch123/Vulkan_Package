@@ -2396,7 +2396,7 @@ begin
     If assigned(SHS) then
     Begin
       SHS.Name       := SC_USE_DOUBLE;
-      SHS.SpecType   :=  TS_BOOLEAN;
+      SHS.SpecType   := TS_BOOLEAN;
       SHS.SpecTValue := 'TRUE';
       SHS.ConstantID := CI_USE_DOUBLE;
     end;

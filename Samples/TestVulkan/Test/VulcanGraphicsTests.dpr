@@ -16,7 +16,8 @@ program VulcanGraphicsTests;
 
 uses
   DUnitTestRunner,
-  TestVulkanTestMF in '..\TestVulkanTestMF.pas';
+  TestVulkanTestMF in '..\TestVulkanTestMF.pas',
+  TestVulkanDynamicRendering in 'TestVulkanDynamicRendering.pas';
 
 R *.RES}
 

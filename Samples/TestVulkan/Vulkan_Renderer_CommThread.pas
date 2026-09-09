@@ -943,6 +943,12 @@ begin
 
   Try
 
+      If fRenderEngine.UseDynamicRendering then
+      Begin
+        fRenderEngine.CmdEndDynamicRendering(fCurrentPrepareFrame.FrameCommandBuffer);
+      End else
+      Begin
+
       fCurrentPrepareFrame.FrameCommandBuffer.CmdEndRenderPass;
 
 
@@ -993,6 +999,8 @@ begin
                                @VK_ClearToPresent);  // aImageMemoryBarriers:PVkImageMemoryBarrier
 
       end;
+
+      End;
 
       fCurrentPrepareFrame.FrameCommandBuffer.EndRecording;
 
@@ -1212,7 +1220,8 @@ begin
 
   Assert(assigned(fRenderEngine.Linker),'Vulkan Link not attached');
   Assert(assigned(fRenderEngine.RenderPass),'Render Pass not created');
-  Assert((fRenderEngine.RenderPass.RenderPassHandle <> VK_NULL_HANDLE),'Render Pass not active');
+  If not fRenderEngine.UseDynamicRendering then
+    Assert((fRenderEngine.RenderPass.RenderPassHandle <> VK_NULL_HANDLE),'Render Pass not active');
 
   Assert(assigned(aFrame),'A Frame not provided.');
   Assert(assigned(aFrame.FrameCommandBuffer),'A Frame Command not provided.');
@@ -1299,6 +1308,12 @@ begin
 
         fCurrentPrepareFrame.FrameCommandBuffer.BeginRecording;
 
+        If fRenderEngine.UseDynamicRendering then
+        Begin
+          fRenderEngine.CmdBeginDynamicRendering(fCurrentPrepareFrame.FrameCommandBuffer, ImageIndex, aFrame);
+        End else
+        Begin
+
         If (fRenderEngine.Linker.ScreenDevice.QueuePresentation.FamilyIndex <> fRenderEngine.Linker.ScreenDevice.QueueGraphics.FamilyIndex) then
         Begin
           VK_presentToClear.image   := RenderImage;
@@ -1317,6 +1332,8 @@ begin
         end;
 
         fCurrentPrepareFrame.FrameCommandBuffer.CmdBeginRenderPass( @RP, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
+
+        End;
 
         Assert(assigned(fRenderEngine.Linker),'Linker not connected');
 

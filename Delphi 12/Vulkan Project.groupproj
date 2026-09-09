@@ -6,6 +6,9 @@
         <Projects Include="..\Samples\TestVulkan\VulcanTest.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="..\Samples\TestVulkan\Test\VulcanGraphicsTests.dproj">
+            <Dependencies/>
+        </Projects>
         <Projects Include="VulkanPkgR280.dproj">
             <Dependencies/>
         </Projects>
@@ -58,6 +61,15 @@
     </Target>
     <Target Name="VulcanTest:Make">
         <MSBuild Projects="..\Samples\TestVulkan\VulcanTest.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="VulcanGraphicsTests">
+        <MSBuild Projects="..\Samples\TestVulkan\Test\VulcanGraphicsTests.dproj"/>
+    </Target>
+    <Target Name="VulcanGraphicsTests:Clean">
+        <MSBuild Projects="..\Samples\TestVulkan\Test\VulcanGraphicsTests.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="VulcanGraphicsTests:Make">
+        <MSBuild Projects="..\Samples\TestVulkan\Test\VulcanGraphicsTests.dproj" Targets="Make"/>
     </Target>
     <Target Name="VulkanPkgR280">
         <MSBuild Projects="VulkanPkgR280.dproj"/>
@@ -168,13 +180,13 @@
         <MSBuild Projects="..\ShaderBuilder\ShaderBuilder.dproj" Targets="Make"/>
     </Target>
     <Target Name="Build">
-        <CallTarget Targets="VulcanTest;VulkanPkgR280;VulkanPkgD280;VulkanPkg_VCLR280;VulkanPkg_VCLD280;VulkanPkg_SingleR280;VulcanPkg_ComThreadR280;VulcanPkg_ComThreadD280;VulkanPkg_OMNIThreadR280;VulkanPkg_OMNIThreadD350;VulkanPkg_FMXR350;VulcanTest_Components;ShaderBuilder"/>
+        <CallTarget Targets="VulcanTest;VulcanGraphicsTests;VulkanPkgR280;VulkanPkgD280;VulkanPkg_VCLR280;VulkanPkg_VCLD280;VulkanPkg_SingleR280;VulcanPkg_ComThreadR280;VulcanPkg_ComThreadD280;VulkanPkg_OMNIThreadR280;VulkanPkg_OMNIThreadD350;VulkanPkg_FMXR350;VulcanTest_Components;ShaderBuilder"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="VulcanTest:Clean;VulkanPkgR280:Clean;VulkanPkgD280:Clean;VulkanPkg_VCLR280:Clean;VulkanPkg_VCLD280:Clean;VulkanPkg_SingleR280:Clean;VulcanPkg_ComThreadR280:Clean;VulcanPkg_ComThreadD280:Clean;VulkanPkg_OMNIThreadR280:Clean;VulkanPkg_OMNIThreadD350:Clean;VulkanPkg_FMXR350:Clean;VulcanTest_Components:Clean;ShaderBuilder:Clean"/>
+        <CallTarget Targets="VulcanTest:Clean;VulcanGraphicsTests:Clean;VulkanPkgR280:Clean;VulkanPkgD280:Clean;VulkanPkg_VCLR280:Clean;VulkanPkg_VCLD280:Clean;VulkanPkg_SingleR280:Clean;VulcanPkg_ComThreadR280:Clean;VulcanPkg_ComThreadD280:Clean;VulkanPkg_OMNIThreadR280:Clean;VulkanPkg_OMNIThreadD350:Clean;VulkanPkg_FMXR350:Clean;VulcanTest_Components:Clean;ShaderBuilder:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="VulcanTest:Make;VulkanPkgR280:Make;VulkanPkgD280:Make;VulkanPkg_VCLR280:Make;VulkanPkg_VCLD280:Make;VulkanPkg_SingleR280:Make;VulcanPkg_ComThreadR280:Make;VulcanPkg_ComThreadD280:Make;VulkanPkg_OMNIThreadR280:Make;VulkanPkg_OMNIThreadD350:Make;VulkanPkg_FMXR350:Make;VulcanTest_Components:Make;ShaderBuilder:Make"/>
+        <CallTarget Targets="VulcanTest:Make;VulcanGraphicsTests:Make;VulkanPkgR280:Make;VulkanPkgD280:Make;VulkanPkg_VCLR280:Make;VulkanPkg_VCLD280:Make;VulkanPkg_SingleR280:Make;VulcanPkg_ComThreadR280:Make;VulcanPkg_ComThreadD280:Make;VulkanPkg_OMNIThreadR280:Make;VulkanPkg_OMNIThreadD350:Make;VulkanPkg_FMXR350:Make;VulcanTest_Components:Make;ShaderBuilder:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
     <ItemGroup Condition="'$(BuildGroup)'=='Vulkan Test Debug Build'">
@@ -213,6 +225,12 @@
             <Configurations>Debug</Configurations>
             <Platforms>Win32</Platforms>
             <Enabled>True</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="..\Samples\TestVulkan\Test\VulcanGraphicsTests.dproj">
+            <ProjectGuid>{807F4E27-8C9B-49C3-8F7F-060E1D46622F}</ProjectGuid>
+            <Configurations>Debug</Configurations>
+            <Platforms>Win32</Platforms>
+            <Enabled>False</Enabled>
         </BuildGroupProject>
         <BuildGroupProject Include="VulkanPkgD280.dproj">
             <ProjectGuid>{A9AF7B1C-5BA6-4894-9D17-DB28C6D8D675}</ProjectGuid>
@@ -290,6 +308,12 @@
         </BuildGroupProject>
         <BuildGroupProject Include="..\Samples\TestVulkan\VulcanTest_Components.dproj">
             <ProjectGuid>{E4570A1B-1CF1-4704-B8AF-F1E7B613413F}</ProjectGuid>
+            <Configurations>Debug</Configurations>
+            <Platforms>Win32</Platforms>
+            <Enabled>False</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="..\Samples\TestVulkan\Test\VulcanGraphicsTests.dproj">
+            <ProjectGuid>{807F4E27-8C9B-49C3-8F7F-060E1D46622F}</ProjectGuid>
             <Configurations>Debug</Configurations>
             <Platforms>Win32</Platforms>
             <Enabled>False</Enabled>
