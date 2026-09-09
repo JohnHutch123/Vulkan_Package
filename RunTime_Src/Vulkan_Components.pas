@@ -3321,6 +3321,7 @@ TvgBaseComponent = class(TComponent)
     function GetName: String;
     procedure SetDynamicState(const Value: TvgDynamicStateBit);
     procedure SetName(const Value: String);
+
     Protected
        fName         : String;
        fDynamicState : TVkDynamicState;
@@ -15672,26 +15673,6 @@ begin
   fFrameCount  := MaxFramesInFlight;   //Max Frames In Flight
   fThreadCount := 1;
 
-//   fSetLayoutCount        := 0;
-//     fSetLayoutArray        : Array of TVkPipelineLayoutCreateInfo;
-
- //  fPushConstantRangeCount:= 0;;
-//     fPushConstantRanges    : Array of TVkPushConstantRange;
-
- (*
-   fUnderlayNodes := TvgObjectDataList.Create;
-   fStaticNodes   := TvgObjectDataList.Create;
-   fDynamicNodes  := TvgObjectDataList.Create;
-   fOverlayNodes  := TvgObjectDataList.Create;
-
-   If assigned(fRenderEngine) then
-   Begin
-     fUnderlayNodes.fRenderer := fRenderEngine;
-     fStaticNodes.fRenderer   := fRenderEngine;
-     fDynamicNodes.fRenderer  := fRenderEngine;
-     fOverlayNodes.fRenderer  := fRenderEngine;
-   End;
- *)
 end;
 
 procedure TvgGraphicPipeline.DefineProperties(Filer: TFiler);
@@ -15871,19 +15852,13 @@ begin
   If not assigned(fRenderEngine.Linker) then exit;
   Result := fRenderEngine.Linker.FrameCount;
 end;
-(*
-function TvgGraphicPipeline.GetNodeCount: Integer;
-begin
-  Result := 0;
 
-//  Result := fObjectStore.ObjectCount
-end;
- *)
 function TvgGraphicPipeline.IsDynamicStateEnabled( aState: TVkDynamicState ; UpdateState:Boolean=False) : Boolean;
   Var I:Integer;
       DS : TvgDynamicState;
 begin
  // Check and fix
+
   Result:=False;
   If fDynamicStates.Count=0 then exit;
   For I:=0 to  fDynamicStates.Count-1 do
@@ -15906,16 +15881,6 @@ begin
   If assigned(fObjectStore) then
      fObjectStore.SetCurrentFrame(fCurrentFrameIndex);
 
- (*
-  If assigned(fGraphicPipeRes) then
-     fGraphicPipeRes.CurrentFrame := fCurrentFrameIndex;
-
-  If  assigned(fGPMaterialRes) then
-     fGPMaterialRes.CurrentFrame  := fCurrentFrameIndex;
-
-  If assigned(fGPModelRes) then
-     fGPModelRes.CurrentFrame     := fCurrentFrameIndex;
-  *)
 end;
 
 Function TvgGraphicPipeline.EnableDesigning : Boolean;
@@ -16170,16 +16135,7 @@ begin
 
     If assigned(fObjectStore) then
        fObjectStore.EnableResources;
-  (*
-    If assigned(FGraphicPipeRes) then
-    Begin
-      If not assigned(FGraphicPipeRes.LogicalDevice) then
-        FGraphicPipeRes.LogicalDevice := SD;
-      FGraphicPipeRes.Linker := GetLinker;
 
-      FGraphicPipeRes.Active := True;
-    End;
- *)
  //layout for resources used
      SetUpPipeLineLayout;
 

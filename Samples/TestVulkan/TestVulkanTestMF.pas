@@ -15,7 +15,7 @@ uses
   TestFramework, Vulkan, System.Variants, Data.DB, Datasnap.Provider,
   Datasnap.DBClient, Winapi.Windows, Vcl.Dialogs, VulkanTestMF, Vcl.Forms,
   Data.Win.ADODB, Vcl.Controls, System.Classes, System.SysUtils, Winapi.Messages,
-  Vulkan_WindowVCL, VulkanTestDM, Vcl.Graphics, Vulkan_Components, Vcl.StdCtrls,
+  Vulkan_WindowVCL,  Vcl.Graphics, Vulkan_Components, Vcl.StdCtrls,
   Vcl.Buttons, Vcl.ComCtrls, Vcl.ExtCtrls, PasVulkan.Math,
   Vulkan_Components_Lookups;
 

@@ -531,6 +531,11 @@ begin
 
     fScreenDevice := TvgScreenRenderDevice.create(nil);
     fScreenDevice.PhysicalDevice := fPhysicalDevice;
+
+    fScreenDevice.DynamicRenderingON := False;
+
+
+    fScreenDevice.DynamicRenderingON := True;
  (*
     fInstance.BuildALLEXtensions;
     fInstance.BuildALLLayers;
