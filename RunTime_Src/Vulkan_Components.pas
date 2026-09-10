@@ -92,7 +92,7 @@ Const
 Var
   VulkanDLLsLoaded     : Boolean = False;
 
-  MaxFramesInFlight    : TvkUint32 = 2;   //IMPORTANT  Used Everywhere
+  MaxFramesInFlight    : TvkUint32 = 3;   //IMPORTANT  Used Everywhere  Particle system needs at least three
   FrameResMax          : TvkUint32 = 10;  //Used to restrict MAX resolution of Frames
 
   IgnorecsLoading      : Boolean = False;

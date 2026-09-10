@@ -22,7 +22,8 @@ uses
   Vulkan_Renderer_CommThread,
   Vulkan_Components_Scene_Renderer,
   Vulkan_Components_DataStore,
-  Vulkan_Components_ShaderBuilder;
+  Vulkan_Components_ShaderBuilder,
+  Vulkan_Components_Particles;
 
 type
   TTestVulkan = class(TForm)
@@ -55,6 +56,7 @@ type
     Button9: TButton;
     SupportFolderEDT: TEdit;
     BitBtn4: TBitBtn;
+    Button11: TButton;
     procedure Button1Click(Sender: TObject);
     procedure Button2Click(Sender: TObject);
     procedure Button4Click(Sender: TObject);
@@ -74,8 +76,8 @@ type
     procedure MSAACBClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure BitBtn3Click(Sender: TObject);
-    procedure Panel1MouseMove(Sender: TObject; Shift: TShiftState; X,
-      Y: Integer);
+    procedure Panel1MouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
+    procedure Button11Click(Sender: TObject);
   private
     { Private declarations }
     fInstance : TvgInstance;
@@ -89,9 +91,13 @@ type
     fScene      : TvgScene;
     fToolManager:TvgToolManager;
 
+    fParticleSys : TvgParticleSystem;
+
     fMSAASample : TvgSampleCountFlagBits;
-    procedure HandleMsg(const aLabel: String; const ThreadCount,
-      aMsgCount: Integer);
+
+    procedure HandleMsg(const aLabel: String; const ThreadCount,  aMsgCount: Integer);
+
+    Procedure ParticleSysCallsRedraw(Sender: TObject) ;
 
     Procedure BuildShaders;
 
@@ -480,6 +486,23 @@ begin
 
 
  // Button6Click(nil);
+
+end;
+
+procedure TTestVulkan.Button11Click(Sender: TObject);
+begin
+  If assigned (fParticleSys) then exit;
+
+  fParticleSys := TvgParticleSystem.Create(self);
+  fParticleSys.ParticleCount:=256;
+
+  fParticleSys.OnRedrawNeeded :=  ParticleSysCallsRedraw;
+
+  fParticleSys.Forces.AddGravity(0,0,0,10) ;
+
+  fParticleSys.Prepare  ;
+
+//  fParticleSys.
 
 end;
 
@@ -897,6 +920,11 @@ end;
 procedure TTestVulkan.Panel1MouseMove(Sender: TObject; Shift: TShiftState; X,  Y: Integer);
 begin
   //
+end;
+
+procedure TTestVulkan.ParticleSysCallsRedraw(Sender: TObject);
+begin
+
 end;
 
 procedure TTestVulkan.vgWindowLink1RenderPassBuild(Sender: TvgRenderPass);

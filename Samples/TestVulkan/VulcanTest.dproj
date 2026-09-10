@@ -128,6 +128,7 @@
         <DCCReference Include="..\..\RunTime_Src\Vulkan_Components_VulkanAPI.pas"/>
         <DCCReference Include="..\..\RunTime_Src\Vulkan_Components_ShaderBuilder.pas"/>
         <DCCReference Include="..\..\RunTime_Src\Vulkan_Components_Particles.pas"/>
+        <DCCReference Include="..\..\RunTime_Src\Vulkan_Components_Compute.pas"/>
         <None Include="ModelSupport_VulcanTest\default.txaPackage"/>
         <None Include="ModelSupport_VulcanTest\default.txvpck"/>
         <None Include="ModelSupport_VulcanTest\VulcanTest\default.txvpck"/>

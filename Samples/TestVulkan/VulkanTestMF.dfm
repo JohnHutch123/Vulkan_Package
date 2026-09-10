@@ -294,8 +294,8 @@ object TestVulkan: TTestVulkan
     TabOrder = 26
   end
   object Button9: TButton
-    Left = 344
-    Top = 92
+    Left = 447
+    Top = 34
     Width = 75
     Height = 25
     Caption = 'Select Folder'
@@ -317,15 +317,25 @@ object TestVulkan: TTestVulkan
     Caption = 'get Shader Template'
     TabOrder = 29
   end
+  object Button11: TButton
+    Left = 336
+    Top = 102
+    Width = 105
+    Height = 25
+    Caption = 'Build Particle Sys'
+    TabOrder = 30
+    OnClick = Button11Click
+  end
   object OpenDialog1: TOpenDialog
     Left = 256
     Top = 400
   end
   object DataFolderDlg: TFileOpenDialog
     FavoriteLinks = <>
+    FileName = 'D:\Vulkan_Package\RunTime_Src'
     FileTypes = <>
     Options = [fdoPickFolders, fdoPathMustExist]
-    Left = 488
-    Top = 128
+    Left = 544
+    Top = 32
   end
 end
