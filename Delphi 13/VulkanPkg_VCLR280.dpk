@@ -34,7 +34,6 @@ requires
   VulkanPkgR280;
 
 contains
-  Vulkan_WindowVCL in '..\RunTime_Src\Vulkan_WindowVCL.pas',
-  Vulkan_Components_PointerValidation in '..\RunTime_Src\Vulkan_Components_PointerValidation.pas';
+  Vulkan_WindowVCL in '..\RunTime_Src\Vulkan_WindowVCL.pas';
 
 end.

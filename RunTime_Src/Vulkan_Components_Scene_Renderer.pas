@@ -145,6 +145,10 @@ type
 
     Procedure  ConfigureGraphicPipeline(GP:TvgGraphicPipeline); Override;
 
+    // Size used for gl_PointSize when Topology is POINT_LIST.  Emitted as a
+    // literal into the generated vertex shader.
+    function GetShaderPointSizeExpression: String; Override;
+
     function GetEditable: Boolean;  Override;
     function GetFrozen: Boolean;  Override;
     function GetLocked: Boolean;    Override;
@@ -178,6 +182,11 @@ type
     // Configuration
 //    Property InstanceDataON : Boolean read fInstanceDataON write SetIncInstanceData;
  //   Property ObjectSelectON : Boolean read fObjectSelectON write SetObjectSelectON ;
+
+    // Point sprite size used when Topology is POINT_LIST.  Read by
+    // GetShaderPointSizeExpression when the vertex shader is generated, so it
+    // must be set before the graphic pipeline is built.
+    Property PointSize : Single read fPointSize write fPointSize;
 
     Property Scene: TvgScene read fScene ;
     Property Active: Boolean read GetActive write SetActiveState;
@@ -1107,6 +1116,18 @@ procedure TvgObjectStore.ClearGraphicPipes;
 begin
   inherited;
 
+end;
+
+function TvgObjectStore.GetShaderPointSizeExpression: String;
+begin
+  if fPointSize > 0 then
+    // Fixed decimals give a clean GLSL float literal; FloatToStr would spell a
+    // Single out as its full binary expansion (6.30000019073486).  Invariant
+    // settings so the result never picks up a comma decimal separator from
+    // the machine's locale.
+    Result := Format('%.4f', [fPointSize], TFormatSettings.Invariant)
+  else
+    Result := inherited GetShaderPointSizeExpression;
 end;
 
 procedure TvgObjectStore.ConfigureGraphicPipeline(GP: TvgGraphicPipeline);

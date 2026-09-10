@@ -1,0 +1,175 @@
+#version 450
+
+layout(local_size_x = 256) in;
+
+const uint VERT_FLOATS = 12u;
+
+struct Particle {
+  vec4  posSize;
+  vec4  velMass;
+  vec4  colour;
+  float life;
+  float maxLife;
+  uint  seed;
+  uint  flags;
+};
+
+struct Force {
+  vec4 origin;
+  vec4 vector;
+  uint kind;
+  uint falloff;
+  uint isOn;
+  uint pad;
+};
+
+layout(std430, set = 0, binding = 0) buffer ParticleBuf {
+  Particle particles[];
+};
+
+layout(std430, set = 0, binding = 1) readonly buffer ForceBuf {
+  Force forces[];
+};
+
+layout(std430, set = 0, binding = 2) writeonly buffer VertexBuf {
+  float verts[];
+};
+
+layout(push_constant) uniform PushBlock {
+  float dt;
+  float elapsed;
+  uint  particleCount;
+  uint  forceCount;
+  vec4  emitOrigin;
+  vec4  emitExtent;
+  vec4  velMin;
+  vec4  velMax;
+  vec4  boundsMin;
+  vec4  boundsMax;
+  vec4  lifeMass;
+} pc;
+
+// xorshift32
+uint rndNext(inout uint s) {
+  if (s == 0u) s = 2463534242u;
+  s ^= s << 13; s ^= s >> 17; s ^= s << 5;
+  return s;
+}
+
+float rnd01(inout uint s) {
+  return float(rndNext(s) & 0x00FFFFFFu) / 16777216.0;
+}
+
+float rndRange(inout uint s, float a, float b) {
+  return a + (b - a) * rnd01(s);
+}
+
+// Give a dead particle a fresh position, velocity, mass and life.
+void respawn(inout Particle p, uint idx) {
+  uint s = p.seed ^ (idx * 747796405u) ^ floatBitsToUint(pc.elapsed + 1.0);
+  p.posSize.xyz = pc.emitOrigin.xyz + vec3(
+      rndRange(s, -pc.emitExtent.x, pc.emitExtent.x),
+      rndRange(s, -pc.emitExtent.y, pc.emitExtent.y),
+      rndRange(s, -pc.emitExtent.z, pc.emitExtent.z));
+  p.velMass.xyz = vec3(
+      rndRange(s, pc.velMin.x, pc.velMax.x),
+      rndRange(s, pc.velMin.y, pc.velMax.y),
+      rndRange(s, pc.velMin.z, pc.velMax.z));
+  p.velMass.w = rndRange(s, pc.lifeMass.z, pc.lifeMass.w);
+  p.maxLife   = rndRange(s, pc.lifeMass.x, pc.lifeMass.y);
+  p.life      = p.maxLife;
+  p.seed      = s;
+  p.flags     = 1u;
+}
+
+vec3 forceAccel(Force f, vec3 pos, vec3 vel, float mass) {
+  if (f.isOn == 0u) return vec3(0.0);
+
+  if (f.kind == 0u) {
+    // uniform field - already an acceleration, mass independent
+    return f.vector.xyz * f.vector.w;
+  }
+  else if (f.kind == 1u) {
+    vec3  d  = f.origin.xyz - pos;
+    float r2 = max(dot(d, d), 1e-6);
+    float r  = sqrt(r2);
+    if (f.origin.w > 0.0 && r > f.origin.w) return vec3(0.0);
+    float atten = 1.0;
+    if      (f.falloff == 1u) atten = 1.0 / r;
+    else if (f.falloff == 2u) atten = 1.0 / r2;
+    return (d / r) * f.vector.w * atten / mass;
+  }
+  else if (f.kind == 2u) {
+    return -vel * f.vector.w / mass;
+  }
+  else if (f.kind == 3u) {
+    vec3 axis = f.vector.xyz;
+    if (dot(axis, axis) < 1e-8) return vec3(0.0);
+    axis = normalize(axis);
+    vec3  d      = pos - f.origin.xyz;
+    vec3  radial = d - axis * dot(d, axis);
+    float r      = length(radial);
+    if (r < 1e-4) return vec3(0.0);
+    if (f.origin.w > 0.0 && r > f.origin.w) return vec3(0.0);
+    vec3  tang  = normalize(cross(axis, radial));
+    float atten = 1.0;
+    if      (f.falloff == 1u) atten = 1.0 / r;
+    else if (f.falloff == 2u) atten = 1.0 / (r * r);
+    return tang * f.vector.w * atten / mass;
+  }
+  return vec3(0.0);
+}
+
+void main() {
+  uint idx = gl_GlobalInvocationID.x;
+  if (idx >= pc.particleCount) return;
+
+  Particle p = particles[idx];
+
+  if (p.flags == 0u || p.life <= 0.0) {
+    respawn(p, idx);
+  } else {
+    float mass = max(p.velMass.w, 1e-4);
+    vec3  acc  = vec3(0.0);
+    for (uint i = 0u; i < pc.forceCount; ++i)
+      acc += forceAccel(forces[i], p.posSize.xyz, p.velMass.xyz, mass);
+
+    vec3 vel = p.velMass.xyz + acc * pc.dt;
+    vel *= max(0.0, 1.0 - clamp(pc.emitOrigin.w, 0.0, 1.0) * pc.dt);
+    vec3 pos = p.posSize.xyz + vel * pc.dt;
+
+    float rest = pc.emitExtent.w;
+    for (int c = 0; c < 3; ++c) {
+      if (pos[c] < pc.boundsMin[c]) { pos[c] = pc.boundsMin[c]; vel[c] = -vel[c] * rest; }
+      else if (pos[c] > pc.boundsMax[c]) { pos[c] = pc.boundsMax[c]; vel[c] = -vel[c] * rest; }
+    }
+
+    p.velMass.xyz = vel;
+    p.posSize.xyz = pos;
+    p.life        = p.life - pc.dt;
+  }
+
+  particles[idx] = p;
+
+  // Render-visible subset straight into the DataStore vertex buffer.
+  float t = (p.maxLife > 0.0) ? clamp(p.life / p.maxLife, 0.0, 1.0) : 0.0;
+
+  // Point size: heavier particles draw larger, and every
+  // particle shrinks as its life runs down.
+  float massT = (pc.lifeMass.w > pc.lifeMass.z)
+              ? clamp((p.velMass.w - pc.lifeMass.z) /
+                      (pc.lifeMass.w - pc.lifeMass.z), 0.0, 1.0)
+              : 0.5;
+  float psize = max(1.0, p.posSize.w * mix(0.6, 1.6, massT) * mix(0.35, 1.0, t));
+
+  uint  b = idx * VERT_FLOATS;
+  verts[b + 0u] = p.posSize.x;
+  verts[b + 1u] = p.posSize.y;
+  verts[b + 2u] = p.posSize.z;
+  verts[b + 3u] = p.colour.r;
+  verts[b + 4u] = p.colour.g;
+  verts[b + 5u] = p.colour.b;
+  verts[b + 6u] = p.colour.a * t;
+  verts[b + 7u] = psize;
+  verts[b + 8u] = t;
+}

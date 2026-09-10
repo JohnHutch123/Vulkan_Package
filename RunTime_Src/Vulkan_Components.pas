@@ -3821,6 +3821,11 @@ TvgBaseComponent = class(TComponent)
     constructor Create(AOwner: TComponent); Override;
     destructor Destroy; override;
 
+    // Per-attachment blend setup.  Create adds one attachment, so
+    // ColorAttachments[0] is the usual target for enabling alpha or additive
+    // blending on a pipeline - see TvgParticleStore.ConfigureGraphicPipeline.
+    Property ColorAttachments : TvgColorBlendAttachmentCol Read fColorAttachments;
+
   Published
 
     Property LogicOpEnable   : Boolean Read getLogicOpEnable write SetLogicOpEnable;
@@ -5266,6 +5271,12 @@ TvgBaseComponent = class(TComponent)
     function GetShaderVertexPositionExpression(const aPositionName: String): String; virtual;
     function GetShaderFragmentColorExpression(const aSamplerName, aTexCoordName, aColorName: String): String; virtual;
 
+    // GLSL expression assigned to gl_PointSize when the topology is
+    // POINT_LIST.  Descendants override it to size points from their own
+    // vertex data - see TvgObjectStore (uses its PointSize property) and
+    // TvgParticleStore (sizes each particle from mass and remaining life).
+    function GetShaderPointSizeExpression: String; virtual;
+
     Property Active        : Boolean Read GetActive write SetActiveState Stored False;
 
     Property ObjectCount   : Integer Read GetObjectCount;
@@ -5543,6 +5554,12 @@ TvgBaseComponent = class(TComponent)
   end;
 
 
+  // Base for compute engines.  Deliberately empty: the concrete work - shader
+  // module, descriptor set layout/pool/sets, pipeline layout, pipeline, and
+  // the dispatch and barrier recording - lives in TvgComputeEngine in
+  // Vulkan_Components_Compute, which cannot be declared here because it needs
+  // the runtime GLSL compiler.  TvgParticleCompute in
+  // Vulkan_Components_Particles is a worked descendant.
   TvgBaseComputeEngine  =  class(TvgBaseComponent)
   Private
 
@@ -26834,6 +26851,11 @@ function TvgBaseObjectStore.GetShaderVertexPositionExpression(
   const aPositionName: String): String;
 begin
   Result := 'vec4(' + aPositionName + ', 1.0)';
+end;
+
+function TvgBaseObjectStore.GetShaderPointSizeExpression: String;
+begin
+  Result := '4.0';
 end;
 
 function TvgBaseObjectStore.GetShaderFragmentColorExpression(

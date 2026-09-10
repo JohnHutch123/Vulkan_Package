@@ -21,7 +21,8 @@ uses
   Vulkan_WindowVCL in '..\..\RunTime_Src\Vulkan_WindowVCL.pas',
   Vulkan_Components_PointerValidation in '..\..\RunTime_Src\Vulkan_Components_PointerValidation.pas',
   Vulkan_Components_VulkanAPI in '..\..\RunTime_Src\Vulkan_Components_VulkanAPI.pas',
-  Vulkan_Components_ShaderBuilder in '..\..\RunTime_Src\Vulkan_Components_ShaderBuilder.pas';
+  Vulkan_Components_ShaderBuilder in '..\..\RunTime_Src\Vulkan_Components_ShaderBuilder.pas',
+  Vulkan_Components_Particles in '..\..\RunTime_Src\Vulkan_Components_Particles.pas';
 
 {$R *.res}
 

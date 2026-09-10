@@ -71,6 +71,12 @@ Uses
 
   {$A-}    //important
 
+const
+  // Descriptor-array slots a storage buffer array starts with.  Referenced
+  // both by TvgDescriptorArray_StorageBuffer<T>.Create and by the published
+  // "default" on its BindingCount redeclaration, so the two cannot drift.
+  SB_DEFAULT_BINDING_COUNT = 64;
+
 var
 
    LocationVKFormat : TvgFormat = R32G32B32_SFLOAT;//R64G64B64_SFLOAT;   send data as float
@@ -419,6 +425,7 @@ Type
 
 
 TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
+
 //============================================================
   // TvgElementSampler
   // Analogous to TvgPixelSampler but for linear GPU storage buffer data.
@@ -633,6 +640,18 @@ TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
 
     Property SB_Descriptor[Index:Integer] : TvgDescriptor_Data_StorageBuffer<T>  Read GetDescriptor_Data_StorageBuffer  ;
 
+   published
+    // Create sets fBindingMode := vgdbmFixedArray (not the inherited
+    // vgdbmSingle default) — redeclare the default here so streaming/
+    // the Object Inspector reflect what this class actually starts with.
+    property BindingMode default vgdbmFixedArray;
+
+    // Same reasoning: Create sets BindingCount to SB_DEFAULT_BINDING_COUNT,
+    // while the inherited declaration says "default 1".  Without this
+    // redeclaration a design-time value of 1 compares equal to the inherited
+    // default, so it is never written to the DFM — and Create's 64 silently
+    // wins on the next load.
+    property BindingCount default SB_DEFAULT_BINDING_COUNT;
 
   end;
 
@@ -3702,7 +3721,7 @@ begin
   fDescriptorType := VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 
   BindingMode     := vgdbmFixedArray;
-  BindingCount    := 64;  //MAX_SLOTS;          // e.g. 64
+  BindingCount    := SB_DEFAULT_BINDING_COUNT;
   PartiallyBound  := True;               // dioPartiallyBound
   UpdateAfterBind := True;              // dioUpdateAfterBind  (optional)
 

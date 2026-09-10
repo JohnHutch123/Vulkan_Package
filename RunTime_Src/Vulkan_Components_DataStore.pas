@@ -169,6 +169,14 @@ type
 
     // Vulkan resources
     FVulkanDevice      : TpvVulkanDevice;
+
+    // Extra VkBufferUsageFlags OR'd into the vertex/instance buffers created by
+    // CreateVulkanDataBuffers.  Descendants that let a compute shader write
+    // straight into the render buffers set this to
+    // VK_BUFFER_USAGE_STORAGE_BUFFER_BIT before the buffers are created.
+    // See TvgParticleStore in Vulkan_Components_Particles.
+    FExtraBufferUsage  : TVkBufferUsageFlags;
+
     FVertexBuffers     : TArray<TVulkanBufferInfo>;    // Per frame
     FInstanceBuffers   : TArray<TVulkanBufferInfo>;    // Per frame
     FIndexBuffers      : TArray<TVulkanBufferInfo>;    // Per frame
@@ -1583,7 +1591,8 @@ begin
   CustomAssert(assigned(FVulkanDevice),'Vulkan Device not assigned');
 
   Usage := TVkBufferUsageFlags(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT) or
-           TVkBufferUsageFlags(VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+           TVkBufferUsageFlags(VK_BUFFER_USAGE_TRANSFER_DST_BIT) or
+           FExtraBufferUsage;
   MemProps := TVkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
   
   // Create vertex buffers

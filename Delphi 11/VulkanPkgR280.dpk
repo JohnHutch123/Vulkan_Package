@@ -58,10 +58,18 @@ contains
   PasVulkan.Image.QOI in '..\..\Vulkan\src\PasVulkan.Image.QOI.pas',
   PasVulkan.Image.Utils in '..\..\Vulkan\src\PasVulkan.Image.Utils.pas',
   PasVulkan.NVIDIA.AfterMath in '..\..\Vulkan\src\PasVulkan.NVIDIA.AfterMath.pas',
-  Vulkan_Components_Nodes in '..\RunTime_Src\Vulkan_Components_Nodes.pas',
-  Vulkan_Components_Resources in '..\RunTime_Src\Vulkan_Components_Resources.pas',
+  Vulkan_Components_Descriptors in '..\RunTime_Src\Vulkan_Components_Descriptors.pas',
   Vulkan_Assert in '..\RunTime_Src\Vulkan_Assert.pas',
-  Vulkan_Components_Scene in '..\RunTime_Src\Vulkan_Components_Scene.pas';
+  Vulkan_Components_Scene_Renderer in '..\RunTime_Src\Vulkan_Components_Scene_Renderer.pas',
+  Vulkan_PixelInfo in '..\RunTime_Src\Vulkan_PixelInfo.pas',
+  Vulkan_Components_Camera in '..\RunTime_Src\Vulkan_Components_Camera.pas',
+  Vulkan_Components_DataStore in '..\RunTime_Src\Vulkan_Components_DataStore.pas',
+  Vulkan_Components_Nodes in '..\RunTime_Src\Vulkan_Components_Nodes.pas',
+  Vulkan_Components_PointerValidation in '..\RunTime_Src\Vulkan_Components_PointerValidation.pas',
+  Vulkan_CriticalSection in '..\RunTime_Src\Vulkan_CriticalSection.pas',
+  Vulkan_Components_ShaderCompiler in '..\RunTime_Src\Vulkan_Components_ShaderCompiler.pas',
+  Vulkan_Components_Compute in '..\RunTime_Src\Vulkan_Components_Compute.pas',
+  Vulkan_Components_Particles in '..\RunTime_Src\Vulkan_Components_Particles.pas';
 
 end.
 

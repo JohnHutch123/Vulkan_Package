@@ -1565,6 +1565,7 @@ var
   UsePoints: Boolean;
   OS       : TvgBaseObjectStore;
   PositionExpr: String;
+  PointSizeExpr: String;
   ViewProjectExpr: String;
   PositionFound: Boolean;
 begin
@@ -1639,14 +1640,24 @@ begin
     //-- point size -----------------------------------------------------------
     if UsePoints then
     begin
+      // The object store decides how big a point is; the base implementation
+      // still returns '4.0', so stores that do not override are unchanged.
+      if Assigned(OS) then
+        PointSizeExpr := OS.GetShaderPointSizeExpression
+      else
+        PointSizeExpr := '4.0';
+
+      if Trim(PointSizeExpr) = '' then
+        PointSizeExpr := '4.0';
+
       SB.AppendLine('');
       if ModuleHasSpecialConstant(aGP.VertexS, SC_POINT_SIZE_ON) then
       begin
         SB.AppendLine('    if (' + SC_POINT_SIZE_ON + ')');
-        SB.AppendLine('        gl_PointSize = 4.0;');
+        SB.AppendLine('        gl_PointSize = ' + PointSizeExpr + ';');
       end
       else
-        SB.AppendLine('    gl_PointSize = 4.0;');
+        SB.AppendLine('    gl_PointSize = ' + PointSizeExpr + ';');
     end;
 
     SB.Append(SB_VertexUserCode(aGP));
@@ -1815,7 +1826,12 @@ begin
       '(TvgPushConstant_2UI) visible to the fragment stage');
 
   SizeExpr := R.ScreenSizePC.GetGLSLValueExpression(R.ScreenSizePCName);
-  ElemExpr := R.ObjectIDBuffer.GetGLSLValueExpression('screenIndex');
+  // aArrayIndexExpr selects the descriptor-array slot (the global ObjectID
+  // buffer lives at slot 0); aIndexExpr is the per-pixel subscript into
+  // that buffer's values[]. Passing 'screenIndex' as the first (and only)
+  // argument previously landed it in aArrayIndexExpr, so aIndexExpr stayed
+  // '' and the function returned a bare "Name.values" with no subscript.
+  ElemExpr := R.ObjectIDBuffer.GetGLSLValueExpression('0', 'screenIndex');
   if ElemExpr = '' then
     raise EInvalidOperation.CreateFmt(
       '%s does not provide a GLSL element expression for ObjectID output',

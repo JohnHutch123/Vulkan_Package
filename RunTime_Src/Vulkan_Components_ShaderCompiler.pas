@@ -4,7 +4,7 @@
 interface
 
 uses
-  SysUtils, Classes,
+  SysUtils, Classes, System.IOUtils,
   Vulkan,
   PasVulkan.Types,
   PasVulkan.Math,
@@ -32,6 +32,14 @@ type
                         // Add others if needed
                         );
   shaderc_env_version = Cardinal;  // e.g., 1 shl 22 for Vulkan 1.0
+
+// Compile GLSL to a SPIR-V blob.  No Vulkan device needed, so this can be
+// exercised (and unit tested) without an instance being up.
+function CompileGLSLToSPIRV(const GLSLSource : String;
+                            ShaderKind       : shaderc_shader_kind = shaderc_vertex_shader;
+                            OptimizationLevel: shaderc_optimization_level = shaderc_optimization_level_performance;
+                            TargetEnv        : shaderc_target_env = shaderc_target_env_vulkan;
+                            EnvVersion       : shaderc_env_version = 1 shl 22): TBytes;
 
 procedure CompileAndCreateShaderModule(const Device    : TVkDevice;
                                        out ShaderModule: TVkShaderModule;
@@ -81,10 +89,13 @@ end;
 
 function GetOptimizationFlag(OptimizationLevel: shaderc_optimization_level): string;
 begin
+  // glslangValidator only understands -Od (disable) and -Os (size).  There is
+  // no plain -O: passing one makes it exit 1 with "unknown -O option", so the
+  // shaderc "performance" level maps to glslang's default output instead.
   case OptimizationLevel of
-    shaderc_optimization_level_zero: Result := '';
-    shaderc_optimization_level_size: Result := '-Os';
-    shaderc_optimization_level_performance: Result := '-O';
+    shaderc_optimization_level_zero:        Result := '-Od';
+    shaderc_optimization_level_size:        Result := '-Os';
+    shaderc_optimization_level_performance: Result := '';
     else Result := '';
   end;
 end;
@@ -185,97 +196,133 @@ begin
 end;
 {$ENDIF}
 
+function CompileGLSLToSPIRV(const GLSLSource : String;
+                            ShaderKind       : shaderc_shader_kind;
+                            OptimizationLevel: shaderc_optimization_level;
+                            TargetEnv        : shaderc_target_env;
+                            EnvVersion       : shaderc_env_version): TBytes;
+var
+  TempBase,
+  TempGlslFile,
+  TempSpvFile : string;
+  FileStream  : TFileStream;
+  CmdLine,
+  Output      : string;
+  ExitCode    : Integer;
+  SPIRVSize   : Int64;
+  GlslangPath,
+  StageExt,
+  OptFlag,
+  TargetFlag  : string;
+  SourceBytes : TBytes;
+begin
+  Result := nil;
+
+  if Trim(GLSLSource) = '' then
+    raise Exception.Create('CompileGLSLToSPIRV: GLSL source is empty');
+
+  // TargetEnv is carried for API compatibility; glslangValidator takes the
+  // concrete environment from EnvVersion.
+  if TargetEnv <> shaderc_target_env_vulkan then
+    raise Exception.Create('CompileGLSLToSPIRV: only the Vulkan target environment is supported');
+
+  GlslangPath := GetGlslangPath;
+  StageExt    := GetStageExtension(ShaderKind);
+  OptFlag     := GetOptimizationFlag(OptimizationLevel);
+  TargetFlag  := GetTargetEnvFlag(EnvVersion);
+
+  // Unique per call.  A fixed name races as soon as two shaders are built at
+  // once, or a second build starts while the first is still reading its .spv.
+  TempBase := IncludeTrailingPathDelimiter(TPath.GetTempPath) +
+              'vgshader_' + TPath.GetGUIDFileName(False);
+
+  TempGlslFile := TempBase + '.' + StageExt;
+  TempSpvFile  := TempBase + '.spv';
+
+  try
+    // The source MUST reach glslangValidator as UTF-8 bytes.  Writing the
+    // UnicodeString buffer raw would emit UTF-16 code units, and passing
+    // Length() as a byte count would emit only half of them.
+    SourceBytes := TEncoding.UTF8.GetBytes(GLSLSource);
+
+    FileStream := TFileStream.Create(TempGlslFile, fmCreate);
+    try
+      if Length(SourceBytes) > 0 then
+        FileStream.WriteBuffer(SourceBytes[0], Length(SourceBytes));
+    finally
+      FileStream.Free;
+    end;
+
+    CmdLine := Format('"%s" -S %s --target-env %s -e main %s -o "%s" "%s"',
+      [GlslangPath, StageExt, TargetFlag, OptFlag, TempSpvFile, TempGlslFile]);
+
+    ExitCode := ExecAndCapture(CmdLine, Output);
+
+    if ExitCode <> 0 then
+      raise Exception.CreateFmt('glslangValidator failed (exit code %d): %s',
+                                [ExitCode, Trim(Output)]);
+
+    if not FileExists(TempSpvFile) then
+      raise Exception.Create('SPIR-V output file not created');
+
+    FileStream := TFileStream.Create(TempSpvFile, fmOpenRead or fmShareDenyWrite);
+    try
+      SPIRVSize := FileStream.Size;
+
+      if SPIRVSize <= 0 then
+        raise Exception.Create('Compiled SPIR-V is empty');
+
+      // SPIR-V is a stream of 32-bit words; anything else means a truncated
+      // or corrupt file rather than something Vulkan should be handed.
+      if (SPIRVSize mod SizeOf(TvkUint32)) <> 0 then
+        raise Exception.CreateFmt(
+          'Compiled SPIR-V size (%d bytes) is not a multiple of 4', [SPIRVSize]);
+
+      SetLength(Result, SPIRVSize);
+      FileStream.ReadBuffer(Result[0], SPIRVSize);
+    finally
+      FileStream.Free;
+    end;
+  finally
+    // Qualified so these resolve to the RTL's string overload rather than
+    // Winapi.Windows.DeleteFile, which takes a PWideChar.
+    System.SysUtils.DeleteFile(TempGlslFile);
+    System.SysUtils.DeleteFile(TempSpvFile);
+  end;
+end;
+
 procedure CompileAndCreateShaderModule(const Device    : TVkDevice;
                                        out ShaderModule: TVkShaderModule;
                                        GLSLSource      : String;
                                        ShaderKind      : shaderc_shader_kind = shaderc_vertex_shader;
                                        OptimizationLevel: shaderc_optimization_level = shaderc_optimization_level_performance;
                                        TargetEnv       : shaderc_target_env = shaderc_target_env_vulkan;
-                                       EnvVersion      : shaderc_env_version = 1 shl 22);  // Default: Vulkan 1.0
-
+                                       EnvVersion      : shaderc_env_version = 1 shl 22);
 var
- // GLSLSource: AnsiString;
-  TempGlslFile, TempSpvFile: string;
-  FileStream: TFileStream;
-  CmdLine, Output: string;
-  ExitCode: Integer;
-  SPIRVData: TBytes;
-  SPIRVSize: NativeUInt;
-  CreateInfo: TVkShaderModuleCreateInfo;
-  VkResult: TVkResult;
-  GlslangPath, StageExt, OptFlag, TargetFlag: string;
+  SPIRVData  : TBytes;
+  CreateInfo : TVkShaderModuleCreateInfo;
+  VkResult   : TVkResult;
 begin
+  ShaderModule := VK_NULL_HANDLE;
+
   Assert(Device <> VK_NULL_HANDLE, 'Invalid Vulkan device handle');
 
- (*
-  // Dynamically build GLSL shader in code (example: simple vertex shader; adapt as needed)
-  GLSLSource :=
-    '#version 450' + #10 +
-    '#extension GL_KHR_vulkan_glsl : enable' + #10 +
-    'layout(location = 0) in vec3 inPosition;' + #10 +
-    'layout(location = 0) out vec4 fragColor;' + #10 +
-    'void main() {' + #10 +
-    '  gl_Position = vec4(inPosition, 1.0);' + #10 +
-    '  fragColor = vec4(1.0, 0.0, 0.0, 1.0);' + #10 +
-    '}';
-  *)
+  SPIRVData := CompileGLSLToSPIRV(GLSLSource, ShaderKind, OptimizationLevel,
+                                  TargetEnv, EnvVersion);
 
-  // Prepare temp files
-// Prepare temp files (use GetTempDir for correct temp path handling)
-  TempGlslFile := IncludeTrailingPathDelimiter(GetTempDir) + 'shader_temp.' + GetStageExtension(ShaderKind);
-  TempSpvFile  := IncludeTrailingPathDelimiter(GetTempDir) + 'shader_temp.spv';
+  FillChar(CreateInfo, SizeOf(CreateInfo), 0);
+  CreateInfo.sType    := VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+  CreateInfo.pNext    := nil;
+  CreateInfo.flags    := 0;
+  CreateInfo.codeSize := Length(SPIRVData);
+  CreateInfo.pCode    := @SPIRVData[0];   // SPIR-V words (uint32_t*)
 
+  VkResult := vkCreateShaderModule(Device, @CreateInfo, nil, @ShaderModule);
+  if VkResult <> VK_SUCCESS then
+    raise Exception.CreateFmt(
+      'Failed to create Vulkan shader module (error code: %d)', [Ord(VkResult)]);
 
-  // Write GLSL to temp file
-  FileStream := TFileStream.Create(TempGlslFile, fmCreate);
-  try
-    FileStream.WriteBuffer(Pointer(GLSLSource)^, Length(GLSLSource));
-  finally
-    FileStream.Free;
-  end;
-
-  // Build command line
-  GlslangPath := GetGlslangPath;
-  StageExt := GetStageExtension(ShaderKind);
-  OptFlag := GetOptimizationFlag(OptimizationLevel);
-  TargetFlag := GetTargetEnvFlag(EnvVersion);
-  CmdLine := Format('"%s" -S %s --target-env %s -e main %s -o "%s" "%s"',
-    [GlslangPath, StageExt, TargetFlag, OptFlag, TempSpvFile, TempGlslFile]);
-
-  // Execute and capture output (for errors)
-  ExitCode := ExecAndCapture(CmdLine, Output);
-  try
-    if ExitCode <> 0 then
-      raise Exception.CreateFmt('glslangValidator failed (exit code %d): %s', [ExitCode, Trim(Output)]);
-
-    // Read SPIR-V binary
-    if not FileExists(TempSpvFile) then
-      raise Exception.Create('SPIR-V output file not created');
-    FileStream := TFileStream.Create(TempSpvFile, fmOpenRead);
-    try
-      SPIRVSize := FileStream.Size;
-      Assert(SPIRVSize > 0, 'Compiled SPIR-V size is zero');
-      SetLength(SPIRVData, SPIRVSize);
-      FileStream.ReadBuffer(SPIRVData[0], SPIRVSize);
-    finally
-      FileStream.Free;
-    end;
-
-    // Create Vulkan shader module
-    FillChar(CreateInfo, SizeOf(CreateInfo), 0);
-    CreateInfo.sType := VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    CreateInfo.codeSize := SPIRVSize;
-    CreateInfo.pCode := @SPIRVData[0];  // SPIR-V binary words (uint32_t*)
-
-    VkResult := vkCreateShaderModule(Device, @CreateInfo, nil, @ShaderModule);
-    if VkResult <> VK_SUCCESS then
-      raise EVulkanException.CreateFmt('Failed to create Vulkan shader module (error code: %d)', [Ord(VkResult)]);
-    Assert(ShaderModule <> VK_NULL_HANDLE, 'Created shader module is invalid');
-  finally
-    // Clean up temp files
-    DeleteFile(TempGlslFile);
-    DeleteFile(TempSpvFile);
-  end;
+  Assert(ShaderModule <> VK_NULL_HANDLE, 'Created shader module is invalid');
 end;
 
 end.

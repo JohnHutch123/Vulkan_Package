@@ -65,6 +65,7 @@ interface
         Winapi.Windows,
         Vcl.Dialogs,
         Vulkan_Components,
+        Vulkan_Components_Particles,
         Vulkan_Components_Lookups;
 
 Type
@@ -380,7 +381,7 @@ begin
    RegisterComponents('Vulkan Graphics', [TvgInstance,
                                             TvgPhysicalDevice,
                                             TvgLinker,
-                                            TvgObject_Triangle]);
+                                            TvgParticleSystem]);
 
    RegisterComponentEditor (TvgInstance,      TvgInstanceEditor);
    RegisterComponentEditor (TvgLogicalDevice, TvgDeviceEditor);

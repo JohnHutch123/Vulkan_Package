@@ -32,7 +32,7 @@ package VulkanPkg_OMNIThreadR280;
 requires
   rtl,
   vcl,
-  VulkanPkgR350;
+  VulkanPkgR280;
 
 contains
   Vulkan_OMNIThread_Renderer in '..\RunTime_Src\Vulkan_OMNIThread_Renderer.pas';
