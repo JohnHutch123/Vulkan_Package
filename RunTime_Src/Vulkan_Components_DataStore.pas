@@ -170,6 +170,12 @@ type
     FTransferState     : TTransferState;
     FValidateWrites    : Boolean;
 
+    //Objects the most recent VulkanDraw skipped as off screen.  Reset per
+    //call rather than per frame, because the store has no frame-start hook -
+    //with several pipes drawing the same store, this reports the last one.
+    //Diagnostic only; maintained inside FCriticalSection with the draw loop.
+    FLastCulledCount   : Integer;
+
     StageBufferList    : TList<TpvVulkanBuffer>;
 
 
@@ -207,6 +213,13 @@ type
       WorldBounds belongs to the application.
       CALLER MUST HOLD FCriticalSection. }
     procedure RecomputeWorldBounds(ObjectIndex: Integer);
+
+    { The cull decision itself, rebuilding stale bounds on the way.  Split out
+      of VulkanDraw so the public ShouldCullObject can expose exactly the
+      decision the draw loop makes, rather than a copy of it that can drift.
+      CALLER MUST HOLD FCriticalSection. }
+    function  ObjectIsCulled(ObjectIndex: Integer;
+                             const aFrustum: TvgFrustrumPlanes): Boolean;
 
   protected
 
@@ -304,6 +317,28 @@ type
     { Bounds of the vertex positions as written, before instancing. }
     function  GetObjectLocalBounds(ObjectIndex: Integer): TvgAABB;
 
+    { Rescans this object's vertex positions and replaces its local bounds.
+
+      Needed because the bounds maintained by SetObjectVertexPosition only
+      ever GROW: they are accumulated per write, so rewriting a vertex to a
+      new place extends the box to cover both the old position and the new
+      one.  That errs towards drawing, never towards dropping geometry, but
+      an object animated by rewriting its vertices accumulates a box that
+      keeps widening until it is never culled again.
+
+      Call this after moving or rebuilding a mesh in place.  It is O(vertex
+      count) against the CPU array, so call it once after the rewrite rather
+      than per vertex.  Objects that are built once and then left alone never
+      need it. }
+    procedure RebuildObjectBounds(ObjectIndex: Integer);
+
+    { True if VulkanDraw would skip this object when culling against
+      aFrustum.  This is the decision the draw loop makes - the loop calls
+      the same code - so it can be used to check culling without a device,
+      or to explain why something did not appear. }
+    function  ShouldCullObject(ObjectIndex: Integer;
+                               const aFrustum: TvgFrustrumPlanes): Boolean;
+
     // Getters
     function GetObjectVertexStart(ObjectIndex: Integer): Integer;
     function GetObjectVertexCount(ObjectIndex: Integer): Integer;
@@ -341,6 +376,11 @@ type
 
     Procedure UpdateGraphicPipeline(aPipe: TvgGraphicPipeline); Override;
     Procedure SetBaseScene(aBaseScene: TvgBaseScene); Override;
+
+    { Objects the most recent VulkanDraw skipped as off screen.  A quick way
+      to tell culling apart from a rendering fault: if geometry is missing and
+      this is 0, the culler is not the cause. }
+    property LastCulledCount: Integer read FLastCulledCount;
 
     property ValidateWrites: Boolean read FValidateWrites write FValidateWrites;
     property BuffersCreated: Boolean read fBuffersCreated;
@@ -1527,6 +1567,89 @@ begin
   FDataObjects[ObjectIndex] := Obj;
 end;
 
+procedure TvgVulkanDataStore.RebuildObjectBounds(ObjectIndex: Integer);
+var
+  Obj    : TvgVulkanObjectRecord;
+  I      : Integer;
+  Offset : Integer;
+  P      : array[0..2] of Single;
+begin
+  FCriticalSection.Enter;
+  try
+    if (ObjectIndex < 0) or (ObjectIndex >= FDataObjects.Count) then
+      raise EVulkanDataStoreException.CreateFmt('Invalid object index: %d', [ObjectIndex]);
+
+    Obj := FDataObjects[ObjectIndex];
+    Obj.LocalBounds.Reset;
+
+    if (vdtPosition in FVertexTypes) and
+       (Obj.VertexStart >= 0) and (Obj.VertexCount > 0) then
+    begin
+      for I := 0 to Obj.VertexCount - 1 do
+      begin
+        Offset := (Obj.VertexStart + I) * Integer(FVertexStride) +
+                  Integer(FVertexOffsets[vdtPosition]);
+
+        if (Offset < 0) or (Offset + SizeOf(P) > Length(FVertexData)) then
+          Break;
+
+        Move(FVertexData[Offset], P[0], SizeOf(P));
+        Obj.LocalBounds.GrowPoint(P[0], P[1], P[2]);
+      end;
+    end;
+
+    // Note this reads every allocated vertex, including any never written.
+    // For amClear storage those sit at the origin and WILL widen the box -
+    // unlike the incremental path, which only sees real writes.  That is the
+    // honest answer for a rescan: those vertices are in the buffer and get
+    // drawn, degenerate or not.
+    Obj.BoundsDirty := True;
+    FDataObjects[ObjectIndex] := Obj;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+function TvgVulkanDataStore.ObjectIsCulled(ObjectIndex: Integer;
+  const aFrustum: TvgFrustrumPlanes): Boolean;
+var
+  Obj: TvgVulkanObjectRecord;
+begin
+  Result := False;
+
+  if (ObjectIndex < 0) or (ObjectIndex >= FDataObjects.Count) then Exit;
+
+  Obj := FDataObjects[ObjectIndex];
+
+  // cmNever opts out entirely: its bounds cannot be trusted, typically
+  // because a compute shader owns the vertex data and the CPU's copy of the
+  // positions is stale.
+  if Obj.CullMode = cmNever then Exit;
+
+  // At most one rebuild per object per frame, and only when something
+  // actually invalidated the bounds.
+  if Obj.BoundsDirty then
+  begin
+    RecomputeWorldBounds(ObjectIndex);
+    Obj := FDataObjects[ObjectIndex];
+  end;
+
+  // An object with no usable bounds tests as visible, so geometry is never
+  // lost to a box that was simply never built.
+  Result := not vgFrustumTestAABB(aFrustum, Obj.WorldBounds);
+end;
+
+function TvgVulkanDataStore.ShouldCullObject(ObjectIndex: Integer;
+  const aFrustum: TvgFrustrumPlanes): Boolean;
+begin
+  FCriticalSection.Enter;
+  try
+    Result := ObjectIsCulled(ObjectIndex, aFrustum);
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
 procedure TvgVulkanDataStore.SetObjectCullMode(ObjectIndex: Integer; AMode: TvgObjectCullMode);
 var
   Obj: TvgVulkanObjectRecord;
@@ -2659,6 +2782,8 @@ var
   Buffers: array[0..1] of TVkBuffer;
   Offsets: array[0..1] of TVkDeviceSize;
   BufferCount: Integer;
+  CullON  : Boolean;
+  Frustum : TvgFrustrumPlanes;
 begin
   if not Assigned(aCommandBuffer) then
     Exit;
@@ -2684,7 +2809,19 @@ begin
   VertexBuffer   := GetVulkanVertexBuffer(aFrameIndex);
   InstanceBuffer := GetVulkanInstanceBuffer(aFrameIndex);
   IndexBuffer    := GetVulkanIndexBuffer(aFrameIndex);
-  
+
+  //Cull volume for this frame, fetched once for the whole loop.  The pipe
+  //knows which renderer it belongs to, which is what makes this correct for a
+  //scene shared between two windows: each renderer publishes the volume for
+  //its own viewport, and each gets culled against its own.
+  //
+  //CullON False - culling switched off, no camera, or no renderer reachable -
+  //means draw everything.
+  CullON := False;
+  if Assigned(aPipe) and Assigned(aPipe.Renderer) then
+    CullON := aPipe.Renderer.GetFrustumPlanes(Frustum);
+
+
   // Determine index type
   case FIndexType of
     itUInt16: IndexTypeVk := VK_INDEX_TYPE_UINT16;
@@ -2695,12 +2832,28 @@ begin
   
   FCriticalSection.Enter;
   try
+    FLastCulledCount := 0;
+
     for I := 0 to FDataObjects.Count - 1 do
     begin
       Obj := FDataObjects[I];
-      
+
       if (Obj.VertexCount <= 0) then
         Continue;
+
+      //Frustum cull before ANY recording for this object.  Skipping here also
+      //skips the CmdBindVertexBuffers and CmdBindIndexBuffer below, which in
+      //this loop cost more than the draw call they precede - every object
+      //rebinds, so a culled object saves two binds as well as a draw.
+      if CullON and ObjectIsCulled(I, Frustum) then
+      begin
+        Inc(FLastCulledCount);
+        Continue;
+      end;
+
+      //ObjectIsCulled may have rebuilt the record's bounds, so re-read it
+      //rather than drawing from the copy taken before that call.
+      Obj := FDataObjects[I];
 
       //Every draw below sources the vertex binding, so a missing vertex buffer
       //or an unallocated vertex range can never produce a correct draw.  Skip

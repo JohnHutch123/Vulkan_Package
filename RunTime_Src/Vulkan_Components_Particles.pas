@@ -1671,6 +1671,18 @@ begin
   Obj.AllocateVertices(fParticleCount, amClear);
   fObject := Obj;
 
+  // Opt this object out of frustum culling.  Once GPUOwned is set the compute
+  // shader is the only writer of the vertex positions, so the bounding box
+  // the DataStore accumulates from CPU writes describes the seed positions at
+  // best and nothing at all at worst - it would cull the simulation the
+  // moment the particles moved out of where they started.
+  //
+  // Particles can be culled again by calling
+  // TvgVulkanDataStore.SetObjectBounds with a box the emitter and forces
+  // cannot carry a particle outside of; that switches the object to cmManual
+  // and the bounds are then honoured as given.
+  fStore.SetObjectCullMode(Obj.ObjIndex, cmNever);
+
   fStore.CreateVulkanDataBuffers;
 
   Stride := fStore.GetStride(BINDING_VERTEX);

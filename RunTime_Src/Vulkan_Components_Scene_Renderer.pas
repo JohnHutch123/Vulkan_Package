@@ -458,7 +458,7 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
     property OrbitButton   : TvgMouseButton     read fOrbitButton  write SetOrbitButton  default vgmbLeft;
     property PanButton     : TvgMouseButton     read fPanButton    write SetPanButton    default vgmbMiddle;
     property DollyButton   : TvgMouseButton     read fDollyButton  write SetDollyButton  default vgmbRight;
-    // 0=XZ(horizontal), 1=XY(vertical), 2=YZ(side) — used for object drag
+    // 0=XZ(horizontal), 1=XY(vertical), 2=YZ(side) ï¿½ used for object drag
     property DragPlaneAxis : Integer            read fDragPlaneAxis write SetDragPlaneAxis default 0;
 
     property OnObjectPicked : TvgObjectPickedEvent     read fOnObjectPicked write fOnObjectPicked;
@@ -1095,7 +1095,7 @@ procedure TvgObjectStore.ClearData;
   Var J,I:Integer;
 begin
 
-// ClearGraphicPipes is unsafe — use DisConnectDataFromSceneandRenderer instead
+// ClearGraphicPipes is unsafe ï¿½ use DisConnectDataFromSceneandRenderer instead
   // which calls SP.RemoveGraphicPipe before clearing the dictionary.
   If assigned(fScene) and assigned(fScene.fRendererList) then
     for J := 0 to fScene.fRendererList.Count-1 do
@@ -1135,14 +1135,14 @@ var
   SHS: TvgShaderSpecialisationItem;
 begin
 
-    // Shader files — ObjectStore owns these
+    // Shader files ï¿½ ObjectStore owns these
     GP.BuildShaderVertexName( fShaderBaseVertName);
  //   GP.GeometryS.FileName := fGe                      FINISH
     GP.BuildShaderFRagmentName(fShaderBaseFragName);
 
     GP.UseShaders         := fUseShaders;        // new property, not hardcoded [PS_VERTEX, PS_FRAGMENT]
 
-    // Topology — ObjectStore owns this
+    // Topology ï¿½ ObjectStore owns this
     GP.InputAssembly.Topology := GetVGPrimitiveTopology(fTopology);
 
     if GP.InputAssembly.Topology = POINT_LIST then
@@ -1154,7 +1154,7 @@ begin
       SHS.ConstantID := CI_POINT_SIZE_ON;
     end;
 
-    // Rasterizer — ObjectStore owns these (new properties)
+    // Rasterizer ï¿½ ObjectStore owns these (new properties)
     GP.Rasterizer.PolygonMode := GetVGPolygonMode(fPolygonMode);   // default POLYGON_FILL
     GP.Rasterizer.CullMode    := GetVGCullMode(fCullMode);      // default CULL_BACK (not NONE)
     GP.Rasterizer.FrontFace   := GetVGFrontFace(fFrontFace);     // default FF_CLOCKWISE
@@ -1230,8 +1230,8 @@ begin
       if assigned(ObjStr) then
       begin
         ObjStr.BuildAGraphicPipeline(aRenderer, SP);
-        // Note: do NOT activate here — ActivateGraphicPipeLines does that
-        // Note: do NOT set ObjStr.Active := True here — it may already be active
+        // Note: do NOT activate here ï¿½ ActivateGraphicPipeLines does that
+        // Note: do NOT set ObjStr.Active := True here ï¿½ it may already be active
         //       for another renderer and its SetEnabled would re-run UpdateGraphicPipelines
       end;
     end;
@@ -1477,6 +1477,9 @@ var
   Cam    : TvgCamera;
   Aspect : Single;
 begin
+  // No camera means no cull volume.  PrepareGlobalAndSceneDescriptors has
+  // already invalidated the previous one, so leaving now draws everything -
+  // which is the only safe answer when we cannot say what is in view.
   if not Assigned(fCameras) then exit;
 
   Cam := fCameras.GetActiveCamera;
@@ -1489,12 +1492,17 @@ begin
   Aspect := aTarget.GetViewportAspect;
 
   // Build a VP matrix correct for this renderer's viewport.
-  // FAspectRatio on the camera is NEVER written — it remains the camera's
+  // FAspectRatio on the camera is NEVER written ï¿½ it remains the camera's
   // "design" aspect (used for tools, ray-casting, frustum culling etc.)
   // Each renderer gets its own freshly-computed projection every frame.
   aTarget.SetViewProjectMatrix(aFrameIndex,  Cam.GetViewProjectionMatrixForAspect(Aspect));
 
-  // Future global data — each also receives the correct per-renderer context:
+  // Cull volume for this renderer, from the SAME aspect the VP above uses.
+  // Building it from any other aspect - the camera's own stored FAspectRatio,
+  // say - would cull geometry that this renderer is about to draw on screen.
+  aTarget.SetFrustumPlanes( Cam.GetFrustumPlanesForAspect(Aspect) );
+
+  // Future global data ï¿½ each also receives the correct per-renderer context:
   // aTarget.SetLightData(aFrameIndex, fLights.BuildShaderBlock);
   // aTarget.SetTimeData(aFrameIndex, fTimeAccumulator);
 end;
@@ -1793,9 +1801,9 @@ end;
 function TvgToolManager.GetDragPlaneNormal: TpvVector3;
 begin
   case fDragPlaneAxis of
-    0 : Result := TpvVector3.Create(0, 1, 0);   // XZ  — horizontal (Y-up world)
-    1 : Result := TpvVector3.Create(0, 0, 1);   // XY  — vertical, facing +Z
-    2 : Result := TpvVector3.Create(1, 0, 0);   // YZ  — vertical, facing +X
+    0 : Result := TpvVector3.Create(0, 1, 0);   // XZ  ï¿½ horizontal (Y-up world)
+    1 : Result := TpvVector3.Create(0, 0, 1);   // XY  ï¿½ vertical, facing +Z
+    2 : Result := TpvVector3.Create(1, 0, 0);   // YZ  ï¿½ vertical, facing +X
   else
     Result := TpvVector3.Create(0, 1, 0);
   end;
@@ -1825,7 +1833,7 @@ begin
   Ray  := Cam.ScreenToWorldRay(aX, aY, W, H);
   Orig := Cam.Position;
 
-  // Ray–plane intersection:  t = dot(planePoint - rayOrigin, planeNormal)
+  // Rayï¿½plane intersection:  t = dot(planePoint - rayOrigin, planeNormal)
   //                              / dot(ray, planeNormal)
   Denom := aPlaneNormal.x * Ray.x +
            aPlaneNormal.y * Ray.y +
@@ -1960,7 +1968,7 @@ begin
   End
   else
   Begin
-    // Clicked on background — deselect
+    // Clicked on background ï¿½ deselect
     ClearSelection;
   End;
 end;
@@ -2034,7 +2042,7 @@ begin
           TAM_CAMERA_ORBIT,
           TAM_CAMERA_PAN,
           TAM_CAMERA_DOLLY:
-            ; // Camera-gesture sub-modes — handled in DoMouseMove
+            ; // Camera-gesture sub-modes ï¿½ handled in DoMouseMove
         end;
       End;
     end;
