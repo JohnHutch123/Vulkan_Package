@@ -22,9 +22,11 @@ uses
   Vulkan,
   PasVulkan.Framework,
   PasVulkan.Types,
+  PasVulkan.Math,
   Vulkan_Assert,
   Vulkan_Components_Lookups,
   Vulkan_Components,
+  Vulkan_Components_Camera,      // TvgAABB - per-object bounds for culling
   Vulkan_Components_Descriptors;
 
 const
@@ -78,6 +80,17 @@ type
 
   TAllocationMode = (amClear, amPreserve, amUninitialized);
 
+  { How an object's bounding box is obtained, and therefore whether the
+    object can be frustum culled at all.
+
+    cmAuto MUST be the first value: TvgVulkanObjectRecord is created with
+    FillChar, so the zero value is what a new object gets. }
+  TvgObjectCullMode = (
+    cmAuto,     // bounds accumulated from the vertex positions the CPU writes
+    cmNever,    // always drawn - for geometry whose bounds the CPU cannot know
+    cmManual    // bounds supplied by the application via SetObjectBounds
+  );
+
   // Simplified object record - just tracks ranges
   TvgVulkanObjectRecord = record
     VertexStart,
@@ -91,6 +104,24 @@ type
 
     IndexType      : TIndexType;
     HasInstances   : Boolean;
+
+    // --- Frustum culling -----------------------------------------------
+    // LocalBounds encloses the vertex positions as written, in whatever
+    // space they were authored in.  This draw path has no per-object model
+    // matrix, so for a non-instanced object that space IS world space and
+    // WorldBounds is simply a copy.
+    //
+    // WorldBounds is what culling actually tests.  For an instanced object
+    // carrying idtMatrix it is the union of LocalBounds transformed by every
+    // instance matrix; for cmManual it is whatever the application supplied.
+    //
+    // BoundsDirty means WorldBounds needs rebuilding from LocalBounds and the
+    // instance matrices.  Recomputation is deferred rather than done on every
+    // vertex write, so building a mesh stays O(1) per vertex.
+    LocalBounds    : TvgAABB;
+    WorldBounds    : TvgAABB;
+    CullMode       : TvgObjectCullMode;
+    BoundsDirty    : Boolean;
   end;
 
   TVulkanBufferInfo = record
@@ -139,6 +170,12 @@ type
     FTransferState     : TTransferState;
     FValidateWrites    : Boolean;
 
+    //Objects the most recent VulkanDraw skipped as off screen.  Reset per
+    //call rather than per frame, because the store has no frame-start hook -
+    //with several pipes drawing the same store, this reports the last one.
+    //Diagnostic only; maintained inside FCriticalSection with the draw loop.
+    FLastCulledCount   : Integer;
+
     StageBufferList    : TList<TpvVulkanBuffer>;
 
 
@@ -164,6 +201,25 @@ type
 
     procedure ComputeLayout;
     function GetIndexElementSize(AType: TIndexType): Cardinal;
+
+    { Reads one instance's idtMatrix attribute straight out of FInstanceData.
+      TvgMatrix4x4S and TpvMatrix4x4 share a layout - both are 16 singles
+      indexed RawComponents[column, row] - so this is a plain copy.
+      CALLER MUST HOLD FCriticalSection. }
+    function  GetInstanceMatrix(AGlobalInstanceIndex: Integer): TpvMatrix4x4;
+
+    { Rebuilds WorldBounds from LocalBounds and the object's instance
+      matrices, and clears BoundsDirty.  Does nothing for cmManual, whose
+      WorldBounds belongs to the application.
+      CALLER MUST HOLD FCriticalSection. }
+    procedure RecomputeWorldBounds(ObjectIndex: Integer);
+
+    { The cull decision itself, rebuilding stale bounds on the way.  Split out
+      of VulkanDraw so the public ShouldCullObject can expose exactly the
+      decision the draw loop makes, rather than a copy of it that can drift.
+      CALLER MUST HOLD FCriticalSection. }
+    function  ObjectIsCulled(ObjectIndex: Integer;
+                             const aFrustum: TvgFrustrumPlanes): Boolean;
 
   protected
 
@@ -239,6 +295,50 @@ type
     procedure SetObjectIndex(ObjectIndex, LocalIndex: Integer; AValue: Cardinal);
     procedure SetObjectTriangle(ObjectIndex, TriangleIndex: Integer; I1, I2, I3: Cardinal);
 
+    // --- Frustum culling -------------------------------------------------
+
+    { Selects how this object's bounds are obtained; see TvgObjectCullMode.
+      Set cmNever for geometry a compute shader writes, where the CPU's
+      idea of the vertex positions is stale or absent - particles being the
+      case in this package. }
+    procedure SetObjectCullMode(ObjectIndex: Integer; AMode: TvgObjectCullMode);
+    function  GetObjectCullMode(ObjectIndex: Integer): TvgObjectCullMode;
+
+    { Supplies world-space bounds directly and switches the object to
+      cmManual, so they are used as given and never recomputed from vertex
+      data.  The way to cull geometry the CPU does not author. }
+    procedure SetObjectBounds(ObjectIndex: Integer; const AMin, AMax: TpvVector3);
+
+    { World-space bounds used for culling, rebuilt first if stale.  Returns
+      an invalid (empty) box when the object has no usable bounds, which
+      vgFrustumTestAABB treats as visible - never culled by accident. }
+    function  GetObjectWorldBounds(ObjectIndex: Integer): TvgAABB;
+
+    { Bounds of the vertex positions as written, before instancing. }
+    function  GetObjectLocalBounds(ObjectIndex: Integer): TvgAABB;
+
+    { Rescans this object's vertex positions and replaces its local bounds.
+
+      Needed because the bounds maintained by SetObjectVertexPosition only
+      ever GROW: they are accumulated per write, so rewriting a vertex to a
+      new place extends the box to cover both the old position and the new
+      one.  That errs towards drawing, never towards dropping geometry, but
+      an object animated by rewriting its vertices accumulates a box that
+      keeps widening until it is never culled again.
+
+      Call this after moving or rebuilding a mesh in place.  It is O(vertex
+      count) against the CPU array, so call it once after the rewrite rather
+      than per vertex.  Objects that are built once and then left alone never
+      need it. }
+    procedure RebuildObjectBounds(ObjectIndex: Integer);
+
+    { True if VulkanDraw would skip this object when culling against
+      aFrustum.  This is the decision the draw loop makes - the loop calls
+      the same code - so it can be used to check culling without a device,
+      or to explain why something did not appear. }
+    function  ShouldCullObject(ObjectIndex: Integer;
+                               const aFrustum: TvgFrustrumPlanes): Boolean;
+
     // Getters
     function GetObjectVertexStart(ObjectIndex: Integer): Integer;
     function GetObjectVertexCount(ObjectIndex: Integer): Integer;
@@ -276,6 +376,11 @@ type
 
     Procedure UpdateGraphicPipeline(aPipe: TvgGraphicPipeline); Override;
     Procedure SetBaseScene(aBaseScene: TvgBaseScene); Override;
+
+    { Objects the most recent VulkanDraw skipped as off screen.  A quick way
+      to tell culling apart from a rendering fault: if geometry is missing and
+      this is 0, the culler is not the cause. }
+    property LastCulledCount: Integer read FLastCulledCount;
 
     property ValidateWrites: Boolean read FValidateWrites write FValidateWrites;
     property BuffersCreated: Boolean read fBuffersCreated;
@@ -685,13 +790,17 @@ var
 begin
   FCriticalSection.Enter;
   try
+    // The FillChar already leaves the culling fields correct: both boxes read
+    // as empty (TvgAABB.Valid False), CullMode is cmAuto, and BoundsDirty is
+    // False because there is nothing yet to rebuild from.  An empty box is
+    // treated as visible, so an object is drawn until it has real bounds.
     FillChar(Obj, SizeOf(Obj), 0);
     Obj.VertexStart   := -1;
     Obj.InstanceStart := -1;
     Obj.IndexStart    := -1;
     Obj.HasInstances  := IncludeInstance;
     Obj.IndexType     := FIndexType;
-    
+
     Result := FDataObjects.Add(Obj);
   finally
     FCriticalSection.Leave;
@@ -805,8 +914,15 @@ begin
     
     Obj.VertexStart := NewStart;
     Obj.VertexCount := ACount;
+
+    // Fresh storage holds no authored geometry yet, whatever AMode put in it,
+    // so any bound carried over from before would be describing vertices that
+    // no longer exist.  Start empty and let the position writes rebuild it.
+    Obj.LocalBounds.Reset;
+    Obj.BoundsDirty := True;
+
     FDataObjects[ObjectIndex] := Obj;
-    
+
     Inc(FVertexCount, ACount);
 
     // Clear data if requested
@@ -849,8 +965,12 @@ begin
     
     Obj.InstanceStart := NewStart;
     Obj.InstanceCount := ACount;
+
+    // Instance count feeds the world bound, so it has to be rebuilt.
+    Obj.BoundsDirty := True;
+
     FDataObjects[ObjectIndex] := Obj;
-    
+
     Inc(FInstanceCount, ACount);
     
     if AMode = amClear then
@@ -1083,6 +1203,20 @@ begin
     GlobalIndex := Obj.VertexStart + LocalIndex;
     Data[0] := X; Data[1] := Y; Data[2] := Z;
     SetVertexAttributeData(GlobalIndex, vdtPosition, Data);
+
+    // This is the ONLY path that writes a vertex position, so accumulating
+    // the bound here keeps it correct for free and costs O(1) per vertex -
+    // no rescanning FVertexData later.
+    //
+    // Note this tracks positions that are actually WRITTEN.  Vertices left
+    // at their allocation value (amClear zeroes them) are not included, so a
+    // partially written allocation is bounded by its real geometry rather
+    // than being dragged out to the origin.  The unwritten remainder is
+    // degenerate and draws nothing visible.
+    Obj.LocalBounds.GrowPoint(X, Y, Z);
+    Obj.BoundsDirty := True;
+    FDataObjects[ObjectIndex] := Obj;
+
     SetDataDirty;
   finally
     FCriticalSection.Leave;
@@ -1296,6 +1430,14 @@ begin
     Obj := FDataObjects[ObjectIndex];
     GlobalIndex := Obj.InstanceStart + LocalIndex;
     SetInstanceAttributeData(GlobalIndex, idtMatrix, M);
+
+    // Where an instance sits is part of where the object sits, so the world
+    // bound no longer holds.  Flagged rather than recomputed: a caller
+    // setting a thousand instance matrices should pay for one rebuild, not
+    // a thousand.
+    Obj.BoundsDirty := True;
+    FDataObjects[ObjectIndex] := Obj;
+
     SetDataDirty;
   finally
     FCriticalSection.Leave;
@@ -1354,6 +1496,246 @@ begin
   SetObjectIndex(ObjectIndex, BaseIndex, I1);
   SetObjectIndex(ObjectIndex, BaseIndex + 1, I2);
   SetObjectIndex(ObjectIndex, BaseIndex + 2, I3);
+end;
+
+{ Frustum culling bounds }
+
+function TvgVulkanDataStore.GetInstanceMatrix(AGlobalInstanceIndex: Integer): TpvMatrix4x4;
+var
+  Offset: Integer;
+begin
+  Result := TpvMatrix4x4.Identity;
+
+  if not (idtMatrix in FInstanceTypes) then Exit;
+
+  if (AGlobalInstanceIndex < 0) or (AGlobalInstanceIndex >= FInstanceCount) then Exit;
+
+  Offset := AGlobalInstanceIndex * Integer(FInstanceStride) +
+            Integer(FInstanceOffsets[idtMatrix]);
+
+  if (Offset < 0) or (Offset + SizeOf(TpvMatrix4x4) > Length(FInstanceData)) then Exit;
+
+  // Same 16-single, RawComponents[column, row] layout in both records - see
+  // TvgMatrix4x4D.Create in Vulkan_Components_Descriptors, which copies
+  // element for element between exactly these two shapes.
+  Move(FInstanceData[Offset], Result, SizeOf(TpvMatrix4x4));
+end;
+
+procedure TvgVulkanDataStore.RecomputeWorldBounds(ObjectIndex: Integer);
+var
+  Obj  : TvgVulkanObjectRecord;
+  I    : Integer;
+  M    : TpvMatrix4x4;
+begin
+  if (ObjectIndex < 0) or (ObjectIndex >= FDataObjects.Count) then Exit;
+
+  Obj := FDataObjects[ObjectIndex];
+
+  // cmManual bounds belong to the application; rebuilding them from vertex
+  // data would throw away the very thing it asked us to use.
+  if Obj.CullMode = cmManual then
+  begin
+    Obj.BoundsDirty := False;
+    FDataObjects[ObjectIndex] := Obj;
+    Exit;
+  end;
+
+  if (not Obj.HasInstances) or
+     (Obj.InstanceCount <= 0) or
+     (Obj.InstanceStart < 0) or
+     (not (idtMatrix in FInstanceTypes)) then
+  begin
+    // No per-instance transform, so there is nothing to move the geometry:
+    // this draw path has no per-object model matrix and the vertices are
+    // already in world space.
+    Obj.WorldBounds := Obj.LocalBounds;
+  end
+  else
+  begin
+    // Union of the local box placed by each instance.  Each transformed box
+    // is itself a bound rather than a tight fit, so the union is generous in
+    // the safe direction.
+    Obj.WorldBounds.Reset;
+    for I := 0 to Obj.InstanceCount - 1 do
+    begin
+      M := GetInstanceMatrix(Obj.InstanceStart + I);
+      Obj.WorldBounds.GrowAABB(Obj.LocalBounds.Transform(M));
+    end;
+  end;
+
+  Obj.BoundsDirty := False;
+  FDataObjects[ObjectIndex] := Obj;
+end;
+
+procedure TvgVulkanDataStore.RebuildObjectBounds(ObjectIndex: Integer);
+var
+  Obj    : TvgVulkanObjectRecord;
+  I      : Integer;
+  Offset : Integer;
+  P      : array[0..2] of Single;
+begin
+  FCriticalSection.Enter;
+  try
+    if (ObjectIndex < 0) or (ObjectIndex >= FDataObjects.Count) then
+      raise EVulkanDataStoreException.CreateFmt('Invalid object index: %d', [ObjectIndex]);
+
+    Obj := FDataObjects[ObjectIndex];
+    Obj.LocalBounds.Reset;
+
+    if (vdtPosition in FVertexTypes) and
+       (Obj.VertexStart >= 0) and (Obj.VertexCount > 0) then
+    begin
+      for I := 0 to Obj.VertexCount - 1 do
+      begin
+        Offset := (Obj.VertexStart + I) * Integer(FVertexStride) +
+                  Integer(FVertexOffsets[vdtPosition]);
+
+        if (Offset < 0) or (Offset + SizeOf(P) > Length(FVertexData)) then
+          Break;
+
+        Move(FVertexData[Offset], P[0], SizeOf(P));
+        Obj.LocalBounds.GrowPoint(P[0], P[1], P[2]);
+      end;
+    end;
+
+    // Note this reads every allocated vertex, including any never written.
+    // For amClear storage those sit at the origin and WILL widen the box -
+    // unlike the incremental path, which only sees real writes.  That is the
+    // honest answer for a rescan: those vertices are in the buffer and get
+    // drawn, degenerate or not.
+    Obj.BoundsDirty := True;
+    FDataObjects[ObjectIndex] := Obj;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+function TvgVulkanDataStore.ObjectIsCulled(ObjectIndex: Integer;
+  const aFrustum: TvgFrustrumPlanes): Boolean;
+var
+  Obj: TvgVulkanObjectRecord;
+begin
+  Result := False;
+
+  if (ObjectIndex < 0) or (ObjectIndex >= FDataObjects.Count) then Exit;
+
+  Obj := FDataObjects[ObjectIndex];
+
+  // cmNever opts out entirely: its bounds cannot be trusted, typically
+  // because a compute shader owns the vertex data and the CPU's copy of the
+  // positions is stale.
+  if Obj.CullMode = cmNever then Exit;
+
+  // At most one rebuild per object per frame, and only when something
+  // actually invalidated the bounds.
+  if Obj.BoundsDirty then
+  begin
+    RecomputeWorldBounds(ObjectIndex);
+    Obj := FDataObjects[ObjectIndex];
+  end;
+
+  // An object with no usable bounds tests as visible, so geometry is never
+  // lost to a box that was simply never built.
+  Result := not vgFrustumTestAABB(aFrustum, Obj.WorldBounds);
+end;
+
+function TvgVulkanDataStore.ShouldCullObject(ObjectIndex: Integer;
+  const aFrustum: TvgFrustrumPlanes): Boolean;
+begin
+  FCriticalSection.Enter;
+  try
+    Result := ObjectIsCulled(ObjectIndex, aFrustum);
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+procedure TvgVulkanDataStore.SetObjectCullMode(ObjectIndex: Integer; AMode: TvgObjectCullMode);
+var
+  Obj: TvgVulkanObjectRecord;
+begin
+  FCriticalSection.Enter;
+  try
+    if (ObjectIndex < 0) or (ObjectIndex >= FDataObjects.Count) then
+      raise EVulkanDataStoreException.CreateFmt('Invalid object index: %d', [ObjectIndex]);
+
+    Obj := FDataObjects[ObjectIndex];
+    if Obj.CullMode = AMode then Exit;
+
+    Obj.CullMode    := AMode;
+    // Leaving cmManual hands the bounds back to the vertex data, so whatever
+    // the application supplied must be rebuilt from it.
+    Obj.BoundsDirty := True;
+    FDataObjects[ObjectIndex] := Obj;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+function TvgVulkanDataStore.GetObjectCullMode(ObjectIndex: Integer): TvgObjectCullMode;
+begin
+  FCriticalSection.Enter;
+  try
+    if (ObjectIndex < 0) or (ObjectIndex >= FDataObjects.Count) then
+      Exit(cmAuto);
+    Result := FDataObjects[ObjectIndex].CullMode;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+procedure TvgVulkanDataStore.SetObjectBounds(ObjectIndex: Integer; const AMin, AMax: TpvVector3);
+var
+  Obj: TvgVulkanObjectRecord;
+begin
+  FCriticalSection.Enter;
+  try
+    if (ObjectIndex < 0) or (ObjectIndex >= FDataObjects.Count) then
+      raise EVulkanDataStoreException.CreateFmt('Invalid object index: %d', [ObjectIndex]);
+
+    Obj := FDataObjects[ObjectIndex];
+    Obj.WorldBounds.SetBounds(AMin, AMax);
+
+    // Supplying bounds only makes sense if they are then used, so this also
+    // selects cmManual rather than silently having no effect on an object
+    // still deriving its bounds from vertex data.
+    Obj.CullMode    := cmManual;
+    Obj.BoundsDirty := False;
+
+    FDataObjects[ObjectIndex] := Obj;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+function TvgVulkanDataStore.GetObjectWorldBounds(ObjectIndex: Integer): TvgAABB;
+begin
+  Result.Reset;
+
+  FCriticalSection.Enter;
+  try
+    if (ObjectIndex < 0) or (ObjectIndex >= FDataObjects.Count) then Exit;
+
+    if FDataObjects[ObjectIndex].BoundsDirty then
+      RecomputeWorldBounds(ObjectIndex);
+
+    Result := FDataObjects[ObjectIndex].WorldBounds;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+function TvgVulkanDataStore.GetObjectLocalBounds(ObjectIndex: Integer): TvgAABB;
+begin
+  Result.Reset;
+
+  FCriticalSection.Enter;
+  try
+    if (ObjectIndex < 0) or (ObjectIndex >= FDataObjects.Count) then Exit;
+    Result := FDataObjects[ObjectIndex].LocalBounds;
+  finally
+    FCriticalSection.Leave;
+  end;
 end;
 
 { Getters }
@@ -2400,6 +2782,8 @@ var
   Buffers: array[0..1] of TVkBuffer;
   Offsets: array[0..1] of TVkDeviceSize;
   BufferCount: Integer;
+  CullON  : Boolean;
+  Frustum : TvgFrustrumPlanes;
 begin
   if not Assigned(aCommandBuffer) then
     Exit;
@@ -2425,7 +2809,19 @@ begin
   VertexBuffer   := GetVulkanVertexBuffer(aFrameIndex);
   InstanceBuffer := GetVulkanInstanceBuffer(aFrameIndex);
   IndexBuffer    := GetVulkanIndexBuffer(aFrameIndex);
-  
+
+  //Cull volume for this frame, fetched once for the whole loop.  The pipe
+  //knows which renderer it belongs to, which is what makes this correct for a
+  //scene shared between two windows: each renderer publishes the volume for
+  //its own viewport, and each gets culled against its own.
+  //
+  //CullON False - culling switched off, no camera, or no renderer reachable -
+  //means draw everything.
+  CullON := False;
+  if Assigned(aPipe) and Assigned(aPipe.Renderer) then
+    CullON := aPipe.Renderer.GetFrustumPlanes(Frustum);
+
+
   // Determine index type
   case FIndexType of
     itUInt16: IndexTypeVk := VK_INDEX_TYPE_UINT16;
@@ -2436,12 +2832,28 @@ begin
   
   FCriticalSection.Enter;
   try
+    FLastCulledCount := 0;
+
     for I := 0 to FDataObjects.Count - 1 do
     begin
       Obj := FDataObjects[I];
-      
+
       if (Obj.VertexCount <= 0) then
         Continue;
+
+      //Frustum cull before ANY recording for this object.  Skipping here also
+      //skips the CmdBindVertexBuffers and CmdBindIndexBuffer below, which in
+      //this loop cost more than the draw call they precede - every object
+      //rebinds, so a culled object saves two binds as well as a draw.
+      if CullON and ObjectIsCulled(I, Frustum) then
+      begin
+        Inc(FLastCulledCount);
+        Continue;
+      end;
+
+      //ObjectIsCulled may have rebuilt the record's bounds, so re-read it
+      //rather than drawing from the copy taken before that call.
+      Obj := FDataObjects[I];
 
       //Every draw below sources the vertex binding, so a missing vertex buffer
       //or an unallocated vertex range can never produce a correct draw.  Skip

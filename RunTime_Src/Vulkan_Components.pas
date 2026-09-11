@@ -81,6 +81,7 @@ uses
   PasVulkan.Framework,
   Vulkan_Assert,
   Vulkan_Components_Lookups,
+  Vulkan_Components_Camera,          // TvgFrustrumPlanes - per-frame cull volume
   Vulkan_Components_PointerValidation,
   Vulkan_PixelInfo;
 
@@ -391,6 +392,15 @@ TvgBaseComponent = class(TComponent)
     function  GetViewportAspect : Single;
 
     procedure SetViewProjectMatrix(aFrameIndex : TvkUint32; const aMat  : TpvMatrix4x4);
+
+    // World-space cull volume for the frame about to be recorded.  MUST be
+    // extracted from the same view-projection handed to SetViewProjectMatrix,
+    // or objects that are on screen will be culled.
+    procedure SetFrustumPlanes(const aPlanes : TvgFrustrumPlanes);
+
+    // Called instead of SetFrustumPlanes when no cull volume can be produced
+    // (no camera, for instance).  Everything is then drawn.
+    procedure ClearFrustumPlanes;
   end;
 
 
@@ -5434,6 +5444,9 @@ TvgBaseComponent = class(TComponent)
     procedure SetViewProjectMatrix(aFrameIndex : TvkUint32; const aMat  : TpvMatrix4x4);
     function  GetViewportAspect : Single;
 
+    procedure SetFrustumPlanes(const aPlanes : TvgFrustrumPlanes);
+    procedure ClearFrustumPlanes;
+
     procedure SetMVPMatrixON(const Value: Boolean);
     procedure SetSelectMode(const Value: TvgSelectMode);
     procedure SetShaderUseDouble(const Value: Boolean);
@@ -5461,6 +5474,27 @@ TvgBaseComponent = class(TComponent)
     fCurrentPrepareFrame  : TvgFrame;
     fImageIndex           : Integer;
     //current rendering frame and image
+
+  //Frustum culling
+    fFrustumPlanes        : TvgFrustrumPlanes;
+    fFrustumValid         : Boolean;
+    fFrustumCullingON     : Boolean;
+    //Cull volume for the frame currently being recorded.
+    //
+    //Deliberately ONE value rather than one per frame-in-flight slot.  It is
+    //written by PrepareGlobalAndSceneDescriptors and read by the render
+    //workers, and all of that happens inside a single PrepareFrame call -
+    //the workers are launched after the write and joined before the next one
+    //- so there is never a second frame's volume in flight to confuse it.
+    //
+    //A per-slot array would also be wrong for TvgParticleStore, which
+    //substitutes a different slot index into VulkanDraw to pick the buffer
+    //its compute pass last finished; that substituted index says nothing
+    //about which camera the frame is being drawn with.
+    //
+    //fFrustumValid is False when no volume could be produced, and everything
+    //is drawn.  fFrustumCullingON is the master switch: turn it off to
+    //confirm whether a visual problem is the culler.
 
     fOnRenderPassStructureBuild : TvgWindowBuildRenderPassStructureEvent;
 
@@ -5536,7 +5570,21 @@ TvgBaseComponent = class(TComponent)
 
     Property ScreenFrameBufferHandle[Index:Integer] : TVkFrameBuffer Read GetFrameBufferHandle;
 
+    { Cull volume for the frame being recorded.  Returns False - and the
+      caller must draw everything - when culling is switched off, or when no
+      volume could be built for this frame.
+
+      Safe to call from the render workers: the value is published before
+      they are launched and not touched again until after they are joined. }
+    Function GetFrustumPlanes(out aPlanes : TvgFrustrumPlanes) : Boolean;
+
   Published
+
+    { Master switch for CPU frustum culling in this renderer.  Default True.
+      Turn it off to establish whether missing geometry is the culler's doing
+      before looking anywhere else. }
+    Property FrustumCulling : Boolean read fFrustumCullingON write fFrustumCullingON default True;
+
 
     Property Linker        : TvgLinker read GetLinker write SetLinker;
     Property RenderPass    : TvgRenderPass read GetRenderPass ;//write SetRenderPass;
@@ -12461,6 +12509,11 @@ begin
 
   fRenderWorkers     := TList<TvgRenderWorker>.Create;
 
+  //Culling is on by default, but stays inert until a scene actually publishes
+  //a cull volume - fFrustumValid is False until then, so nothing is culled.
+  fFrustumCullingON  := True;
+  fFrustumValid      := False;
+
   VaildateGlobalResources; //   should happen at Create NOT enabled;
 
 end;
@@ -12559,6 +12612,26 @@ begin
   Result := W / H;
 end;
 
+procedure TvgBaseRenderEngine.SetFrustumPlanes(const aPlanes: TvgFrustrumPlanes);
+begin
+  fFrustumPlanes := aPlanes;
+  fFrustumValid  := True;
+end;
+
+procedure TvgBaseRenderEngine.ClearFrustumPlanes;
+begin
+  fFrustumValid := False;
+end;
+
+function TvgBaseRenderEngine.GetFrustumPlanes(out aPlanes: TvgFrustrumPlanes): Boolean;
+begin
+  Result := fFrustumCullingON and fFrustumValid;
+  if Result then
+    aPlanes := fFrustumPlanes
+  else
+    FillChar(aPlanes, SizeOf(aPlanes), 0);
+end;
+
 function TvgBaseRenderEngine.GetGlobalResources: TvgDescriptorSet;
 begin
   Result := fGlobalRes;
@@ -12616,9 +12689,21 @@ begin
     fGlobalRes.UploadDescriptorSetData(aFrameIndex);
   end;
 
-  // 2. Let the scene write whatever per-frame global data it owns
-  //    (camera VP matrix, lights, time etc.) via the IvgGlobalDataTarget
-  //    interface.  The scene never touches fGlobalRes directly.
+  // 2. Drop last frame's cull volume BEFORE asking the scene for a new one.
+  //    If the scene cannot supply one this frame - no camera yet, say - the
+  //    stale volume would otherwise still be culling against a camera that
+  //    no longer applies.  Invalid means "draw everything", which is the
+  //    right answer when we do not know what is visible.
+  ClearFrustumPlanes;
+
+  // 3. Let the scene write whatever per-frame global data it owns
+  //    (camera VP matrix, cull volume, lights, time etc.) via the
+  //    IvgGlobalDataTarget interface.  The scene never touches fGlobalRes
+  //    directly.
+  //
+  //    This runs before AddSceneRenderCommands launches the render workers,
+  //    so whatever the scene publishes here is stable for the whole of the
+  //    recording that follows.
   if Assigned(fBaseScene) then
     fBaseScene.PrepareFrameGlobalData(Self as IvgGlobalDataTarget, aFrameIndex);
 
