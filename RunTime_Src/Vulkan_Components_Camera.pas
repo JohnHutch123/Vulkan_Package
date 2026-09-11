@@ -76,6 +76,51 @@ type
      Planes :  array [0..5] of TpvVector4;
   end;
 
+  { Axis-aligned bounding box, used to cull an object without touching its
+    geometry.  Whatever space the box is built in is the space it must be
+    tested in; for frustum culling that means world space.
+
+    Valid is False until at least one point has been added, and Min/Max mean
+    nothing while it is False - an EMPTY box is not the same as a box at the
+    origin, and treating one as the other would cull objects sitting near
+    (0,0,0).  A zero-filled record is already a correct empty box, so a
+    FillChar'd owner needs no extra initialisation. }
+  TvgAABB = Record
+  Public
+    Min, Max : TpvVector3;
+    Valid    : Boolean;
+
+    procedure Reset;
+
+    // Extend to include a point or another box.  Growing by an empty box is
+    // a no-op; growing an empty box makes it exactly that point/box.
+    procedure GrowPoint(const aPoint: TpvVector3);        Overload;
+    procedure GrowPoint(aX, aY, aZ: Single);              Overload;
+    procedure GrowAABB(const aBox: TvgAABB);
+
+    // Adopt explicit bounds.  For geometry whose vertices the CPU never sees
+    // - anything a compute shader writes - this is the only way to get a
+    // usable box.  Components are ordered, so the caller may pass corners
+    // either way round.
+    procedure SetBounds(const aMin, aMax: TpvVector3);
+
+    function  Centre  : TpvVector3;   // undefined unless Valid
+    function  Extents : TpvVector3;   // HALF the size, undefined unless Valid
+    function  Size    : TpvVector3;
+    function  Radius  : Single;       // bounding sphere about Centre
+
+    { Box enclosing this box transformed by aMatrix (Arvo's method: transform
+      the centre, and scale the extents by the absolute value of the basis).
+      The result is a bound on the transformed box, not a tight fit - for a
+      rotation it can be up to sqrt(3) times the volume, which costs a little
+      culling accuracy and never correctness.
+
+      aMatrix is applied as aMatrix * point, and is assumed affine (the usual
+      model/instance transform); a projective matrix would need a w divide
+      that no bounding box can represent anyway. }
+    function  Transform(const aMatrix: TpvMatrix4x4): TvgAABB;
+  end;
+
   { TvgCamera: Main camera class }
   TvgCamera = class
   private
@@ -270,6 +315,21 @@ function vgProjectionIsZeroToOneDepth(const aProjection: TpvMatrix4x4;
 function vgExtractFrustumPlanes(const aVP: TpvMatrix4x4;
                                       aZeroToOneDepth: Boolean): TvgFrustrumPlanes;
 
+{ True if aBox might be visible inside aFrustum, False only when it is
+  definitely outside and can be skipped.
+
+  Conservative by design and in one direction only: it can return True for a
+  box that turns out to be off screen (which merely wastes a draw), and must
+  never return False for one that is on screen (which would make geometry
+  disappear).  An empty box therefore tests as visible - a caller that has no
+  bounds for an object has to draw it.
+
+  aFrustum's planes must be normalised, which vgExtractFrustumPlanes
+  guarantees; the test compares a plane distance against a box extent, so
+  unnormalised planes would reject visible geometry. }
+function vgFrustumTestAABB(const aFrustum: TvgFrustrumPlanes;
+                           const aBox    : TvgAABB): Boolean;
+
 implementation
 
 { Reports whether aProjection maps the near plane to z_ndc = 0 (the Vulkan
@@ -365,6 +425,161 @@ begin
     // empty ortho box).  Leaving the plane as-is keeps the result finite;
     // every point then tests as inside it, which fails safe by drawing.
   end;
+end;
+
+{ ============================================================================ }
+{ TvgAABB                                                                      }
+{ ============================================================================ }
+
+procedure TvgAABB.Reset;
+begin
+  Min   := TpvVector3.Create(0, 0, 0);
+  Max   := TpvVector3.Create(0, 0, 0);
+  Valid := False;
+end;
+
+procedure TvgAABB.GrowPoint(const aPoint: TpvVector3);
+begin
+  if Valid then
+  begin
+    Min := Min.Min(aPoint);   // component-wise
+    Max := Max.Max(aPoint);
+  end
+  else
+  begin
+    Min   := aPoint;
+    Max   := aPoint;
+    Valid := True;
+  end;
+end;
+
+procedure TvgAABB.GrowPoint(aX, aY, aZ: Single);
+begin
+  GrowPoint(TpvVector3.Create(aX, aY, aZ));
+end;
+
+procedure TvgAABB.GrowAABB(const aBox: TvgAABB);
+begin
+  if not aBox.Valid then Exit;   // nothing to add
+
+  if Valid then
+  begin
+    Min := Min.Min(aBox.Min);
+    Max := Max.Max(aBox.Max);
+  end
+  else
+  begin
+    Self := aBox;
+  end;
+end;
+
+procedure TvgAABB.SetBounds(const aMin, aMax: TpvVector3);
+begin
+  // Order the components rather than trusting the caller, so a box passed in
+  // with its corners swapped does not come out inside-out and cull wrongly.
+  Min   := aMin.Min(aMax);
+  Max   := aMin.Max(aMax);
+  Valid := True;
+end;
+
+function TvgAABB.Centre: TpvVector3;
+begin
+  Result := (Min + Max) * 0.5;
+end;
+
+function TvgAABB.Extents: TpvVector3;
+begin
+  Result := (Max - Min) * 0.5;
+end;
+
+function TvgAABB.Size: TpvVector3;
+begin
+  if Valid then
+    Result := Max - Min
+  else
+    Result := TpvVector3.Create(0, 0, 0);
+end;
+
+function TvgAABB.Radius: Single;
+begin
+  if Valid then
+    Result := Extents.Length
+  else
+    Result := 0.0;
+end;
+
+function TvgAABB.Transform(const aMatrix: TpvMatrix4x4): TvgAABB;
+var
+  C, E : TpvVector3;
+  TC   : TpvVector4;
+begin
+  if not Valid then
+  begin
+    Result.Reset;
+    Exit;
+  end;
+
+  C := Centre;
+  E := Extents;
+
+  // Centre goes through the full transform (rotation, scale AND translation).
+  TC := aMatrix * TpvVector4.Create(C.x, C.y, C.z, 1.0);
+
+  // Extents go through the absolute value of the 3x3 basis only: translation
+  // must not move a half-size, and the absolute value is what makes the
+  // result enclose the rotated box rather than slice through it.
+  E := aMatrix.MulAbsBasis(E);
+
+  Result.Min   := TpvVector3.Create(TC.x - E.x, TC.y - E.y, TC.z - E.z);
+  Result.Max   := TpvVector3.Create(TC.x + E.x, TC.y + E.y, TC.z + E.z);
+  Result.Valid := True;
+end;
+
+{ ============================================================================ }
+{ Frustum / AABB intersection                                                  }
+{ ============================================================================ }
+
+function vgFrustumTestAABB(const aFrustum: TvgFrustrumPlanes;
+                           const aBox    : TvgAABB): Boolean;
+var
+  C, E : TpvVector3;
+  I    : Integer;
+  D, R : Single;
+  N    : TpvVector4;
+begin
+  // No bounds means no basis on which to reject it - draw it.
+  if not aBox.Valid then
+    Exit(True);
+
+  C := aBox.Centre;
+  E := aBox.Extents;
+
+  for I := 0 to 5 do
+  begin
+    N := aFrustum.Planes[I];
+
+    // Signed distance from the box centre to the plane.  Positive is inside,
+    // because the plane normals point into the frustum.
+    D := (N.x * C.x) + (N.y * C.y) + (N.z * C.z) + N.w;
+
+    // How far the box can reach towards the plane from its centre: the
+    // extent projected onto the plane normal.  Using abs(N) with the extents
+    // picks whichever corner is furthest out without testing all eight.
+    R := (System.Abs(N.x) * E.x) +
+         (System.Abs(N.y) * E.y) +
+         (System.Abs(N.z) * E.z);
+
+    // Even the nearest corner is on the outside of this plane, so the whole
+    // box is - one plane is enough to reject.
+    if D < -R then
+      Exit(False);
+  end;
+
+  // Inside, or straddling a plane.  Note this can also return True for a box
+  // in one of the corner regions outside two planes but outside neither one
+  // on its own; that is the known false positive of plane-by-plane testing
+  // and costs a draw, never a missing object.
+  Result := True;
 end;
 
 { ============================================================================ }
