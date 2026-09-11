@@ -509,7 +509,10 @@ type
 
   TvgParticleSystem = class(TvgBaseComponent)
   private
+   //linked
     fStore        : TvgParticleStore;
+
+   //owned
     fCompute      : TvgParticleCompute;
     fEmitter      : TvgParticleEmitter;
     fForces       : TvgForceFields;

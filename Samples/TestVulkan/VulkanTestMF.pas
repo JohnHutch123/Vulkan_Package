@@ -92,6 +92,8 @@ type
     fToolManager:TvgToolManager;
 
     fParticleSys : TvgParticleSystem;
+    fParticleStore : TvgParticleStore;
+
 
     fMSAASample : TvgSampleCountFlagBits;
 
@@ -499,6 +501,8 @@ begin
   fParticleSys.OnRedrawNeeded :=  ParticleSysCallsRedraw;
 
   fParticleSys.Forces.AddGravity(0,0,0,10) ;
+
+
 
   fParticleSys.Prepare  ;
 
