@@ -466,7 +466,11 @@ begin
   FTransferState    := tsIdle;
   FValidateWrites   := True;
   
-  FNumFrames := 2;
+  //MUST track the frames-in-flight count used by TvgLinker/TvgFrame.
+  //If this is smaller, the highest frame index has no vertex/instance/index
+  //buffer, its upload raises (and is swallowed by the worker) and its draw is
+  //recorded with nothing bound - which presents as a blank frame.
+  FNumFrames := Integer(MaxFramesInFlight);
   SetLength(FDataDirty, FNumFrames);
 end;
 
@@ -2388,6 +2392,7 @@ procedure TvgVulkanDataStore.VulkanDraw(aCommandBuffer: TvgCommandBuffer;
   aPipe: TvgGraphicPipeline; aFrameIndex: TvkUint32; var CommandCount: Integer);
 var
   I: Integer;
+  FI: Integer;
   Obj: TvgVulkanObjectRecord;
   VertexBuffer, InstanceBuffer, IndexBuffer: TpvVulkanBuffer;
   VertexOffset : TVkDeviceSize;
@@ -2398,7 +2403,25 @@ var
 begin
   if not Assigned(aCommandBuffer) then
     Exit;
-    
+
+  //Nothing has been uploaded to the device yet.  That is a sequencing state,
+  //not a fault, so record nothing and stay quiet.
+  if not FBuffersCreated then
+    Exit;
+
+  //A frame index this store was never sized for means the per-frame buffer
+  //arrays are out of step with the renderer's frames-in-flight.  Recording a
+  //draw against the missing slot binds nothing and presents as a blank frame,
+  //so refuse the draw and leave a trace instead of failing silently.
+  FI := Integer(aFrameIndex);
+  if (FI < 0) or (FI >= FNumFrames) then
+  begin
+    CustomAssert(False,
+      System.SysUtils.Format('VulkanDraw: frame index %d out of range, store holds %d frame slots',
+                             [FI, FNumFrames]), Self);
+    Exit;
+  end;
+
   VertexBuffer   := GetVulkanVertexBuffer(aFrameIndex);
   InstanceBuffer := GetVulkanInstanceBuffer(aFrameIndex);
   IndexBuffer    := GetVulkanIndexBuffer(aFrameIndex);
@@ -2419,33 +2442,62 @@ begin
       
       if (Obj.VertexCount <= 0) then
         Continue;
-        
+
+      //Every draw below sources the vertex binding, so a missing vertex buffer
+      //or an unallocated vertex range can never produce a correct draw.  Skip
+      //the object rather than record a draw with nothing bound.
+      if (not Assigned(VertexBuffer)) or (Obj.VertexStart < 0) then
+      begin
+        CustomAssert(False,
+          System.SysUtils.Format('VulkanDraw: object %d has no vertex buffer for frame %d - draw skipped',
+                                 [I, FI]), Self);
+        Continue;
+      end;
+
+      //An object carrying indices MUST be drawn indexed.  Falling through to a
+      //non-indexed draw of VertexCount vertices renders the wrong geometry.
+      if (Obj.IndexCount > 0) and
+         ((not Assigned(IndexBuffer)) or (Obj.IndexStart < 0)) then
+      begin
+        CustomAssert(False,
+          System.SysUtils.Format('VulkanDraw: object %d has %d indices but no index buffer for frame %d - draw skipped',
+                                 [I, Obj.IndexCount, FI]), Self);
+        Continue;
+      end;
+
+      //Instanced geometry needs its instance binding for the same reason - the
+      //instance attributes would otherwise be read from an unbound binding.
+      if Obj.HasInstances and
+         ((not Assigned(InstanceBuffer)) or (Obj.InstanceStart < 0)) then
+      begin
+        CustomAssert(False,
+          System.SysUtils.Format('VulkanDraw: object %d is instanced but has no instance buffer for frame %d - draw skipped',
+                                 [I, FI]), Self);
+        Continue;
+      end;
+
       // Bind vertex and instance buffers
       BufferCount := 0;
-      
-      if Assigned(VertexBuffer) and (Obj.VertexStart >= 0) then
-      begin
-        Buffers[BufferCount] := VertexBuffer.Handle;
-        Offsets[BufferCount] := TVkDeviceSize(Obj.VertexStart) * FVertexStride;
-        Inc(BufferCount);
-      end;
-      
-      if Assigned(InstanceBuffer) and Obj.HasInstances and (Obj.InstanceStart >= 0) then
+
+      Buffers[BufferCount] := VertexBuffer.Handle;
+      Offsets[BufferCount] := TVkDeviceSize(Obj.VertexStart) * FVertexStride;
+      Inc(BufferCount);
+
+      if Obj.HasInstances then
       begin
         Buffers[BufferCount] := InstanceBuffer.Handle;
         Offsets[BufferCount] := TVkDeviceSize(Obj.InstanceStart) * FInstanceStride;
         Inc(BufferCount);
       end;
-      
-      if BufferCount > 0 then
-        aCommandBuffer.CmdBindVertexBuffers(0, BufferCount, @Buffers[0], @Offsets[0]);
-      
+
+      aCommandBuffer.CmdBindVertexBuffers(0, BufferCount, @Buffers[0], @Offsets[0]);
+
       // Bind index buffer if present
-      if Assigned(IndexBuffer) and (Obj.IndexCount > 0) and (Obj.IndexStart >= 0) then
+      if (Obj.IndexCount > 0) then
       begin
         VertexOffset := TVkDeviceSize(Obj.IndexStart) * GetIndexElementSize(FIndexType);
         aCommandBuffer.CmdBindIndexBuffer(IndexBuffer.Handle, VertexOffset, IndexTypeVk);
-        
+
         // Indexed draw
         aCommandBuffer.CmdDrawIndexed(Obj.IndexCount,
                                       Max(1, Obj.InstanceCount),
@@ -2458,7 +2510,7 @@ begin
                                 Max(1, Obj.InstanceCount),
                                 0, 0);
       end;
-      
+
       Inc(CommandCount);
     end;
   finally
