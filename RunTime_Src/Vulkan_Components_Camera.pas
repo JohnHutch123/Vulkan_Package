@@ -36,6 +36,22 @@ const
   CAMERA_DEFAULT_FAR     = 10000.0;
   CAMERA_DEFAULT_ASPECT  = 16.0 / 9.0;
 
+  // Index of each plane within TvgFrustrumPlanes.Planes.
+  //
+  // These are the planes produced by the standard Gribb/Hartmann extraction,
+  // named for the clip-space bound each one comes from.  Note that a
+  // projection with a negated Y (which is how Vulkan clip space is normally
+  // reached, and what GetViewProjectionMatrixForAspect builds) swaps which
+  // of TOP/BOTTOM is geometrically above the other.  The six planes still
+  // bound exactly the same volume, so culling is unaffected; only the labels
+  // would read backwards if you inspected them individually.
+  FRUSTUM_PLANE_LEFT   = 0;
+  FRUSTUM_PLANE_RIGHT  = 1;
+  FRUSTUM_PLANE_BOTTOM = 2;
+  FRUSTUM_PLANE_TOP    = 3;
+  FRUSTUM_PLANE_NEAR   = 4;
+  FRUSTUM_PLANE_FAR    = 5;
+
 type
   TvgCamera = class;
 
@@ -47,6 +63,15 @@ type
     cfFrustumDirty
   );
 
+  { Six world-space clipping planes of a view frustum.
+
+    Each plane is stored as (A,B,C,D) where the normal (A,B,C) points INWARD,
+    so a point P is on the inside of the plane when
+    A*P.x + B*P.y + C*P.z + D >= 0.  (A,B,C) is unit length, which makes the
+    value of that expression the true signed distance from P to the plane.
+    Culling code depends on that: testing a bounding volume compares the
+    distance against the volume's radius/extent, which is only meaningful if
+    the plane really is normalised. }
   TvgFrustrumPlanes = Record
      Planes :  array [0..5] of TpvVector4;
   end;
@@ -102,6 +127,11 @@ type
     procedure RecalculateViewProjectionMatrix;
     procedure InvalidateMatrices(aFlags: TCameraUpdateFlags);
 
+    { Builds a projection matrix for aAspect into a stack variable, leaving
+      FProjectionMatrix, FAspectRatio and FUpdateFlags untouched.
+      CALLER MUST HOLD FCriticalSection. }
+    function  BuildProjectionForAspect(aAspect: Single): TpvMatrix4x4;
+
     // --- Helpers ---
     function GetForwardVector: TpvVector3;
     function GetRightVector: TpvVector3;
@@ -155,8 +185,21 @@ type
     procedure SetPerspective(aFOVDegrees, aAspect, aNear, aFar: Single);
     procedure SetOrthographic(aLeft, aRight, aTop, aBottom, aNear, aFar: Single);
 
-    { World-space frustum planes (useful for culling) }
-    function GetFrustumPlanes : TvgFrustrumPlanes; // 6 planes: near, far, left, right, top, bottom
+    { World-space frustum planes of this camera's own projection, i.e. built
+      with the stored FAspectRatio.  Indexed by FRUSTUM_PLANE_*.
+
+      For CULLING, prefer GetFrustumPlanesForAspect: a renderer draws with
+      GetViewProjectionMatrixForAspect(<its own viewport aspect>), and culling
+      against a frustum built from a different aspect ratio will discard
+      geometry that is actually on screen. }
+    function GetFrustumPlanes : TvgFrustrumPlanes;
+
+    { World-space frustum planes for the projection the caller actually
+      renders with.  Pass the same aAspect handed to
+      GetViewProjectionMatrixForAspect so the cull volume and the draw agree.
+      Does not mutate any cached camera state, so it is safe to call
+      concurrently from several renderer threads. }
+    function GetFrustumPlanesForAspect(aAspect: Single) : TvgFrustrumPlanes;
 
     { Screen-to-world ray casting }
     function ScreenToWorldRay(aScreenX, aScreenY: Single; aViewportWidth, aViewportHeight: Single): TpvVector3;
@@ -215,7 +258,114 @@ type
     procedure ClearAll;
   end;
 
+{ Reports whether aProjection maps the near plane to z_ndc = 0 (the Vulkan
+  convention) or to z_ndc = -1 (the OpenGL convention).  See the body for why
+  this is probed rather than assumed. }
+function vgProjectionIsZeroToOneDepth(const aProjection: TpvMatrix4x4;
+                                            aNearPlane : Single): Boolean;
+
+{ Standard Gribb/Hartmann frustum plane extraction from a combined
+  view-projection matrix, returning planes indexed by FRUSTUM_PLANE_*.
+  Use vgProjectionIsZeroToOneDepth to decide aZeroToOneDepth. }
+function vgExtractFrustumPlanes(const aVP: TpvMatrix4x4;
+                                      aZeroToOneDepth: Boolean): TvgFrustrumPlanes;
+
 implementation
+
+{ Reports whether aProjection maps the near plane to z_ndc = 0 (the Vulkan
+  convention) or to z_ndc = -1 (the OpenGL convention), by projecting a point
+  that sits exactly on the near plane and looking at where it lands.
+
+  This is probed rather than assumed because the projections built in this
+  unit are NOT consistent: the perspective path produces -1..1 while the
+  orthographic path produces 0..1.  Probing keeps frustum extraction correct
+  either way, and keeps it correct if that inconsistency is resolved later. }
+function vgProjectionIsZeroToOneDepth(const aProjection: TpvMatrix4x4;
+                                            aNearPlane : Single): Boolean;
+var
+  NearPoint : TpvVector4;
+begin
+  // Eye space looks down -Z, so the near plane sits at z = -aNearPlane.
+  NearPoint := aProjection * TpvVector4.Create(0, 0, -aNearPlane, 1);
+
+  if SameValue(NearPoint.w, 0.0) then
+  begin
+    // Degenerate projection; assume the Vulkan convention rather than divide.
+    Result := True;
+    Exit;
+  end;
+
+  // z_ndc is ~0 for a 0..1 clip volume and ~-1 for a -1..1 one, so the
+  // midpoint -0.5 separates them with plenty of margin for FP error.
+  Result := (NearPoint.z / NearPoint.w) > -0.5;
+end;
+
+{ Standard Gribb/Hartmann plane extraction from a combined view-projection
+  matrix, returning planes indexed by FRUSTUM_PLANE_*.
+
+  aZeroToOneDepth selects the near-plane clip bound: the Vulkan convention
+  clips at z_clip >= 0, the OpenGL one at z_clip >= -w_clip.  Use
+  vgProjectionIsZeroToOneDepth to decide.
+
+  Rows, not columns: aVP is used with the column-vector convention
+  (clip := aVP * world), so each clip-space bound comes from a ROW of aVP.
+  TpvMatrix4x4 stores column-major - RawComponents[c,r] - so indexing it as
+  [row,col] silently extracts the planes of the TRANSPOSED matrix.  Rows[]
+  does the right thing and says so. }
+function vgExtractFrustumPlanes(const aVP: TpvMatrix4x4;
+                                      aZeroToOneDepth: Boolean): TvgFrustrumPlanes;
+var
+  RowX, RowY, RowZ, RowW : TpvVector4;
+  I      : Integer;
+  Len    : Single;
+
+begin
+  RowX := aVP.Rows[0];
+  RowY := aVP.Rows[1];
+  RowZ := aVP.Rows[2];
+  RowW := aVP.Rows[3];
+
+  // -w <= x <= w   ->  inside when (w + x) >= 0 and (w - x) >= 0
+  Result.Planes[FRUSTUM_PLANE_LEFT]   := RowW + RowX;
+  Result.Planes[FRUSTUM_PLANE_RIGHT]  := RowW - RowX;
+
+  // -w <= y <= w
+  Result.Planes[FRUSTUM_PLANE_BOTTOM] := RowW + RowY;
+  Result.Planes[FRUSTUM_PLANE_TOP]    := RowW - RowY;
+
+  // Near bound differs by depth convention; the far bound (z <= w) does not.
+  if aZeroToOneDepth then
+    Result.Planes[FRUSTUM_PLANE_NEAR] := RowZ            // 0 <= z
+  else
+    Result.Planes[FRUSTUM_PLANE_NEAR] := RowW + RowZ;    // -w <= z
+
+  Result.Planes[FRUSTUM_PLANE_FAR]    := RowW - RowZ;
+
+  // Normalise by the length of the NORMAL (xyz) only.
+  //
+  // TpvVector4.Normalize divides by the length of all four components, which
+  // leaves the plane geometrically correct - any uniform scale preserves the
+  // sign of A*x+B*y+C*z+D - but destroys the magnitude.  Culling tests compare
+  // that value against a bounding volume's radius, so it has to be a real
+  // distance, which means scaling by 1/|(A,B,C)|.
+  for I := 0 to 5 do
+  begin
+    Len := Sqrt(Sqr(Result.Planes[I].x) +
+                Sqr(Result.Planes[I].y) +
+                Sqr(Result.Planes[I].z));
+
+    if Len > 1e-12 then
+    begin
+      Result.Planes[I].x := Result.Planes[I].x / Len;
+      Result.Planes[I].y := Result.Planes[I].y / Len;
+      Result.Planes[I].z := Result.Planes[I].z / Len;
+      Result.Planes[I].w := Result.Planes[I].w / Len;
+    end;
+    // A zero-length normal means a degenerate projection (a zero FOV or an
+    // empty ortho box).  Leaving the plane as-is keeps the result finite;
+    // every point then tests as inside it, which fails safe by drawing.
+  end;
+end;
 
 { ============================================================================ }
 { TvgCamera Implementation                                                    }
@@ -523,7 +673,15 @@ end;
 
 procedure TvgCamera.RecalculateViewProjectionMatrix;
 begin
-  FViewProjectionMatrix := FProjectionMatrix * FViewMatrix;
+  // Operand order looks backwards but is not: TpvMatrix4x4's '*' multiplies
+  // the RAW (column-major) arrays as if they were row-major, so 'A * B'
+  // evaluates to B*A in normal matrix notation.  'View * Projection' is
+  // therefore the one that yields Projection*View, i.e. the matrix a shader
+  // applies as clip := VP * vec4(worldPos, 1).
+  //
+  // This matches PasVulkan's own convention - see TpvFrustum.Init in
+  // PasVulkan.Frustum.pas, which builds aViewMatrix*aProjectionMatrix.
+  FViewProjectionMatrix := FViewMatrix * FProjectionMatrix;
 end;
 
 function TvgCamera.GetViewMatrix: TpvMatrix4x4;
@@ -571,60 +729,78 @@ begin
   end;
 end;
 
-function TvgCamera.GetViewProjectionMatrixForAspect(  aAspect: Single): TpvMatrix4x4;
+function TvgCamera.BuildProjectionForAspect(aAspect: Single): TpvMatrix4x4;
 var
-  LocalProj  : TpvMatrix4x4;
   fovy, f    : Single;
   invDepth   : Single;
 begin
+  // This is identical to RecalculateProjectionMatrix but returns a stack
+  // value, leaving FProjectionMatrix, FAspectRatio and FUpdateFlags alone.
+  // Caller holds FCriticalSection.
+
+  // Guard against a bad viewport.  Applied to BOTH projection types: the
+  // orthographic path divides by halfH * aAspect, so a zero aspect is a hard
+  // divide-by-zero there rather than merely a wrong-looking image.
+  if aAspect <= 0 then aAspect := 1.0;
+
+  case FProjectionType of
+
+    ptPerspective:
+    begin
+      fovy     := DegToRad(FFieldOfView) / 2;
+      f        := Cos(fovy) / Sin(fovy);
+      invDepth := 1.0 / (FNearPlane - FFarPlane);
+
+      Result := TpvMatrix4x4.Create(
+        f / aAspect,  0,  0,  0,
+        0,            -f, 0,  0,    // negated Y for Vulkan clip space
+        0,            0,  (FFarPlane + FNearPlane) * invDepth, -1,
+        0,            0,  2 * FFarPlane * FNearPlane * invDepth, 0
+      );
+    end;
+
+    ptOrthographic:
+    begin
+      // For ortho the caller's aspect scales the horizontal extent;
+      // we derive new left/right bounds while preserving the stored height.
+      var halfH : Single := (FOrthTop - FOrthBottom) * 0.5;
+
+      // An empty ortho box would divide by zero below.  Fall back to a unit
+      // box so the caller gets a usable matrix instead of an exception.
+      if SameValue(halfH, 0.0) then halfH := 1.0;
+
+      var halfW : Single := halfH * aAspect;
+      invDepth := 1.0 / (FNearPlane - FFarPlane);
+
+      Result := TpvMatrix4x4.Create(
+        1 / halfW,  0,          0,          0,
+        0,          1 / halfH,  0,          0,
+        0,          0,          invDepth,   0,
+        0,          0,          FNearPlane * invDepth, 1
+      );
+    end;
+
+  else
+    Result := TpvMatrix4x4.Identity;
+  end;
+end;
+
+function TvgCamera.GetViewProjectionMatrixForAspect(  aAspect: Single): TpvMatrix4x4;
+var
+  LocalProj  : TpvMatrix4x4;
+begin
   FCriticalSection.Enter;
   try
-    // ?? 1. Rebuild the view matrix if dirty (normal lazy path) ???????????
+    // 1. Rebuild the view matrix if dirty (normal lazy path)
     if cfViewDirty in FUpdateFlags then
       RecalculateViewMatrix;
 
-    // ?? 2. Build a local projection matrix using the caller's aspect ??????
-    //    This is identical to RecalculateProjectionMatrix but writes into
-    //    a stack variable, leaving FProjectionMatrix and FAspectRatio alone.
-    case FProjectionType of
+    // 2. Build a projection for the caller's aspect, touching no cached state
+    LocalProj := BuildProjectionForAspect(aAspect);
 
-      ptPerspective:
-      begin
-        if aAspect <= 0 then aAspect := 1.0;  // guard against bad viewport
-        fovy     := DegToRad(FFieldOfView) / 2;
-        f        := Cos(fovy) / Sin(fovy);
-        invDepth := 1.0 / (FNearPlane - FFarPlane);
-
-        LocalProj := TpvMatrix4x4.Create(
-          f / aAspect,  0,  0,  0,
-          0,            -f, 0,  0,    // negated Y for Vulkan clip space
-          0,            0,  (FFarPlane + FNearPlane) * invDepth, -1,
-          0,            0,  2 * FFarPlane * FNearPlane * invDepth, 0
-        );
-      end;
-
-      ptOrthographic:
-      begin
-        // For ortho the caller's aspect scales the horizontal extent;
-        // we derive new left/right bounds while preserving the stored height.
-        var halfH : Single := (FOrthTop - FOrthBottom) * 0.5;
-        var halfW : Single := halfH * aAspect;
-        invDepth := 1.0 / (FNearPlane - FFarPlane);
-
-        LocalProj := TpvMatrix4x4.Create(
-          1 / halfW,  0,          0,          0,
-          0,          1 / halfH,  0,          0,
-          0,          0,          invDepth,   0,
-          0,          0,          FNearPlane * invDepth, 1
-        );
-      end;
-
-    else
-      LocalProj := TpvMatrix4x4.Identity;
-    end;
-
-    // ?? 3. VP = Proj * View (column-major, matches RecalculateViewProjection)
-    Result := LocalProj * FViewMatrix;
+    // 3. VP = Proj*View - see RecalculateViewProjectionMatrix for why that is
+    //    spelled View * Proj with TpvMatrix4x4's reversed '*'.
+    Result := FViewMatrix * LocalProj;
 
   finally
     FCriticalSection.Leave;
@@ -833,59 +1009,58 @@ end;
 
 function TvgCamera.GetFrustumPlanes: TvgFrustrumPlanes;
 var
-  vp: TpvMatrix4x4;
+  VP       : TpvMatrix4x4;
+  Proj     : TpvMatrix4x4;
+  NearDist : Single;
 begin
-  // Extract frustum planes from view-projection matrix
-  // Left, Right, Bottom, Top, Near, Far
-  vp := GetViewProjectionMatrix;
+  FCriticalSection.Enter;
+  try
+    if cfViewDirty in FUpdateFlags then
+      RecalculateViewMatrix;
+    if cfProjectionDirty in FUpdateFlags then
+      RecalculateProjectionMatrix;
+    if (cfViewDirty in FUpdateFlags) or (cfProjectionDirty in FUpdateFlags) then
+      RecalculateViewProjectionMatrix;
 
-  // Left plane
-  Result.Planes[0] := TpvVector4.Create(
-    vp.RawComponents[3, 0] + vp.RawComponents[0, 0],
-    vp.RawComponents[3, 1] + vp.RawComponents[0, 1],
-    vp.RawComponents[3, 2] + vp.RawComponents[0, 2],
-    vp.RawComponents[3, 3] + vp.RawComponents[0, 3]
-  ).Normalize;
+    VP       := FViewProjectionMatrix;
+    Proj     := FProjectionMatrix;
+    NearDist := FNearPlane;
+  finally
+    FCriticalSection.Leave;
+  end;
 
-  // Right plane
-  Result.Planes[1] := TpvVector4.Create(
-    vp.RawComponents[3, 0] - vp.RawComponents[0, 0],
-    vp.RawComponents[3, 1] - vp.RawComponents[0, 1],
-    vp.RawComponents[3, 2] - vp.RawComponents[0, 2],
-    vp.RawComponents[3, 3] - vp.RawComponents[0, 3]
-  ).Normalize;
+  // Not cached, so cfFrustumDirty is deliberately left alone: nothing in this
+  // unit ever tests it, and clearing it here would be an unsynchronised write
+  // to FUpdateFlags from whichever thread happened to ask for the planes.
+  Result := vgExtractFrustumPlanes(VP,
+              vgProjectionIsZeroToOneDepth(Proj, NearDist));
+end;
 
-  // Bottom plane
-  Result.Planes[2] := TpvVector4.Create(
-    vp.RawComponents[3, 0] + vp.RawComponents[1, 0],
-    vp.RawComponents[3, 1] + vp.RawComponents[1, 1],
-    vp.RawComponents[3, 2] + vp.RawComponents[1, 2],
-    vp.RawComponents[3, 3] + vp.RawComponents[1, 3]
-  ).Normalize;
+function TvgCamera.GetFrustumPlanesForAspect(aAspect: Single): TvgFrustrumPlanes;
+var
+  LocalProj : TpvMatrix4x4;
+  VP        : TpvMatrix4x4;
+  NearDist  : Single;
+begin
+  FCriticalSection.Enter;
+  try
+    if cfViewDirty in FUpdateFlags then
+      RecalculateViewMatrix;
 
-  // Top plane
-  Result.Planes[3] := TpvVector4.Create(
-    vp.RawComponents[3, 0] - vp.RawComponents[1, 0],
-    vp.RawComponents[3, 1] - vp.RawComponents[1, 1],
-    vp.RawComponents[3, 2] - vp.RawComponents[1, 2],
-    vp.RawComponents[3, 3] - vp.RawComponents[1, 3]
-  ).Normalize;
+    // Same projection, and the same VP composition, that
+    // GetViewProjectionMatrixForAspect hands the renderer - so the volume
+    // culled against is exactly the volume drawn.
+    LocalProj := BuildProjectionForAspect(aAspect);
+    VP        := FViewMatrix * LocalProj;
+    NearDist  := FNearPlane;
+  finally
+    FCriticalSection.Leave;
+  end;
 
-  // Near plane
-  Result.Planes[4] := TpvVector4.Create(
-    vp.RawComponents[3, 0] + vp.RawComponents[2, 0],
-    vp.RawComponents[3, 1] + vp.RawComponents[2, 1],
-    vp.RawComponents[3, 2] + vp.RawComponents[2, 2],
-    vp.RawComponents[3, 3] + vp.RawComponents[2, 3]
-  ).Normalize;
-
-  // Far plane
-  Result.Planes[5] := TpvVector4.Create(
-    vp.RawComponents[3, 0] - vp.RawComponents[2, 0],
-    vp.RawComponents[3, 1] - vp.RawComponents[2, 1],
-    vp.RawComponents[3, 2] - vp.RawComponents[2, 2],
-    vp.RawComponents[3, 3] - vp.RawComponents[2, 3]
-  ).Normalize;
+  // Deliberately outside the lock: operates only on the locals above, so
+  // several renderer threads can extract their own planes concurrently.
+  Result := vgExtractFrustumPlanes(VP,
+              vgProjectionIsZeroToOneDepth(LocalProj, NearDist));
 end;
 
 function TvgCamera.ScreenToWorldRay(aScreenX, aScreenY: Single; aViewportWidth, aViewportHeight: Single): TpvVector3;
@@ -899,7 +1074,10 @@ begin
   ndc.Y := 1.0 - (2.0 * aScreenY) / aViewportHeight;
   ndc.Z := 1.0;
 
-  invView := GetInverseViewMatrix * GetInverseProjectionMatrix;
+  // Unprojecting needs View^-1 * Projection^-1 applied to the clip-space
+  // point, which with TpvMatrix4x4's reversed '*' is spelled with the
+  // operands this way round - same reason as RecalculateViewProjectionMatrix.
+  invView := GetInverseProjectionMatrix * GetInverseViewMatrix;
   ray := (invView * TpvVector4.Create(ndc.X, ndc.Y, ndc.Z, 1.0)).XYZ.Normalize;
 
   Result := ray;
