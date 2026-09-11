@@ -30,6 +30,7 @@ To run a single test, build it the same way and run the exe, or just run
 |---|---|---|
 | `FrustumTest.dpr` | `Vulkan_Components_Camera` | Frustum plane extraction: normalisation, signed distance to the near and far planes, and inside/outside for points straddling each of the six planes. Runs perspective at two aspect ratios, the camera's own aspect, and orthographic. |
 | `AABBTest.dpr` | `Vulkan_Components_Camera` | `TvgAABB` growth, union, centre/extent/size/radius, and `Transform` under identity, translation, scale and rotation. Then `vgFrustumTestAABB` against boxes behind the camera, past the far plane, off each side, straddling the near plane, enclosing the frustum, and centred outside the frustum while still overlapping it. |
+| `BoundsTest.dpr` | `Vulkan_Components_DataStore` | The per-object bounds the store maintains: accumulation from vertex writes, the union over instance matrices, the three cull modes, that two objects sharing the interleaved vertex array keep separate boxes, and the whole thing tested against a real camera frustum. Drives the store with no Vulkan device, since bounds live in its CPU arrays. |
 
 ## Why these exist
 
@@ -47,6 +48,13 @@ visible:
 - `FrustumTest`: signed distances, not just signs. Sign-only tests pass even
   with unnormalised planes; anything comparing a distance against a bounding
   volume's extent does not.
+- `BoundsTest`: *manual Min/Max survives a vertex write* - an object whose
+  bounds the application supplied, because a compute shader owns its
+  geometry, must not have them quietly replaced by stale CPU positions.
+- `BoundsTest`: *union Min/Max* over instance matrices. `TvgMatrix4x4S` is
+  reinterpreted as a `TpvMatrix4x4` when the store reads an instance
+  transform back; if that layout assumption were wrong the boxes would not
+  move, or would move along the wrong axis, and these checks say which.
 
 ## Adding a test
 
