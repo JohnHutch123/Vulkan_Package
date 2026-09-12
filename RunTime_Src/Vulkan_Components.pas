@@ -14032,7 +14032,7 @@ end;
 procedure TvgCommandBuffer.BeginRecording(const AFlags: TVkCommandBufferUsageFlags = 0);
 begin
   RequireState([cbsInitial], 'BeginRecording requires INITIAL state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'BeginRecording: Vulkan command buffer handle not valid');
   CustomAssert(fCommandLevel=CB_PRIMARY ,'Command Buffer is NOT Primary');
 
   fVulkanCommandBuffer.BeginRecording(aFlags) ;
@@ -14044,7 +14044,7 @@ end;
 procedure TvgCommandBuffer.BeginRecordingPrimary;
 begin
   RequireState([cbsInitial], 'BeginRecordingPrimary requires INITIAL state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'BeginRecordingPrimary: Vulkan command buffer handle not valid');
   CustomAssert(fCommandLevel=CB_PRIMARY ,'Command Buffer is NOT Primary');
 
   fVulkanCommandBuffer.BeginRecordingPrimary ;
@@ -14061,7 +14061,7 @@ procedure TvgCommandBuffer.BeginRecordingSecondary(
   const aFlags: TVkCommandBufferUsageFlags});
 begin
   RequireState([cbsInitial], 'BeginRecordingPrimary requires INITIAL state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'BeginRecordingSecondary: Vulkan command buffer handle not valid');
 
   CustomAssert(fCommandLevel=CB_SECONDARY ,'Command Buffer is NOT Sceondary');
 
@@ -14089,7 +14089,7 @@ procedure TvgCommandBuffer.BeginRecordingSecondaryDynamic(
       ColorFmt    : TVkFormat;
 begin
   RequireState([cbsInitial], 'BeginRecordingSecondaryDynamic requires INITIAL state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'BeginRecordingSecondaryDynamic: Vulkan command buffer handle not valid');
   CustomAssert(fCommandLevel=CB_SECONDARY ,'Command Buffer is NOT Secondary');
   CustomAssert(assigned(fCommandPool),'Command Pool not assigned');
   CustomAssert(assigned(fCommandPool.Device),'Device not assigned');
@@ -14134,7 +14134,7 @@ end;
 procedure TvgCommandBuffer.CmdBeginQuery(queryPool: TVkQueryPool; query: TvkUint32; flags: TVkQueryControlFlags);
 begin
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdBeginQuery: Vulkan command buffer handle not valid');
 
   fVulkanCommandBuffer.CmdBeginQuery(queryPool,query,flags);
   Inc(fCommandCount);
@@ -14144,7 +14144,7 @@ end;
 procedure TvgCommandBuffer.CmdBeginRenderPass(const aRenderPassBegin: PVkRenderPassBeginInfo; contents: TVkSubpassContents);
 begin
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdBeginRenderPass: Vulkan command buffer handle not valid');
 
   fVulkanCommandBuffer.CmdBeginRenderPass(aRenderPassBegin,contents);
   Inc(fCommandCount);
@@ -14154,7 +14154,7 @@ end;
 procedure TvgCommandBuffer.CmdBeginRendering(const aRenderingInfo: PVkRenderingInfo);
 begin
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdBeginRendering: Vulkan command buffer handle not valid');
   CustomAssert(assigned(aRenderingInfo),'RenderingInfo not assigned');
   CustomAssert(assigned(fCommandPool),'Command Pool not assigned');
   CustomAssert(assigned(fCommandPool.Device),'Device not assigned');
@@ -14171,7 +14171,7 @@ procedure TvgCommandBuffer.CmdBindDescriptorSets(
   dynamicOffsetCount: TvkUint32; const aDynamicOffsets: PvkUInt32);
 begin
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdBindDescriptorSets: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdBindDescriptorSets(pipelineBindPoint,
                                                  layout,
@@ -14188,7 +14188,7 @@ end;
 procedure TvgCommandBuffer.CmdBindIndexBuffer(buffer: TVkBuffer;  offset: TVkDeviceSize; indexType: TVkIndexType);
 begin
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdBindIndexBuffer: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdBindIndexBuffer(buffer,
                                               Offset,
@@ -14201,7 +14201,7 @@ end;
 procedure TvgCommandBuffer.CmdBindPipeline(  pipelineBindPoint: TVkPipelineBindPoint; pipeline: TVkPipeline);
 begin
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdBindPipeline: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdBindPipeline(pipelineBindPoint,
                                               pipeline);
@@ -14214,7 +14214,7 @@ procedure TvgCommandBuffer.CmdBindVertexBuffers(firstBinding,
   const aOffsets: PVkDeviceSize);
 begin
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdBindVertexBuffers: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdBindVertexBuffers(firstBinding,
                                                 bindingCount,
@@ -14230,7 +14230,7 @@ procedure TvgCommandBuffer.CmdBlitImage(srcImage: TVkImage;
   const aRegions: PVkImageBlit; filter: TVkFilter);
 begin
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdBlitImage: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdBlitImage(srcImage,
                                                 srcImageLayout,
@@ -14249,7 +14249,7 @@ procedure TvgCommandBuffer.CmdClearAttachments(attachmentCount: TvkUint32;
   const aRects: PVkClearRect);
 begin
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdClearAttachments: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdClearAttachments(attachmentCount,
                                                 aAttachments,
@@ -14265,7 +14265,7 @@ procedure TvgCommandBuffer.CmdClearColorImage(image: TVkImage;
   rangeCount: TvkUint32; const aRanges: PVkImageSubresourceRange);
 begin
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdClearColorImage: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdClearColorImage(image,
                                                 imageLayout,
@@ -14282,7 +14282,7 @@ procedure TvgCommandBuffer.CmdClearDepthStencilImage(image: TVkImage;
   rangeCount: TvkUint32; const aRanges: PVkImageSubresourceRange);
 begin
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdClearDepthStencilImage: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdClearDepthStencilImage(image,
                                                 imageLayout,
@@ -14299,7 +14299,7 @@ procedure TvgCommandBuffer.CmdCopyBuffer(srcBuffer, dstBuffer: TVkBuffer;
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdCopyBuffer: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdCopyBuffer(srcBuffer,
                                                 dstBuffer,
@@ -14316,7 +14316,7 @@ procedure TvgCommandBuffer.CmdCopyBufferToImage(srcBuffer: TVkBuffer;
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdCopyBufferToImage: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdCopyBufferToImage(srcBuffer,
                                                 dstImage,
@@ -14335,7 +14335,7 @@ procedure TvgCommandBuffer.CmdCopyImage(srcImage: TVkImage;
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdCopyImage: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdCopyImage(srcImage,
                                         srcImageLayout,
@@ -14354,7 +14354,7 @@ procedure TvgCommandBuffer.CmdCopyImageToBuffer(srcImage: TVkImage;
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdCopyImageToBuffer: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdCopyImageToBuffer(srcImage,
                                                 srcImageLayout,
@@ -14372,7 +14372,7 @@ procedure TvgCommandBuffer.CmdCopyQueryPoolResults(queryPool: TVkQueryPool;
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdCopyQueryPoolResults: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdCopyQueryPoolResults(queryPool,
                                                 firstQuery,
@@ -14390,7 +14390,7 @@ procedure TvgCommandBuffer.CmdDispatch(x, y, z: TvkUint32);
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdDispatch: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdDispatch(X,Y,Z);
 
@@ -14403,7 +14403,7 @@ procedure TvgCommandBuffer.CmdDispatchIndirect(buffer: TVkBuffer;
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdDispatchIndirect: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdDispatchIndirect(buffer, offset);
 
@@ -14415,7 +14415,7 @@ procedure TvgCommandBuffer.CmdDraw(vertexCount, instanceCount, firstVertex,  fir
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdDraw: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdDraw(vertexCount,
                                    instanceCount,
@@ -14431,7 +14431,7 @@ procedure TvgCommandBuffer.CmdDrawIndexed(indexCount, instanceCount,
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdDrawIndexed: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdDrawIndexed(indexCount,
                                    instanceCount,
@@ -14447,7 +14447,7 @@ procedure TvgCommandBuffer.CmdDrawIndexedIndirect(buffer: TVkBuffer;  offset: TV
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdDrawIndexedIndirect: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdDrawIndexedIndirect(buffer,
                                    offset,
@@ -14463,7 +14463,7 @@ procedure TvgCommandBuffer.CmdDrawIndirect(buffer: TVkBuffer;
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdDrawIndirect: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdDrawIndirect(buffer,
                                    offset,
@@ -14478,7 +14478,7 @@ procedure TvgCommandBuffer.CmdEndQuery(queryPool: TVkQueryPool;  query: TvkUint3
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdEndQuery: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdEndQuery(queryPool, query);
 
@@ -14490,7 +14490,7 @@ procedure TvgCommandBuffer.CmdEndRenderPass;
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdEndRenderPass: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdEndRenderPass;
 
@@ -14502,7 +14502,7 @@ end;
 procedure TvgCommandBuffer.CmdEndRendering;
 begin
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdEndRendering: Vulkan command buffer handle not valid');
   CustomAssert(assigned(fCommandPool),'Command Pool not assigned');
   CustomAssert(assigned(fCommandPool.Device),'Device not assigned');
   CustomAssert(assigned(fCommandPool.Device.VulkanDevice),'Vulkan Device not assigned');
@@ -14515,7 +14515,7 @@ procedure TvgCommandBuffer.CmdExecute( const aCommandBuffer: TpvVulkanCommandBuf
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdExecute: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdExecute(aCommandBuffer);
 
@@ -14528,7 +14528,7 @@ procedure TvgCommandBuffer.CmdExecuteCommands(commandBufferCount: TvkUint32;
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdExecuteCommands: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdExecuteCommands(commandBufferCount,
                                               aCommandBuffers);
@@ -14541,7 +14541,7 @@ procedure TvgCommandBuffer.CmdFillBuffer(dstBuffer: TVkBuffer; dstOffset, size: 
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdFillBuffer: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdFillBuffer(dstBuffer,
                                          dstOffset,
@@ -14556,7 +14556,7 @@ procedure TvgCommandBuffer.CmdNextSubpass(contents: TVkSubpassContents);
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdNextSubpass: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdNextSubpass(contents);
 
@@ -14574,7 +14574,7 @@ procedure TvgCommandBuffer.CmdPipelineBarrier(srcStageMask,
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdPipelineBarrier: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdPipelineBarrier(srcStageMask,
                                          dstStageMask,
@@ -14596,7 +14596,7 @@ procedure TvgCommandBuffer.CmdPushConstants(layout: TVkPipelineLayout;
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdPushConstants: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdPushConstants(layout,
                                             stageFlags,
@@ -14612,7 +14612,7 @@ procedure TvgCommandBuffer.CmdResetEvent(event: TVkEvent;  stageMask: TVkPipelin
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdResetEvent: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdResetEvent(event,stageMask);
 
@@ -14623,7 +14623,7 @@ end;
 procedure TvgCommandBuffer.CmdResetQueryPool(queryPool: TVkQueryPool; firstQuery, queryCount: TvkUint32);
 begin
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdResetQueryPool: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdResetQueryPool(queryPool,
                                             firstQuery,
@@ -14640,7 +14640,7 @@ procedure TvgCommandBuffer.CmdResolveImage(srcImage: TVkImage;
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdResolveImage: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdResolveImage(srcImage,
                                             srcImageLayout,
@@ -14657,7 +14657,7 @@ procedure TvgCommandBuffer.CmdSetBlendConstants(const blendConstants: TvkFloat);
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdSetBlendConstants: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdSetBlendConstants(blendConstants);
 
@@ -14669,7 +14669,7 @@ procedure TvgCommandBuffer.CmdSetCullMode(const cullMode: TVkCullModeFlags);
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdSetCullMode: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdSetCullMode(cullMode);
 
@@ -14681,7 +14681,7 @@ procedure TvgCommandBuffer.CmdSetDepthBias(depthBiasConstantFactor, depthBiasCla
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdSetDepthBias: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdSetDepthBias(depthBiasConstantFactor,
                                            depthBiasClamp,
@@ -14695,7 +14695,7 @@ procedure TvgCommandBuffer.CmdSetDepthBounds(minDepthBounds, maxDepthBounds: Tvk
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdSetDepthBounds: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdSetDepthBounds(minDepthBounds, maxDepthBounds);
 
@@ -14707,7 +14707,7 @@ procedure TvgCommandBuffer.CmdSetEvent(event: TVkEvent;  stageMask: TVkPipelineS
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdSetEvent: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdSetEvent(event, stageMask);
 
@@ -14719,7 +14719,7 @@ procedure TvgCommandBuffer.CmdSetLineWidth(lineWidth: TvkFloat);
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdSetLineWidth: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdSetLineWidth(lineWidth);
 
@@ -14731,7 +14731,7 @@ procedure TvgCommandBuffer.CmdSetScissor(firstScissor, scissorCount: TvkUint32; 
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdSetScissor: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdSetScissor(firstScissor,
                                          scissorCount,
@@ -14745,7 +14745,7 @@ procedure TvgCommandBuffer.CmdSetStencilCompareMask( faceMask: TVkStencilFaceFla
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdSetStencilCompareMask: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdSetStencilCompareMask(faceMask, compareMask);
 
@@ -14757,7 +14757,7 @@ procedure TvgCommandBuffer.CmdSetStencilReference(faceMask: TVkStencilFaceFlags;
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdSetStencilReference: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdSetStencilReference(faceMask, areference);
 
@@ -14769,7 +14769,7 @@ procedure TvgCommandBuffer.CmdSetStencilWriteMask(faceMask: TVkStencilFaceFlags;
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdSetStencilWriteMask: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdSetStencilWriteMask(faceMask,writeMask);
 
@@ -14782,7 +14782,7 @@ procedure TvgCommandBuffer.CmdSetViewport(firstViewport,
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdSetViewport: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdSetViewport(firstViewport,
                                          viewportCount,
@@ -14797,7 +14797,7 @@ procedure TvgCommandBuffer.CmdUpdateBuffer(dstBuffer: TVkBuffer; dstOffset,
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdUpdateBuffer: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdUpdateBuffer(dstBuffer,
                                          dstOffset,
@@ -14818,7 +14818,7 @@ procedure TvgCommandBuffer.CmdWaitEvents(eventCount: TvkUint32;
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdWaitEvents: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdWaitEvents(eventCount,
                                          aEvents,
@@ -14840,7 +14840,7 @@ procedure TvgCommandBuffer.CmdWriteTimestamp( pipelineStage: TVkPipelineStageFla
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'CmdWriteTimestamp: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.CmdWriteTimestamp(pipelineStage,
                                          queryPool,
@@ -14867,7 +14867,7 @@ procedure TvgCommandBuffer.EndRecording;
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'EndRecording: Vulkan command buffer handle not valid');
 
   fVulkanCommandBuffer.EndRecording;
 
@@ -14890,7 +14890,7 @@ begin
 
 
   RequireState([cbsExecutable], 'Command requires EXECUTABLE state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'ExecuteCommand: Vulkan command buffer handle not valid');
 
 
             fVulkanCommandBuffer.Execute(aQueue,
@@ -14998,7 +14998,7 @@ procedure TvgCommandBuffer.MetaCmdDrawToPresentImageBarrier( const aImage: TpvVu
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'MetaCmdDrawToPresentImageBarrier: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.MetaCmdDrawToPresentImageBarrier(aImage,aDoTransitionToPresentSrcLayout);
 
@@ -15012,7 +15012,7 @@ procedure TvgCommandBuffer.MetaCmdMemoryBarrier(const aSrcStageMask,
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'MetaCmdMemoryBarrier: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.MetaCmdMemoryBarrier(aSrcStageMask,aDstStageMask,aSrcAccessMask,aDstAccessMask);
 
@@ -15026,7 +15026,7 @@ procedure TvgCommandBuffer.MetaCmdPresentToDrawImageBarrier(
 begin
 
   RequireState([cbsRecording], 'Command requires Recording state');
-  CustomAssert(IsValidHandle,'Vulkan Buffer handle not valid');
+  CustomAssert(IsValidHandle,'MetaCmdPresentToDrawImageBarrier: Vulkan command buffer handle not valid');
 
       fVulkanCommandBuffer.MetaCmdPresentToDrawImageBarrier(aImage, aDoTransitionToColorAttachmentOptimalLayout);
 
@@ -15064,8 +15064,13 @@ begin
     if fBufferState = S then
       Exit;
 
+  //Name the state rather than printing its ordinal - "cbsPending" says what
+  //went wrong, "3" needs the enum to hand.
   raise
-     Exception.CreateFmt( '%s (Current state: %d)', [AError, Ord(fBufferState)]  );
+     Exception.CreateFmt( '%s (Current state: %s, buffer "%s")',
+                          [AError,
+                           GetEnumName(TypeInfo(TvgCommandBufferState), Ord(fBufferState)),
+                           fName]  );
 end;
 
 procedure TvgCommandBuffer.Reset;
