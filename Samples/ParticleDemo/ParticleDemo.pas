@@ -59,8 +59,25 @@ type
     procedure Start;
     procedure Stop;
 
-    // Wrap your frame present in this so the worker and the render path never
-    // submit to the graphics queue at the same time.
+    // Render one frame, holding the lock the compute worker also takes, so the
+    // two never submit to the graphics queue at the same time.
+    //
+    // The frame loop this drives, for reference - every step matters, which is
+    // why TriggerWindowRepaint has to be the entry point:
+    //
+    //   TvgLinker.TriggerWindowRepaint            (RT_SCREEN)
+    //     -> TvgLinker.LinkerStartPrepare         sets fLinkRenderLock
+    //         -> TvgFrame.StartFramePrepare       acquires the swapchain image
+    //             -> TvgBaseRenderEngine.StartRenderEnginePrepare
+    //                 -> FinishRenderEnginePrepare      (when not UseThread)
+    //                     -> TvgFrame.FinishFramePrepare
+    //                         -> TvgLinker.LinkerFinishPrepare
+    //                             -> AdvanceToNextFrames   <- frame advance
+    //                             -> VulkanPaint_Present   <- present
+    //
+    procedure RenderFrameGuarded;
+
+    // Superseded by RenderFrameGuarded, which it now calls.  aFrame is ignored.
     procedure PresentGuarded(aFrame: TvgFrame);
 
     // prmInline alternative: call this while the frame command buffer is
@@ -167,8 +184,8 @@ begin
   fSystem.Forces.AddDrag(0.35);
 
   //--------------------------------------------------------------------------
-  // 4.  Build the GPU side.  The scene must already have a Vulkan device, so
-  //     call this after the scene / linker are active.
+  // 4.  Configure the system.  Nothing Vulkan-side is built until Start sets
+  //     Active := True, so this part does not need a live device.
   //--------------------------------------------------------------------------
   fSystem.ParticleCount := aParticleCount;
   fSystem.Store         := fStore;
@@ -176,45 +193,79 @@ begin
   fSystem.FixedStep     := 0;       // 0 = use the wall clock delta
 
   // prmThreaded needs at least 3 frames in flight so the worker never writes
-  // the slot the renderer is reading; Prepare raises if there are fewer.
+  // the slot the renderer is reading; activating raises if there are fewer.
   // prmInline has no such requirement and is the simpler thing to bring up
   // first - it records the dispatch into the frame's own command buffer, so
   // no locking, no fence stall and no slot handshake.
   fSystem.RunMode := prmThreaded;
-
-  fSystem.Prepare;
 end;
 
 procedure TvgParticleDemo.Start;
 begin
-  fSystem.StartThread;
+  // Builds the buffers and compute pipeline, seeds the particles, primes every
+  // frame slot, and starts the worker if RunMode is prmThreaded.
+  fSystem.Active := True;
 end;
 
 procedure TvgParticleDemo.Stop;
 begin
+  // Stops the worker, waits for the device to go idle and frees the GPU side.
+  // The store keeps drawing the last simulated frame.
   if Assigned(fSystem) then
-    fSystem.StopThread;
+    fSystem.Active := False;
 end;
 
 procedure TvgParticleDemo.HandleRedrawNeeded(Sender: TObject);
 begin
-  // Runs on the main thread, after the compute fence has signalled, so the
-  // vertex data for this step is complete.  Trigger a repaint here.
-  if Assigned(fLinker) then
+  // Runs on the main thread (the worker reaches here through Synchronize),
+  // after the compute fence has signalled, so the vertex data for this step is
+  // complete.  Go through the guarded path: the render submit inside
+  // TriggerWindowRepaint shares the graphics queue with the compute worker.
+  RenderFrameGuarded;
+end;
+
+procedure TvgParticleDemo.RenderFrameGuarded;
+begin
+  if not Assigned(fLinker) then Exit;
+
+  // TriggerWindowRepaint drives the WHOLE cycle, and it must be the entry
+  // point.  Calling TvgFrame.StartFramePrepare directly (as an earlier version
+  // of this sample did) skips TvgLinker.LinkerStartPrepare, so fLinkRenderLock
+  // is never set - and LinkerFinishPrepare opens with
+  //
+  //     if not fLinkRenderLock then exit;
+  //
+  // so AdvanceToNextFrames and VulkanPaint_Present never run.  The frame is
+  // recorded and submitted but the swapchain image never advances and the same
+  // picture stays on screen.
+  //
+  // The lock is the one the compute worker takes around its own submit: the
+  // render submit happens inside this call (FinishFramePrepare ->
+  // ExecuteCommand), so it has to be covered too.
+  fSystem.SubmitLock.Enter;
+  try
+    // The compute shader has just rewritten the particle vertex buffers, so
+    // the scene content is stale.  Saying so is all that is needed: the linker
+    // decides what to do about it, and an offscreen target uses it to choose
+    // between re-rendering and simply re-blitting the last image.
+    //
+    // (Before the frame-loop rework this call was load-bearing for a different
+    //  reason - RT_FRAME would otherwise re-present the same image forever.
+    //  That is fixed in TvgLinker.TriggerWindowRepaint; this is now just an
+    //  honest "the scene changed".)
+    fLinker.FlagALLFrameRebuild;
+
     fLinker.TriggerWindowRepaint;
+  finally
+    fSystem.SubmitLock.Leave;
+  end;
 end;
 
 procedure TvgParticleDemo.PresentGuarded(aFrame: TvgFrame);
 begin
-  if not Assigned(aFrame) then Exit;
-
-  // Same lock the compute worker takes around its submit.
-  fSystem.SubmitLock.Enter;
-  try
-    aFrame.StartFramePrepare;
-  finally
-    fSystem.SubmitLock.Leave;
-  end;
+  // Retained so existing callers keep compiling.  aFrame is ignored: the
+  // linker owns which frame is prepared and which is presented.
+  RenderFrameGuarded;
 end;
 
 procedure TvgParticleDemo.RecordInlineStep(aCommandBuffer: TvgCommandBuffer;

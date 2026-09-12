@@ -23750,31 +23750,34 @@ begin
 
  if fLinkRenderLock then
  Begin
+    //Busy with a frame.  Remember to run one more when it finishes.
     fRenderRequested := True;
     exit;
- end else
+ End;
 
-    Case fRenderTarget of
-      RT_NONE   :;
-      RT_SCREEN :Begin
-                   LinkerStartPrepare ;
-                 End;
-      RT_FRAME  :Begin
-                    if     (fRenderRequested = False) or
-                           (fFrames[fPresentFrameIndex].fRenderNeeded = False) then
-                    Begin
-                       if fMsgON and assigned(fMsgList) then
-                          fMsgList.Clear;
+  if fRenderTarget = RT_NONE then exit;
 
-                       VulkanPaint_Present;
-
-                       if fMsgON and assigned(fMsgEvent) then
-                                   fMsgEvent(fMsgList);
-                    end else
-                       LinkerStartPrepare ;
-                 End;
-
-    End;
+  //-------------------------------------------------------------------------
+  //  One path for both render targets.
+  //
+  //  This used to branch: RT_SCREEN always rendered, while RT_FRAME tested
+  //  fRenderRequested AND the present frame's fRenderNeeded and, if either was
+  //  clear, called VulkanPaint_Present directly - which re-presented the same
+  //  image without ever advancing the frame.  Because both flags are one-shot
+  //  (fRenderNeeded consumed in StartFramePrepare, fRenderRequested cleared in
+  //  LinkerFinishPrepare), an animated offscreen scene froze on frame one
+  //  unless something re-armed BOTH every frame.
+  //
+  //  The two flags meant different things and are now kept apart:
+  //    fRenderRequested - "a repaint arrived while we were busy; retry after"
+  //    Frame.fRenderNeeded - "this slot's scene content is stale"
+  //
+  //  Staleness is acted on in StartFramePrepare, which skips the scene render
+  //  for an unchanged offscreen frame and simply re-blits it.  Either way the
+  //  frame is acquired, submitted, advanced and presented, so the picture
+  //  cannot get stuck.
+  //-------------------------------------------------------------------------
+  LinkerStartPrepare;
 end;
 
 function TvgLinker.VulkanPaint_Cancel: Boolean;
