@@ -14901,7 +14901,17 @@ begin
                                          aDoWaitAndResetFence); //if a fence provided then wait on fence OR not
 
   If fIsSingleUse then
-    fBufferState := cbsInvalid;
+    fBufferState := cbsInvalid
+  else
+  if aUseFence and (not aDoWaitAndResetFence) then
+  Begin
+    //Submitted without blocking, so the GPU may still be reading this buffer.
+    //Record that, so PrepareForRecording waits on the fence before the buffer
+    //is reused.  Without this WaitOnFence exits immediately on fFenceSet and
+    //the buffer could be re-recorded while still executing.
+    fBufferState := cbsPending;
+    fFenceSet    := True;
+  End;
 
  (*
 
@@ -24999,7 +25009,11 @@ begin
 
 
   If assigned(fFramePrepareCommandBuffer) and (CP_RESET_COMMAND_BUFFER in fFrameGraphicCommandPool.QueueCreateFlags)  then
-    fFramePrepareCommandBuffer.Reset;
+    //PrepareForRecording, not a bare Reset: this is the point where the slot is
+    //reused, so a buffer left in cbsPending by a non-blocking submit gets its
+    //fence waited on here.  Resetting a command buffer the GPU is still
+    //executing is undefined behaviour.
+    fFramePrepareCommandBuffer.PrepareForRecording;
 end;
 
 procedure TvgFrame.BeginFrame;
@@ -25673,12 +25687,17 @@ begin
         //------------------------------------------------------------------
         if (fImageIndex >= 0) and Assigned(fFramePrepareCommandBuffer) then
         Begin
+             //Fence is used but NOT waited on here.  Blocking on it right after
+             //submitting is what made frames-in-flight meaningless: the CPU sat
+             //out every frame, so the per-frame pools, buffers and semaphores
+             //could never overlap.  The wait now happens when this slot comes
+             //round again, in ResetPrepareCommandBuffer -> PrepareForRecording.
              fFramePrepareCommandBuffer.ExecuteCommand( fGraphicQueue,
                                                         TVkPipelineStageFlags(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT),
                                                         fImageAvailableSemaphore,                 //wait for the acquire
                                                         fRenderFinishedSemaphores[fImageIndex],   //signal when finished
-                                                        True,
-                                                        True) ;
+                                                        True,      //use a fence
+                                                        False) ;   //...but do not block on it
 
              fLinker.SwapChain.QueuePresent(fPresentQueue, fRenderFinishedSemaphores[fImageIndex]);
         End;
