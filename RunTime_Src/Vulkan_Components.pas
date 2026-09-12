@@ -4957,6 +4957,15 @@ TvgBaseComponent = class(TComponent)
     Procedure ResetPrepareCommandBuffer;
 
     Procedure FrameToScreenCopy_Record;  Virtual;
+    //Legacy: pre-records one blit command buffer per swapchain image, which is
+    //why the offscreen path needed a second submit.  Superseded by
+    //RecordPresentBlit; kept because the per-image pool is still built.
+
+    Procedure RecordPresentBlit(aCommandBuffer : TvgCommandBuffer); Virtual;
+    //Appends the offscreen -> swapchain blit to a command buffer that is
+    //ALREADY recording, targeting the image acquired this frame (fImageIndex).
+    //No-op when the target is the screen, so callers need no branch.
+    //This is what collapses the offscreen path to a single submit.
     //build Commands for Back Buffer to Screen transfer
 
     procedure PrepareFrameToScreenCommand(const aCommandBuffer    : TvgCommandBuffer;
@@ -13213,6 +13222,11 @@ begin
         end;
 
         End;
+
+       //Offscreen targets append the blit to the swapchain image HERE, into
+       //the same buffer as the render, so the whole frame is one submit.  It
+       //is a no-op when rendering straight to the screen.
+       fCurrentPrepareFrame.RecordPresentBlit(fCurrentPrepareFrame.FrameCommandBuffer);
 
        fCurrentPrepareFrame.FrameCommandBuffer.EndRecording;
 
@@ -23782,6 +23796,7 @@ begin
 end;
 
 Procedure TvgLinker.LinkerFinishPrepare;
+  Var RestartRender : Boolean;
 begin
 
   if not fLinkRenderLock  then exit;
@@ -23803,13 +23818,18 @@ begin
   if fMsgON and assigned(fMsgEvent) then
               fMsgEvent(fMsgList);
 
-  If fRenderThreaded and fRenderRequested then  //start loop again if requested
-  Begin
-    LinkerStartPrepare;
-    //exit;
-  End;
-
+  //Consume the request BEFORE acting on it.
+  //LinkerStartPrepare runs a whole nested render whose own LinkerFinishPrepare
+  //reaches this test again.  Clearing fRenderRequested afterwards meant that
+  //nested call still saw it set and re-entered - and so on, without bound,
+  //whenever a repaint was requested mid-render with UseThread on.
+  //Taking a copy and clearing first makes each request drive exactly one
+  //further render.
+  RestartRender   := fRenderThreaded and fRenderRequested;
   fRenderRequested := False;
+
+  If RestartRender then     //start loop again if requested
+    LinkerStartPrepare;
 
 end;
 
@@ -25263,16 +25283,14 @@ begin
 
 
   Try
-
-     If fUseImageBuffer then
-
-         fFramePrepareCommandBuffer.ExecuteCommand(  fGraphicQueue,
-                                                           TVkPipelineStageFlags(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT),
-                                                           nil,     //wait for
-                                                           nil,    //signal when finished
-                                                           true,
-                                                           true) ;
-
+     //Nothing is submitted here any more.
+     //
+     //The offscreen target used to submit the render at this point (with its
+     //own fence wait) and then submit a SECOND blit buffer inside PresentFrame
+     //- two full CPU/GPU round trips per frame.  The blit now lives in the
+     //same command buffer as the render (see RecordPresentBlit), so both
+     //targets submit exactly once, in PresentFrame, against the acquire and
+     //render-finished semaphores.
 
   Finally
     fFrameRenderLock := False;
@@ -25312,59 +25330,171 @@ begin
   fPresentQueue  := fLinker.ScreenDevice.VulkanDevice.PresentQueue;
   fTransferQueue := fLinker.ScreenDevice.VulkanDevice.TransferQueue;
 
-  If fUseImageBuffer then
+  //--------------------------------------------------------------------------
+  //  ONE acquire, both render targets.
+  //
+  //  This used to happen in two places: here for RT_SCREEN, and inside
+  //  PresentFrame for RT_FRAME (which set fImageIndex := -1 until then).  That
+  //  single difference forced every later stage to branch on fUseImageBuffer.
+  //  Acquiring here means the swapchain image index is known before recording
+  //  ends, which is what lets the offscreen blit go into the same command
+  //  buffer as the render - see RecordPresentBlit.
+  //--------------------------------------------------------------------------
+  If not fLinker.SwapChain.AcquireNextImage(fImageAvailableSemaphore, nil) then
   Begin
-          fImageIndex   := -1;
+    //Acquire failed (usually an out-of-date swapchain; AcquireNextImage has
+    //already flagged the rebuild).  Release BOTH locks - leaving them set
+    //leaves the linker permanently unable to start another frame, which
+    //presents as a frozen picture with no error.
+    fFrameRenderLock := False;
+    fLinker.VulkanPaint_Cancel;
+    exit;
+  End;
 
-          if fRenderNeeded then   //need to signal if a redraw is needed
-          Begin
-                fRenderNeeded := False;
+  fImageIndex := fLinker.SwapChain.CurrentImageIndex;
 
-                if not assigned(fFramePrepareCommandBuffer) then
-                Begin
-                   fFramePrepareCommandBuffer  := fFrameGraphicCommandPool.AcquireFrameCommand(0);//  RequestCommand(0 , CB_PRIMARY,  [BU_SIMULTANEOUS_USE_BIT]);
-                   CustomAssert(Assigned(fFramePrepareCommandBuffer),'Command not assigned',Self);
+  if not assigned(fFramePrepareCommandBuffer) then
+  Begin
+     fFramePrepareCommandBuffer  := fFrameGraphicCommandPool.AcquireFrameCommand(0);
+     CustomAssert(Assigned(fFramePrepareCommandBuffer),'Command not assigned',Self);
+     fFramePrepareCommandBuffer.Active   := True;
+  End else
+     ResetPrepareCommandBuffer;
 
-                   fFramePrepareCommandBuffer.Active   := True;
-                End else
-                   ResetPrepareCommandBuffer;
+  If fUseImageBuffer and (not fRenderNeeded) then
+  Begin
+      //Offscreen target whose scene has not changed: the offscreen image still
+      //holds the last render, so skip the scene and just blit it to the
+      //freshly acquired swapchain image.  Still one submit, still one present,
+      //so the frame advances exactly as it does on any other path.
+      fFramePrepareCommandBuffer.BeginRecording;
+      RecordPresentBlit(fFramePrepareCommandBuffer);
+      fFramePrepareCommandBuffer.EndRecording;
 
-                If assigned(fLinker.fRenderer) then
-                            fLinker.fRenderer.StartRenderEnginePrepare(fImageIndex, self ) ;   //may be threaded
-
-          end else
-          Begin
-
-            FinishFramePrepare;    //just need to finish and prepare
-          End;
-
+      FinishFramePrepare;
   end else
   Begin
+      fRenderNeeded := False;
 
-      If fLinker.SwapChain.AcquireNextImage(fImageAvailableSemaphore, nil) then
-      Begin
-
-          if not assigned(fFramePrepareCommandBuffer) then
-          Begin
-             fFramePrepareCommandBuffer  := fFrameGraphicCommandPool.AcquireFrameCommand(0) ;  //RequestCommand(0, CB_PRIMARY,  [BU_SIMULTANEOUS_USE_BIT]);
-             CustomAssert(Assigned(fFramePrepareCommandBuffer),'Command not assigned',Self);
-             fFramePrepareCommandBuffer.Active   := True;
-          End else
-             ResetPrepareCommandBuffer;
-
-          fImageIndex := fLinker.SwapChain.CurrentImageIndex;
-
-
-          If assigned(fLinker.fRenderer) then
-                      fLinker.fRenderer.StartRenderEnginePrepare(fImageIndex, self) ;  //may be threaded
+      If assigned(fLinker.fRenderer) then
+                  fLinker.fRenderer.StartRenderEnginePrepare(fImageIndex, self) ;  //may be threaded
                       //needs to be inside the Aquire/Present loop
-
-      end;
-
   End;
 
 end;
 
+
+Procedure TvgFrame.RecordPresentBlit(aCommandBuffer : TvgCommandBuffer);
+var
+  Barrier    : TVkImageMemoryBarrier;
+  VK_ImageSub: TVkImageSubresourceRange;
+  BlitRegion : TVkImageBlit;
+  SrcImage,
+  DstImage   : TVkImage;
+begin
+  //Screen target renders straight into the swapchain image - nothing to copy.
+  if not fUseImageBuffer then Exit;
+
+  if not Assigned(aCommandBuffer) then Exit;
+  if not Assigned(fFrameImageBuffer) then Exit;
+  if not Assigned(fLinker) or not Assigned(fLinker.SwapChain) then Exit;
+  if not Assigned(fLinker.SwapChain.VulkanSwapChain) then Exit;
+
+  //fImageIndex is set by StartFramePrepare's acquire.
+  if (fImageIndex < 0) or
+     (fImageIndex >= Integer(fLinker.SwapChain.VulkanSwapChain.CountImages)) then Exit;
+
+  SrcImage := fFrameImageBuffer.FrameBufferAttachment.Image.Handle;
+  DstImage := fLinker.SwapChain.VulkanSwapChain.Images[fImageIndex].Handle;
+
+  FillChar(VK_ImageSub, SizeOf(VK_ImageSub), 0);
+  VK_ImageSub.aspectMask     := TVkImageAspectFlags(VK_IMAGE_ASPECT_COLOR_BIT);
+  VK_ImageSub.baseMipLevel   := 0;
+  VK_ImageSub.levelCount     := 1;
+  VK_ImageSub.baseArrayLayer := 0;
+  VK_ImageSub.layerCount     := 1;
+
+  FillChar(Barrier, SizeOf(Barrier), 0);
+  Barrier.sType               := VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  Barrier.srcQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
+  Barrier.dstQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
+  Barrier.subresourceRange    := VK_ImageSub;
+
+  //-- swapchain image -> transfer destination --------------------------------
+  Barrier.image         := DstImage;
+  Barrier.oldLayout     := VK_IMAGE_LAYOUT_UNDEFINED;   //contents after acquire are undefined
+  Barrier.newLayout     := VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+  Barrier.srcAccessMask := 0;
+  Barrier.dstAccessMask := TVkAccessFlags(VK_ACCESS_TRANSFER_WRITE_BIT);
+
+  aCommandBuffer.CmdPipelineBarrier(
+    TVkPipelineStageFlags(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT),
+    TVkPipelineStageFlags(VK_PIPELINE_STAGE_TRANSFER_BIT),
+    0, 0, nil, 0, nil, 1, @Barrier);
+
+  //-- offscreen image -> transfer source -------------------------------------
+  Barrier.image         := SrcImage;
+  Barrier.oldLayout     := VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  Barrier.newLayout     := VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+  Barrier.srcAccessMask := TVkAccessFlags(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+  Barrier.dstAccessMask := TVkAccessFlags(VK_ACCESS_TRANSFER_READ_BIT);
+
+  aCommandBuffer.CmdPipelineBarrier(
+    TVkPipelineStageFlags(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT),
+    TVkPipelineStageFlags(VK_PIPELINE_STAGE_TRANSFER_BIT),
+    0, 0, nil, 0, nil, 1, @Barrier);
+
+  //-- blit, downsampling from FrameResolution to the swapchain size ----------
+  FillChar(BlitRegion, SizeOf(BlitRegion), 0);
+
+  BlitRegion.srcSubresource.aspectMask     := TVkImageAspectFlags(VK_IMAGE_ASPECT_COLOR_BIT);
+  BlitRegion.srcSubresource.mipLevel       := 0;
+  BlitRegion.srcSubresource.baseArrayLayer := 0;
+  BlitRegion.srcSubresource.layerCount     := 1;
+  BlitRegion.srcOffsets[0] := TVkOffset3D.Create(0, 0, 0);
+  BlitRegion.srcOffsets[1] := TVkOffset3D.Create(fLinker.SwapChain.ImageWidth  * fLinker.FrameResolution,
+                                                 fLinker.SwapChain.ImageHeight * fLinker.FrameResolution,
+                                                 1);
+
+  BlitRegion.dstSubresource.aspectMask     := TVkImageAspectFlags(VK_IMAGE_ASPECT_COLOR_BIT);
+  BlitRegion.dstSubresource.mipLevel       := 0;
+  BlitRegion.dstSubresource.baseArrayLayer := 0;
+  BlitRegion.dstSubresource.layerCount     := 1;
+  BlitRegion.dstOffsets[0] := TVkOffset3D.Create(0, 0, 0);
+  BlitRegion.dstOffsets[1] := TVkOffset3D.Create(fLinker.SwapChain.ImageWidth,
+                                                 fLinker.SwapChain.ImageHeight,
+                                                 1);
+
+  aCommandBuffer.CmdBlitImage(SrcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                              DstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                              1, @BlitRegion, VK_FILTER_LINEAR);
+
+  //-- offscreen image back to colour attachment, ready for the next render ---
+  Barrier.image         := SrcImage;
+  Barrier.oldLayout     := VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+  Barrier.newLayout     := VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  Barrier.srcAccessMask := TVkAccessFlags(VK_ACCESS_TRANSFER_READ_BIT);
+  Barrier.dstAccessMask := TVkAccessFlags(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+
+  aCommandBuffer.CmdPipelineBarrier(
+    TVkPipelineStageFlags(VK_PIPELINE_STAGE_TRANSFER_BIT),
+    TVkPipelineStageFlags(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT),
+    0, 0, nil, 0, nil, 1, @Barrier);
+
+  //-- swapchain image -> present layout -------------------------------------
+  //The old two-submit path left this to the blit pool's own recording; doing
+  //it here keeps the whole transition inside the one submitted buffer.
+  Barrier.image         := DstImage;
+  Barrier.oldLayout     := VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+  Barrier.newLayout     := VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+  Barrier.srcAccessMask := TVkAccessFlags(VK_ACCESS_TRANSFER_WRITE_BIT);
+  Barrier.dstAccessMask := TVkAccessFlags(VK_ACCESS_MEMORY_READ_BIT);
+
+  aCommandBuffer.CmdPipelineBarrier(
+    TVkPipelineStageFlags(VK_PIPELINE_STAGE_TRANSFER_BIT),
+    TVkPipelineStageFlags(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT),
+    0, 0, nil, 0, nil, 1, @Barrier);
+end;
 
 procedure TvgFrame.PrepareFrameToScreenCommand(
   const aCommandBuffer: TvgCommandBuffer;
@@ -25534,55 +25664,25 @@ begin
         fTransferQueue:= fLinker.ScreenDevice.VulkanDevice.TransferQueue;
         //main render
 
-        If fUseImageBuffer then
+        //------------------------------------------------------------------
+        //  One submit, one present, both targets.
+        //
+        //  The image was acquired in StartFramePrepare and the offscreen blit
+        //  (if any) was recorded into this same buffer, so there is nothing
+        //  target-specific left to do here.
+        //------------------------------------------------------------------
+        if (fImageIndex >= 0) and Assigned(fFramePrepareCommandBuffer) then
         Begin
-
-              If fLinker.SwapChain.AcquireNextImage(fImageAvailableSemaphore, nil) then
-              Begin
-
-                   fImageIndex  := fLinker.SwapChain.VulkanSwapChain.CurrentImageIndex;
-
-              //use the ImageIndex Transfer Buffer to copy Render Frame to SCREEN
-                (*
-                   PrepareFrameToScreenCommand( fFrameImageCommandBufferPool.CommandBuffer[fImageIndex],//   const aCommandBuffer    : TvgCommandBuffer;
-                                                fFrameImageBuffer.fImage,//   const aBackBufferImage: TpvVulkanImage; // your off-screen image when fUseImageBuffer=True
-                                                fLinker.SwapChain.VulkanSwapChain.Images[fImageIndex],// const aSwapChainImage : TpvVulkanImage;   // CURRENT acquired swap-chain image
-                                                fImageIndex);// const aSwapChainImageIndex: TvkUint32);
-                *)
-
-
-
-                   fFrameImageCommandBufferPool.CommandBuffer[fImageIndex].ExecuteCommand( fGraphicQueue,  //must be Graphic
-                                                                                         TVkPipelineStageFlags(VK_PIPELINE_STAGE_TRANSFER_BIT),//TVkPipelineStageFlags(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT),
-                                                                                         fImageAvailableSemaphore,     //wait for
-                                                                                         fRenderFinishedSemaphores[fImageIndex],    //signal when finished
-                                                                                         true,          //MUST be TRUE
-                                                                                         true) ;        //MUST be TRUE
-
-                   fLinker.SwapChain.QueuePresent(fPresentQueue, fRenderFinishedSemaphores[fImageIndex]);
-
-              end;
-
-
-
-        end else
-        Begin
-
-
              fFramePrepareCommandBuffer.ExecuteCommand( fGraphicQueue,
-                                                               TVkPipelineStageFlags(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT),
-                                                               fImageAvailableSemaphore,  //wait for image
-                                                               fRenderFinishedSemaphores[fImageIndex],  //signal when finished
-                                                               True,        //MUST be TRUE
-                                                               True) ;      //MUST be TRUE
+                                                        TVkPipelineStageFlags(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT),
+                                                        fImageAvailableSemaphore,                 //wait for the acquire
+                                                        fRenderFinishedSemaphores[fImageIndex],   //signal when finished
+                                                        True,
+                                                        True) ;
 
              fLinker.SwapChain.QueuePresent(fPresentQueue, fRenderFinishedSemaphores[fImageIndex]);
-
-
-
         End;
 
-                 //acquire already completed in PrepareFrame call
 
 
 
