@@ -442,8 +442,16 @@ type
     fSoftEdge   : Single;
     fRenderIndex: Integer;
 
+    // For each vertex-buffer slot, the renderer frame that most recently
+    // recorded a draw from it, or -1 if none has.  Written on the render
+    // thread in VulkanDraw, read on the compute worker, so accessed through
+    // TInterlocked.  This is what lets the worker ask "is anything still
+    // reading this slot?" - see TvgParticleSystem.SlotIsInFlight.
+    fSlotFrame  : array of Integer;
+
     function GetRenderIndex: Integer;
     procedure SetRenderIndex(const Value: Integer);
+    procedure EnsureSlotFrames;
 
   protected
     // Enables blending, disables depth writes, and keeps depth testing on so
@@ -476,6 +484,16 @@ type
     // prmThreaded the system publishes the slot whose fence has signalled, so
     // the renderer never reads a buffer the compute worker is still writing.
     Property RenderIndex : Integer read GetRenderIndex write SetRenderIndex;
+
+    // The renderer frame that last recorded a draw from aSlot, or -1 if none.
+    // The particle system turns this into "is that frame still executing?"
+    // before it reuses the slot.
+    Function SlotDrawnByFrame(aSlot: Integer): Integer;
+
+    // Size the slot-tracking array and mark every slot unread.  Called by the
+    // particle system while building GPU resources, before any draw can be
+    // recorded, so the render thread never has to grow the array itself.
+    Procedure ResetSlotTracking;
 
     Function GetDataDirty(aFrameIndex: Integer): Boolean; Override;
     Procedure UploadAllDataUsingCommand(aCmd: TvgCommandBuffer;
@@ -539,8 +557,18 @@ type
     // fence has just signalled is published to fStore.RenderIndex so the
     // renderer only ever draws finished data.
     fWriteIndex    : Integer;
+
+    // Steps skipped because every vertex-buffer slot was still being read by
+    // an in-flight renderer frame.  A steadily climbing count means the
+    // simulation is outrunning the renderer.
+    fSkippedSteps  : Integer;
     fSeeded        : Boolean;
     fDescriptorsValid : Boolean;
+
+    // The store's vertex layout and its single particle object are built once
+    // and survive a disable/enable cycle - AddObject is not idempotent, so
+    // repeating it would stack up a second object on every re-activation.
+    fStoreLayoutDone : Boolean;
 
     fOnStep        : TvgParticleStepEvent;
     fOnRedrawNeeded: TNotifyEvent;
@@ -564,15 +592,56 @@ type
     procedure UploadForces;
     procedure RefreshDescriptors;
 
+    // The three phases SetEnabled / SetDisabled are built from.
+
+    // One-time CPU-side setup of the store: vertex attributes, the particle
+    // object and its vertex allocation, cull mode.  Guarded by
+    // fStoreLayoutDone so a re-enable does not add a second object.
+    procedure BuildStoreLayout;
+
+    // Everything that owns a Vulkan handle: command pool, buffers, compute
+    // pipeline, seed data, descriptors and the priming dispatches.  Rebuilt
+    // on every enable.
+    procedure BuildGPUResources;
+
+    // Tears the above back down, waiting for the device to go idle first so
+    // nothing is destroyed while still in flight.
+    procedure ReleaseGPUResources;
+
     function BuildPushConstants(aDeltaTime: Single): TvgParticlePush;
+
+    // The TvgLinker driving the renderer, via the store's scene.  nil until the
+    // scene is wired up.
+    function GetLinker: TvgLinker;
+
+    // True while the renderer frame that last drew aSlot is still executing on
+    // the GPU.  Writing that slot now would rewrite vertices a submitted draw
+    // is still reading.
+    function SlotIsInFlight(aSlot: Integer): Boolean;
+
+    // Next slot the worker may safely write, skipping any the renderer still
+    // holds.  False when every slot is busy - the caller should simply try
+    // again on the next tick rather than stall the worker.
+    function AcquireWriteSlot(out aSlot: Integer): Boolean;
 
   public
     constructor Create(AOwner: TComponent); Override;
     destructor Destroy; override;
 
-    // Build the store's geometry (one point per particle), create the GPU
-    // buffers and the compute pipeline.  Call with the scene already active so
-    // a Vulkan device exists.
+    // The system is driven by the usual component lifecycle:
+    //
+    //   Active := True   builds the store layout (once), the GPU buffers, the
+    //                    compute pipeline, seeds the particles, primes every
+    //                    frame slot, and starts the worker in prmThreaded.
+    //   Active := False  stops the worker, waits for the device to go idle and
+    //                    frees everything Vulkan-side.  The store keeps
+    //                    drawing its last simulated frame.
+    //
+    // The Scene must be active (so a Vulkan device exists) and Store must be
+    // assigned before activating.
+    //
+    // Prepare is the pre-lifecycle spelling of Active := True and is kept for
+    // callers written against the older API; it is a no-op when already active.
     Procedure Prepare;
 
     // prmInline: call from inside frame command-buffer recording, before the
@@ -587,6 +656,9 @@ type
     // Called by TvgParticleThread, but usable directly.
     Function ExecuteStep(aDeltaTime: Single): Boolean;
 
+    // Activating in prmThreaded starts the worker and deactivating stops it,
+    // so these are only needed to pause and resume a running simulation
+    // without tearing the GPU resources down.
     Procedure StartThread;
     Procedure StopThread;
 
@@ -598,6 +670,12 @@ type
     Property Compute       : TvgParticleCompute read fCompute;
     Property ParticleBuffer: TpvVulkanBuffer    read fParticleBuffer;
     Property ElapsedTime   : Single             read fElapsedTime;
+
+    // Steps the worker skipped because every vertex-buffer slot was still
+    // being read by an in-flight renderer frame.  Zero means the gate never
+    // fires; a steadily climbing value means the simulation is outrunning the
+    // renderer and StepInterval should be longer (or FrameCount higher).
+    Property SkippedSteps  : Integer            read fSkippedSteps;
     Property ForceCount    : Integer            read GetForceCount;
     Property SubmitLock    : TvgCriticalSection read fSubmitLock;
 
@@ -1259,6 +1337,36 @@ begin
   TInterlocked.Exchange(fRenderIndex, Value);
 end;
 
+procedure TvgParticleStore.EnsureSlotFrames;
+begin
+  //Safety net only.  ResetSlotTracking sizes this from the system before any
+  //draw can happen, precisely so the SetLength below never races a worker
+  //reading the array.
+  if Length(fSlotFrame) = 0 then
+    ResetSlotTracking;
+end;
+
+Procedure TvgParticleStore.ResetSlotTracking;
+var
+  I, N : Integer;
+begin
+  N := NumFrames;
+  if N < 1 then N := 1;
+
+  SetLength(fSlotFrame, N);
+  for I := 0 to N - 1 do
+    fSlotFrame[I] := -1;      // never drawn, so nothing is reading it
+end;
+
+Function TvgParticleStore.SlotDrawnByFrame(aSlot: Integer): Integer;
+begin
+  Result := -1;
+
+  if (aSlot < 0) or (aSlot >= Length(fSlotFrame)) then Exit;
+
+  Result := TInterlocked.CompareExchange(fSlotFrame[aSlot], 0, 0);
+end;
+
 Procedure TvgParticleStore.ConfigureGraphicPipeline(GP: TvgGraphicPipeline);
 var
   CB : TvgColorBlendAttachment;
@@ -1317,10 +1425,37 @@ var
 begin
   Slot := GetRenderIndex;
 
-  // aFrameIndex only selects which per-frame buffer set to bind, so
-  // substituting the finished simulation slot is safe.
+  // Within the inherited VulkanDraw, aFrameIndex only selects which per-frame
+  // buffer set to bind (plus its range check), so substituting a different
+  // slot binds the right memory and records a valid draw.
+  //
+  // What it does NOT preserve is the reason per-frame buffers are safe in the
+  // first place.  The renderer may write buffer[N] because frame slot N's
+  // fence has signalled - the frame-in-flight contract.  Slot is chosen by the
+  // particle system's own counter, which has no fence relationship to the
+  // frame being recorded here, so nothing stops the compute worker wrapping
+  // round and rewriting this slot while the GPU is still drawing from it.
+  // Three slots make that unlikely, not impossible: the worker's cadence
+  // (StepInterval) is independent of the render's, so it can lap.
+  //
+  // prmInline avoids this entirely - RenderIndex stays -1, the else branch
+  // runs, and compute writes frame N's buffer inside frame N's own command
+  // buffer with a barrier between.  That is correct by construction.
+  //
+  // That handshake now exists: recording which renderer frame reads this slot
+  // is what lets TvgParticleSystem.SlotIsInFlight refuse to overwrite a slot
+  // whose frame has not finished on the GPU.
+  EnsureSlotFrames;
+
   if (Slot >= 0) and (Slot < NumFrames) then
-    inherited VulkanDraw(aCommandBuffer, aPipe, TvkUint32(Slot), CommandCount)
+  begin
+    //Claim the slot for this renderer frame BEFORE recording the draw, so the
+    //worker cannot see it as free between the check and the draw.
+    if Slot < Length(fSlotFrame) then
+      TInterlocked.Exchange(fSlotFrame[Slot], Integer(aFrameIndex));
+
+    inherited VulkanDraw(aCommandBuffer, aPipe, TvkUint32(Slot), CommandCount);
+  end
   else
     inherited VulkanDraw(aCommandBuffer, aPipe, aFrameIndex, CommandCount);
 end;
@@ -1405,8 +1540,9 @@ end;
 
 destructor TvgParticleSystem.Destroy;
 begin
-  StopThread;
-  DestroyBuffers;
+  // Same teardown the disable path uses, so a component freed while still
+  // active does not leak Vulkan objects or outlive its worker thread.
+  ReleaseGPUResources;
 
   if Assigned(fSubmitLock) then FreeAndNil(fSubmitLock);
   if Assigned(fForces)     then FreeAndNil(fForces);
@@ -1421,8 +1557,16 @@ begin
 
   if (Operation = opRemove) and (AComponent = fStore) then
   begin
-    StopThread;
-    fStore := nil;
+    // The store is going away underneath us.  Tear the GPU side down first -
+    // ReleaseGPUResources still needs fStore to be valid - then forget it.
+    // Not routed through SetActiveState because a free can arrive while
+    // another state transition is in progress, and ApplyState refuses to
+    // re-enter.
+    ReleaseGPUResources;
+
+    fStore            := nil;
+    fObject           := nil;
+    fStoreLayoutDone  := False;
     fDescriptorsValid := False;
   end;
 end;
@@ -1431,11 +1575,18 @@ procedure TvgParticleSystem.SetStore(const Value: TvgParticleStore);
 begin
   if fStore = Value then Exit;
 
+  // Structural: everything the system builds hangs off the store.
+  SetActiveState(False);
+
   if Assigned(fStore) then
     fStore.RemoveFreeNotification(Self);
 
-  fStore := Value;
+  fStore            := Value;
   fDescriptorsValid := False;
+
+  // The layout belongs to the old store, not this one.
+  fStoreLayoutDone  := False;
+  fObject           := nil;
 
   if Assigned(fStore) then
     fStore.FreeNotification(Self);
@@ -1448,21 +1599,54 @@ begin
   V := Max(Value, PARTICLE_LOCAL_SIZE);
   if fParticleCount = V then Exit;
 
-  fParticleCount := V;
-  fSeeded := False;
+  // Structural: the buffers and the store's vertex allocation are both sized
+  // from this, so deactivate and let the next enable rebuild at the new size.
+  SetActiveState(False);
+
+  fParticleCount    := V;
+  fSeeded           := False;
   fDescriptorsValid := False;
+
+  // The store's vertex allocation no longer matches, so the layout has to be
+  // rebuilt too.  Drop the existing object first, or the next enable would
+  // allocate a second one alongside it.
+  if fStoreLayoutDone and Assigned(fStore) then
+  begin
+    fStore.ClearData;
+    fStoreLayoutDone := False;
+    fObject          := nil;
+  end;
 end;
 
 procedure TvgParticleSystem.SetRunMode(const Value: TvgParticleRunMode);
+var
+  WasActive : Boolean;
 begin
   if fRunMode = Value then Exit;
+
+  WasActive := Active;
+
   StopThread;
   fRunMode := Value;
 
   // Inline draws the frame it just simulated; threaded draws the last slot
   // the system published.
-  if Assigned(fStore) and (fRunMode = prmInline) then
-    fStore.RenderIndex := -1;
+  if Assigned(fStore) then
+    if fRunMode = prmInline then
+      fStore.RenderIndex := -1
+    else
+      fStore.RenderIndex := fWriteIndex;
+
+  // Switching to threaded on a live system needs the worker running; the
+  // frames-in-flight requirement is only checked on enable, so re-run it.
+  if WasActive and (fRunMode = prmThreaded) then
+  begin
+    if fFrameCount < 3 then
+      raise EvgParticleException.CreateFmt(
+        'Particle system: RunMode prmThreaded needs at least 3 frames in ' +
+        'flight but the DataStore has %d.', [fFrameCount]);
+    StartThread;
+  end;
 end;
 
 procedure TvgParticleSystem.EmitterChanged(Sender: TObject);
@@ -1486,20 +1670,53 @@ end;
 
 Function TvgParticleSystem.SetEnabled: Boolean;
 begin
-  Result := Assigned(fStore) and Assigned(fParticleBuffer);
+  Result := Inherited;
+  CustomAssert(Result, Format('%s : inherited state change failed', [Self.ClassName]), Self);
+
+  // These must hold in every build, not just Debug: CustomAssert falls through
+  // in Release (see Vulkan_Assert), and the lines below dereference both.
+  if not Assigned(fStore) then
+    raise EvgParticleException.Create(
+      'Particle system: Store must be assigned before activating');
+
+  if not Assigned(fStore.Scene) then
+    raise EvgParticleException.Create(
+      'Particle system: the Store must be added to a Scene (Scene.AddDataStore) ' +
+      'before activating');
+
+  try
+    BuildStoreLayout;     // once; survives a disable/enable cycle
+    BuildGPUResources;    // buffers, pipeline, seed, descriptors, priming
+
+    // Only prmThreaded runs a worker; prmInline is driven by the caller from
+    // inside the frame command buffer.
+    if fRunMode = prmThreaded then
+      StartThread;
+  except
+    // Do not leave half-built Vulkan objects behind if any stage throws.
+    ReleaseGPUResources;
+    raise;
+  end;
+
+  Result := True;
 end;
 
 Function TvgParticleSystem.SetDisabled: Boolean;
 begin
-  StopThread;
-  Result := True;
+  Result := False;
+
+  ReleaseGPUResources;   // stops the worker, waits idle, frees everything
+
+  Result := Inherited;
+  CustomAssert(Result, Format('%s : inherited state change failed', [Self.ClassName]), Self);
 end;
 
 procedure TvgParticleSystem.CreateBuffers;
 var
   Size : TVkDeviceSize;
 begin
-  CustomAssert(Assigned(fVulkanDevice), 'Particle system: Vulkan device not available', Self);
+  if not Assigned(fVulkanDevice) then
+    raise EvgParticleException.Create('Particle system: Vulkan device not available');
 
   DestroyBuffers;
 
@@ -1555,7 +1772,8 @@ var
   end;
 
 begin
-  CustomAssert(Assigned(fParticleBuffer), 'Particle system: particle buffer not created', Self);
+  if not Assigned(fParticleBuffer) then
+    raise EvgParticleException.Create('Particle system: particle buffer not created');
 
   E := fEmitter;
   SetLength(Data, fParticleCount);
@@ -1589,7 +1807,8 @@ begin
   end;
 
   Cmd := fCommandPool.AcquireUploadCommand(0);
-  CustomAssert(Assigned(Cmd), 'Particle system: could not acquire an upload command', Self);
+  if not Assigned(Cmd) then
+    raise EvgParticleException.Create('Particle system: could not acquire an upload command');
 
   fParticleBuffer.UploadData(fVulkanDevice.TransferQueue,
                              Cmd.VulkanCommandBuffer,
@@ -1620,12 +1839,14 @@ var
   I  : Integer;
   VB : TpvVulkanBuffer;
 begin
-  CustomAssert(Assigned(fStore), 'Particle system: store not assigned', Self);
+  if not Assigned(fStore) then
+    raise EvgParticleException.Create('Particle system: store not assigned');
 
   for I := 0 to fFrameCount - 1 do
   begin
     VB := fStore.GetVulkanVertexBuffer(I);
-    CustomAssert(Assigned(VB), 'Particle system: DataStore vertex buffer not created', Self);
+    if not Assigned(VB) then
+      raise EvgParticleException.CreateFmt('Particle system: DataStore vertex buffer %d not created', [I]);
 
     fCompute.UpdateDescriptorSet(I, fParticleBuffer, fForceBuffer, VB);
   end;
@@ -1634,32 +1855,17 @@ begin
 end;
 
 Procedure TvgParticleSystem.Prepare;
-var
-  I      : Integer;
-  Obj    : TvgObject;
-  Stride : Cardinal;
-  Floats : Integer;
 begin
-  CustomAssert(Assigned(fStore), 'Particle system: Store must be assigned before Prepare', Self);
+  // Kept for callers written before the component had a lifecycle.  Setting
+  // Active runs SetEnabled, which does the real work.
+  SetActiveState(True);
+end;
 
-  fVulkanDevice := fStore.Scene.GetVulkanDevice;
-  CustomAssert(Assigned(fVulkanDevice), 'Particle system: scene has no Vulkan device yet', Self);
-
-  fFrameCount := fStore.NumFrames;
-  if fFrameCount < 1 then fFrameCount := 1;
-
-  // In prmThreaded the worker writes one slot while the renderer draws the
-  // previously published one, and the renderer may still hold an earlier slot
-  // in flight.  With fewer than three slots the write pointer can catch the
-  // buffer the renderer is reading, which shows up as torn or stale
-  // particles.  prmInline has no such constraint, because the dispatch and
-  // the draw share a command buffer.
-  if (fRunMode = prmThreaded) and (fFrameCount < 3) then
-    raise EvgParticleException.CreateFmt(
-      'Particle system: RunMode prmThreaded needs at least 3 frames in ' +
-      'flight but the DataStore has %d.  Either raise the frame count, or ' +
-      'set RunMode := prmInline and call RecordStep from the frame command ' +
-      'buffer.', [fFrameCount]);
+procedure TvgParticleSystem.BuildStoreLayout;
+var
+  Obj : TvgObject;
+begin
+  if fStoreLayoutDone then Exit;
 
   // One vertex per particle: position for placement, colour for shading, and
   // texcoord carrying (point size, life ratio) so the point sprite can be
@@ -1683,11 +1889,48 @@ begin
   // and the bounds are then honoured as given.
   fStore.SetObjectCullMode(Obj.ObjIndex, cmNever);
 
+  fStoreLayoutDone := True;
+end;
+
+procedure TvgParticleSystem.BuildGPUResources;
+var
+  I      : Integer;
+  Stride : Cardinal;
+  Floats : Integer;
+begin
+  fVulkanDevice := fStore.Scene.GetVulkanDevice;
+
+  // Everything below dereferences this, so it has to raise in Release too.
+  if not Assigned(fVulkanDevice) then
+    raise EvgParticleException.Create(
+      'Particle system: the Scene has no Vulkan device yet - activate the ' +
+      'Linker/Scene before the particle system');
+
+  fFrameCount := fStore.NumFrames;
+  if fFrameCount < 1 then fFrameCount := 1;
+
+  // In prmThreaded the worker writes one slot while the renderer draws the
+  // previously published one, and the renderer may still hold an earlier slot
+  // in flight.  With fewer than three slots the write pointer can catch the
+  // buffer the renderer is reading, which shows up as torn or stale
+  // particles.  prmInline has no such constraint, because the dispatch and
+  // the draw share a command buffer.
+  if (fRunMode = prmThreaded) and (fFrameCount < 3) then
+    raise EvgParticleException.CreateFmt(
+      'Particle system: RunMode prmThreaded needs at least 3 frames in ' +
+      'flight but the DataStore has %d.  Either raise the frame count, or ' +
+      'set RunMode := prmInline and call RecordStep from the frame command ' +
+      'buffer.', [fFrameCount]);
+
   fStore.CreateVulkanDataBuffers;
 
   Stride := fStore.GetStride(BINDING_VERTEX);
-  CustomAssert(Stride mod SizeOf(Single) = 0,
-               'Particle system: vertex stride is not a whole number of floats', Self);
+  // Not a crash if this is wrong - worse, the compute shader would write every
+  // particle at a skewed offset and silently corrupt the vertex buffer.
+  if (Stride mod SizeOf(Single)) <> 0 then
+    raise EvgParticleException.CreateFmt(
+      'Particle system: vertex stride (%d bytes) is not a whole number of floats',
+      [Stride]);
   Floats := Stride div SizeOf(Single);
 
   // Command pool used for the seeding upload and, in threaded mode, for the
@@ -1714,6 +1957,12 @@ begin
   // From here the GPU is the only writer of the vertex data.
   fStore.GPUOwned := True;
 
+  // Size the slot tracking before anything can draw, and clear any records
+  // left over from a previous activation - a stale frame index would make a
+  // free slot look as though it were still in flight.
+  fStore.ResetSlotTracking;
+  fSkippedSteps := 0;
+
   // The vertex buffers are device local and have never been written, so prime
   // every frame slot with one tiny step.  Without this a frame presented
   // before the first real dispatch would draw uninitialised memory.
@@ -1725,6 +1974,130 @@ begin
   // the draw must read that same frame's slot rather than a published one.
   if fRunMode = prmInline then
     fStore.RenderIndex := -1;
+end;
+
+procedure TvgParticleSystem.ReleaseGPUResources;
+begin
+  // The worker submits to the graphics queue, so it has to be stopped before
+  // anything it might still be referencing is destroyed.
+  StopThread;
+
+  // Wait for in-flight work to retire.  Destroying buffers or a pipeline that
+  // a submitted command buffer still references is undefined behaviour.
+  if Assigned(fVulkanDevice) then
+  begin
+    try
+      fVulkanDevice.WaitIdle;
+    except
+      // A lost device still has to be torn down; swallow and continue.
+    end;
+  end;
+
+  // Deliberately leave fStore.GPUOwned set and RenderIndex where it is.
+  //
+  // The store's CPU vertex array was only ever allocated, never filled - the
+  // compute shader is its sole writer.  Clearing GPUOwned would re-arm the
+  // DataStore's upload path, which would then stamp that all-zero array over
+  // the last good frame and collapse every particle onto the origin.  Leaving
+  // both alone means a disabled system simply freezes on its final frame,
+  // which is both correct and what a viewer expects.
+  //
+  // The store's own buffers are not freed here either; they belong to the
+  // DataStore.  SetParticleCount calls ClearData when the allocation actually
+  // has to change.
+
+  if Assigned(fCompute) then
+    fCompute.SetDevice(nil);      // destroys pipeline, pool, sets, shader
+
+  DestroyBuffers;
+
+  if Assigned(fCommandPool) then
+  begin
+    fCommandPool.Active := False;
+    FreeAndNil(fCommandPool);
+  end;
+
+  fVulkanDevice     := nil;
+  fFrameCount       := 0;
+  fWriteIndex       := 0;
+  fSkippedSteps     := 0;
+  fElapsedTime      := 0;
+  fSeeded           := False;
+  fDescriptorsValid := False;
+end;
+
+function TvgParticleSystem.GetLinker: TvgLinker;
+begin
+  Result := nil;
+
+  if not Assigned(fStore) then Exit;
+  if not Assigned(fStore.Scene) then Exit;
+
+  Result := fStore.Scene.Linker;
+end;
+
+function TvgParticleSystem.SlotIsInFlight(aSlot: Integer): Boolean;
+var
+  RenderFrame : Integer;
+  Lk          : TvgLinker;
+  Frm         : TvgFrame;
+  Cmd         : TvgCommandBuffer;
+begin
+  Result := False;
+
+  if not Assigned(fStore) then Exit;
+
+  RenderFrame := fStore.SlotDrawnByFrame(aSlot);
+  if RenderFrame < 0 then Exit;        //never drawn, so nothing is reading it
+
+  Lk := GetLinker;
+  if not Assigned(Lk) then Exit;       //no renderer to be in flight
+
+  if (RenderFrame < 0) or (RenderFrame >= Integer(Lk.FrameCount)) then Exit;
+
+  Frm := Lk.Frame[RenderFrame];
+  if not Assigned(Frm) then Exit;
+
+  Cmd := Frm.FrameCommandBuffer;
+  if not Assigned(Cmd) then Exit;
+
+  //cbsPending means submitted with a fence that has not been waited on, i.e.
+  //still executing.  This only became a meaningful state once the frame submit
+  //stopped blocking on its fence; before that a frame was always finished by
+  //the time control returned, and the buffer never sat in Pending.
+  Result := (Cmd.BufferState = cbsPending);
+end;
+
+function TvgParticleSystem.AcquireWriteSlot(out aSlot: Integer): Boolean;
+var
+  Tries : Integer;
+  S     : Integer;
+begin
+  Result := False;
+  aSlot  := -1;
+
+  if fFrameCount < 1 then Exit;
+
+  S := fWriteIndex;
+  if (S < 0) or (S >= fFrameCount) then
+    S := 0;
+
+  for Tries := 0 to fFrameCount - 1 do
+  begin
+    if not SlotIsInFlight(S) then
+    begin
+      aSlot  := S;
+      Result := True;
+      Exit;
+    end;
+
+    S := S + 1;
+    if S >= fFrameCount then S := 0;
+  end;
+
+  //Every slot is still being read.  Skipping this step is the right answer -
+  //blocking here would stall the worker behind the renderer and, if the caller
+  //holds SubmitLock, could deadlock against the very frame we are waiting on.
 end;
 
 function TvgParticleSystem.BuildPushConstants(aDeltaTime: Single): TvgParticlePush;
@@ -1817,7 +2190,17 @@ begin
 
   fSubmitLock.Enter;
   try
-    Slot := fWriteIndex;
+    //Never write a slot the renderer is still reading.  The slot cycle is the
+    //particle system's own, with no inherent relationship to the frames in
+    //flight, so without this the worker can lap the renderer and rewrite the
+    //vertices a submitted draw is sourcing.
+    if not AcquireWriteSlot(Slot) then
+    begin
+      //All slots busy.  Not an error - the renderer is simply behind.  Skip
+      //this step and let the next tick try again.
+      Inc(fSkippedSteps);
+      Exit;
+    end;
 
     // AcquireUploadCommand already prepares and activates the buffer.
     Cmd := fCommandPool.AcquireUploadCommand(TvkUint32(Slot));
@@ -1843,6 +2226,7 @@ begin
     // finishes, so it never reads the buffer being written.
     fStore.RenderIndex := Slot;
 
+    //Start the next search after the slot just used.
     fWriteIndex := Slot + 1;
     if fWriteIndex >= fFrameCount then
       fWriteIndex := 0;
