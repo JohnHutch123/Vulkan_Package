@@ -30253,11 +30253,16 @@ begin
 
   fCurrentGraphicCommandBuffer   := fGraphicCommandPool.AcquireSecondaryCommand(fFrameIndex);
 
-  If assigned(fCurrentGraphicCommandBuffer) and not fCurrentGraphicCommandBuffer.Active then
-    fCurrentGraphicCommandBuffer.Active  := True;
-
-
-  CustomAssert(assigned(fCurrentGraphicCommandBuffer),'Graphic Buffer NOT assigned');
+  //RequestCommand returns nil when aFrameIndex is outside the pool, which
+  //happens whenever the worker's frame count is out of step with the
+  //renderer's frames in flight.  CustomAssert does not raise in a Release
+  //build, so the old code walked straight into an access violation on the
+  //next line with nothing naming the cause.  Fail with the numbers instead.
+  if not Assigned(fCurrentGraphicCommandBuffer) then
+    raise EvgVulkanException.CreateFmt(
+      'TvgRenderWorker: no secondary command buffer for frame %d - the worker ' +
+      'pool holds %d frame slots.  Worker and renderer frame counts disagree.',
+      [fFrameIndex, fFrameCount]);
 
   fCurrentGraphicCommandBuffer.Active := True;
   SPI :=  tvkUint32(fSubPassIndex);
