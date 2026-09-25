@@ -1,0 +1,205 @@
+unit InstanceDataMinimalCombinations;
+
+{$MODE DELPHI}
+
+interface
+
+type
+  TVkVector3 = packed record
+    x, y, z: Single;
+  end;
+
+  TVkMatrix4x4 = packed record
+    rows: array[0..3] of TVkVector3;
+  end;
+
+  TIndex2u = packed record
+    Index: array[0..1] of UInt32;
+  end;
+
+// 1-field combinations
+type
+  TInstanceData_Matrix4x4 = packed record
+    Matrix: TVkMatrix4x4;
+  end;
+
+  TInstanceData_Position3f = packed record
+    Position: TVkVector3;
+  end;
+
+  TInstanceData_Color3f = packed record
+    Color: TVkVector3;
+  end;
+
+  TInstanceData_Normal3f = packed record
+    Normal: TVkVector3;
+  end;
+
+  TInstanceData_Index2u = packed record
+    Index2u: TIndex2u;
+  end;
+
+// 2-field combinations
+type
+  TInstanceData_Matrix4x4_Position3f = packed record
+    Matrix: TVkMatrix4x4;
+    Position: TVkVector3;
+  end;
+
+  TInstanceData_Matrix4x4_Color3f = packed record
+    Matrix: TVkMatrix4x4;
+    Color: TVkVector3;
+  end;
+
+  TInstanceData_Matrix4x4_Normal3f = packed record
+    Matrix: TVkMatrix4x4;
+    Normal: TVkVector3;
+  end;
+
+  TInstanceData_Matrix4x4_Index2u = packed record
+    Matrix: TVkMatrix4x4;
+    Index2u: TIndex2u;
+  end;
+
+  TInstanceData_Position3f_Color3f = packed record
+    Position: TVkVector3;
+    Color: TVkVector3;
+  end;
+
+  TInstanceData_Position3f_Normal3f = packed record
+    Position: TVkVector3;
+    Normal: TVkVector3;
+  end;
+
+  TInstanceData_Position3f_Index2u = packed record
+    Position: TVkVector3;
+    Index2u: TIndex2u;
+  end;
+
+  TInstanceData_Color3f_Normal3f = packed record
+    Color: TVkVector3;
+    Normal: TVkVector3;
+  end;
+
+  TInstanceData_Color3f_Index2u = packed record
+    Color: TVkVector3;
+    Index2u: TIndex2u;
+  end;
+
+  TInstanceData_Normal3f_Index2u = packed record
+    Normal: TVkVector3;
+    Index2u: TIndex2u;
+  end;
+
+// 3-field combinations
+type
+  TInstanceData_Matrix4x4_Position3f_Color3f = packed record
+    Matrix: TVkMatrix4x4;
+    Position: TVkVector3;
+    Color: TVkVector3;
+  end;
+
+  TInstanceData_Matrix4x4_Position3f_Normal3f = packed record
+    Matrix: TVkMatrix4x4;
+    Position: TVkVector3;
+    Normal: TVkVector3;
+  end;
+
+  TInstanceData_Matrix4x4_Position3f_Index2u = packed record
+    Matrix: TVkMatrix4x4;
+    Position: TVkVector3;
+    Index2u: TIndex2u;
+  end;
+
+  TInstanceData_Matrix4x4_Color3f_Normal3f = packed record
+    Matrix: TVkMatrix4x4;
+    Color: TVkVector3;
+    Normal: TVkVector3;
+  end;
+
+  TInstanceData_Matrix4x4_Color3f_Index2u = packed record
+    Matrix: TVkMatrix4x4;
+    Color: TVkVector3;
+    Index2u: TIndex2u;
+  end;
+
+  TInstanceData_Matrix4x4_Normal3f_Index2u = packed record
+    Matrix: TVkMatrix4x4;
+    Normal: TVkVector3;
+    Index2u: TIndex2u;
+  end;
+
+  TInstanceData_Position3f_Color3f_Normal3f = packed record
+    Position: TVkVector3;
+    Color: TVkVector3;
+    Normal: TVkVector3;
+  end;
+
+  TInstanceData_Position3f_Color3f_Index2u = packed record
+    Position: TVkVector3;
+    Color: TVkVector3;
+    Index2u: TIndex2u;
+  end;
+
+  TInstanceData_Position3f_Normal3f_Index2u = packed record
+    Position: TVkVector3;
+    Normal: TVkVector3;
+    Index2u: TIndex2u;
+  end;
+
+  TInstanceData_Color3f_Normal3f_Index2u = packed record
+    Color: TVkVector3;
+    Normal: TVkVector3;
+    Index2u: TIndex2u;
+  end;
+
+// 4-field combinations
+type
+  TInstanceData_Matrix4x4_Position3f_Color3f_Normal3f = packed record
+    Matrix: TVkMatrix4x4;
+    Position: TVkVector3;
+    Color: TVkVector3;
+    Normal: TVkVector3;
+  end;
+
+  TInstanceData_Matrix4x4_Position3f_Color3f_Index2u = packed record
+    Matrix: TVkMatrix4x4;
+    Position: TVkVector3;
+    Color: TVkVector3;
+    Index2u: TIndex2u;
+  end;
+
+  TInstanceData_Matrix4x4_Position3f_Normal3f_Index2u = packed record
+    Matrix: TVkMatrix4x4;
+    Position: TVkVector3;
+    Normal: TVkVector3;
+    Index2u: TIndex2u;
+  end;
+
+  TInstanceData_Matrix4x4_Color3f_Normal3f_Index2u = packed record
+    Matrix: TVkMatrix4x4;
+    Color: TVkVector3;
+    Normal: TVkVector3;
+    Index2u: TIndex2u;
+  end;
+
+  TInstanceData_Position3f_Color3f_Normal3f_Index2u = packed record
+    Position: TVkVector3;
+    Color: TVkVector3;
+    Normal: TVkVector3;
+    Index2u: TIndex2u;
+  end;
+
+// 5-field combination
+type
+  TInstanceData_Matrix4x4_Position3f_Color3f_Normal3f_Index2u = packed record
+    Matrix: TVkMatrix4x4;
+    Position: TVkVector3;
+    Color: TVkVector3;
+    Normal: TVkVector3;
+    Index2u: TIndex2u;
+  end;
+
+implementation
+
+end.

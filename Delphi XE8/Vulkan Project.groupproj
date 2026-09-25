@@ -1,0 +1,116 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{FE136DA0-0C05-4F5F-8910-14F2CD2D4243}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="VulkanPkgR290.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="VulkanPkgD290.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="VulkanPkg_VCLR290.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="VulkanPkg_VCLD290.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="..\Samples\TestVulkan\VulcanTest.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="VulkanPkgR290">
+        <MSBuild Projects="VulkanPkgR290.dproj"/>
+    </Target>
+    <Target Name="VulkanPkgR290:Clean">
+        <MSBuild Projects="VulkanPkgR290.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="VulkanPkgR290:Make">
+        <MSBuild Projects="VulkanPkgR290.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="VulkanPkgD290">
+        <MSBuild Projects="VulkanPkgD290.dproj"/>
+    </Target>
+    <Target Name="VulkanPkgD290:Clean">
+        <MSBuild Projects="VulkanPkgD290.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="VulkanPkgD290:Make">
+        <MSBuild Projects="VulkanPkgD290.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="VulkanPkg_VCLR290">
+        <MSBuild Projects="VulkanPkg_VCLR290.dproj"/>
+    </Target>
+    <Target Name="VulkanPkg_VCLR290:Clean">
+        <MSBuild Projects="VulkanPkg_VCLR290.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="VulkanPkg_VCLR290:Make">
+        <MSBuild Projects="VulkanPkg_VCLR290.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="VulkanPkg_VCLD290">
+        <MSBuild Projects="VulkanPkg_VCLD290.dproj"/>
+    </Target>
+    <Target Name="VulkanPkg_VCLD290:Clean">
+        <MSBuild Projects="VulkanPkg_VCLD290.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="VulkanPkg_VCLD290:Make">
+        <MSBuild Projects="VulkanPkg_VCLD290.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="VulcanTest">
+        <MSBuild Projects="..\Samples\TestVulkan\VulcanTest.dproj"/>
+    </Target>
+    <Target Name="VulcanTest:Clean">
+        <MSBuild Projects="..\Samples\TestVulkan\VulcanTest.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="VulcanTest:Make">
+        <MSBuild Projects="..\Samples\TestVulkan\VulcanTest.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="VulkanPkgR290;VulkanPkgD290;VulkanPkg_VCLR290;VulkanPkg_VCLD290;VulcanTest"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="VulkanPkgR290:Clean;VulkanPkgD290:Clean;VulkanPkg_VCLR290:Clean;VulkanPkg_VCLD290:Clean;VulcanTest:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="VulkanPkgR290:Make;VulkanPkgD290:Make;VulkanPkg_VCLR290:Make;VulkanPkg_VCLD290:Make;VulcanTest:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+    <ItemGroup Condition="'$(BuildGroup)'=='Build ALL'">
+        <BuildGroupProject Include="VulkanPkgR290.dproj">
+            <ProjectGuid>{413EE3C7-D5AD-406F-A0F1-572F3176852E}</ProjectGuid>
+            <Configurations>Debug;Release</Configurations>
+            <Platforms>Win32;Win64</Platforms>
+            <Enabled>True</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="VulkanPkg_VCLR290.dproj">
+            <ProjectGuid>{83562F30-7D57-4313-AD52-22D359605E4F}</ProjectGuid>
+            <Configurations>Debug;Release</Configurations>
+            <Platforms>Win32;Win64</Platforms>
+            <Enabled>True</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="..\Samples\TestVulkan\VulcanTest.dproj">
+            <ProjectGuid>{37D3E49B-B817-4763-A03E-8750D5EA3819}</ProjectGuid>
+            <Configurations>Debug</Configurations>
+            <Platforms>Win32;Win64</Platforms>
+            <Enabled>True</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="VulkanPkgD290.dproj">
+            <ProjectGuid>{3166785E-0E4E-40FF-B88E-34EB257273FA}</ProjectGuid>
+            <Configurations>Release</Configurations>
+            <Platforms>Win32</Platforms>
+            <Enabled>True</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="VulkanPkg_VCLD290.dproj">
+            <ProjectGuid>{356DDF75-3DBC-443F-89E9-544B2ADABEB1}</ProjectGuid>
+            <Configurations>Release</Configurations>
+            <Platforms>Win32</Platforms>
+            <Enabled>True</Enabled>
+        </BuildGroupProject>
+    </ItemGroup>
+</Project>

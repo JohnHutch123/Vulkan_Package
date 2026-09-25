@@ -1,0 +1,51 @@
+package VulkanPkgR290;
+
+{$R *.res}
+{$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
+{$ALIGN 8}
+{$ASSERTIONS ON}
+{$BOOLEVAL OFF}
+{$DEBUGINFO OFF}
+{$EXTENDEDSYNTAX ON}
+{$IMPORTEDDATA ON}
+{$IOCHECKS ON}
+{$LOCALSYMBOLS OFF}
+{$LONGSTRINGS ON}
+{$OPENSTRINGS ON}
+{$OPTIMIZATION ON}
+{$OVERFLOWCHECKS OFF}
+{$RANGECHECKS OFF}
+{$REFERENCEINFO OFF}
+{$SAFEDIVIDE OFF}
+{$STACKFRAMES OFF}
+{$TYPEDADDRESS OFF}
+{$VARSTRINGCHECKS ON}
+{$WRITEABLECONST OFF}
+{$MINENUMSIZE 1}
+{$IMAGEBASE $400000}
+{$DEFINE RELEASE}
+{$ENDIF IMPLICITBUILDING}
+{$DESCRIPTION 'Datavis - Vulkan Graphics'}
+{$RUNONLY}
+{$IMPLICITBUILD OFF}
+
+requires
+  rtl;
+
+contains
+  Vulkan_Components in '..\RunTime_Src\Vulkan_Components.pas',
+  Vulkan_Components_Lookups in '..\RunTime_Src\Vulkan_Components_Lookups.pas',
+  Vulkan in '..\..\Vulkan\src\Vulkan.pas',
+  PasVulkan.Types in '..\..\Vulkan\src\PasVulkan.Types.pas',
+  PasVulkan.Math in '..\..\Vulkan\src\PasVulkan.Math.pas',
+  PasVulkan.Framework in '..\..\Vulkan\src\PasVulkan.Framework.pas',
+  PasDblStrUtils in '..\..\Vulkan\externals\pasdblstrutils\src\PasDblStrUtils.pas',
+  PUCU in '..\..\Vulkan\externals\pucu\src\PUCU.pas',
+  PasMP in '..\..\Vulkan\externals\pasmp\src\PasMP.pas',
+  Vulkan_CriticalSection in '..\RunTime_Src\Vulkan_CriticalSection.pas';
+
+end.
+
+
+
+

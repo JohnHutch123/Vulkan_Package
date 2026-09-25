@@ -1,0 +1,340 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{FE136DA0-0C05-4F5F-8910-14F2CD2D4243}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="..\Samples\TestVulkan\VulcanTest.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="VulkanPkgR280.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="VulkanPkgD280.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="VulkanPkg_VCLR280.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="VulkanPkg_VCLD280.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="..\Samples\TestVulkan\VulkanPkg_SingleR280.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="..\Samples\TestVulkan\VulcanPkg_ComThreadR280.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="..\Samples\TestVulkan\VulcanPkg_ComThreadD280.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="VulkanPkg_OMNIThreadR280.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="VulkanPkg_OMNIThreadD350.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="VulkanPkg_FMXR350.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="..\Samples\TestVulkan\VulcanTest_Components.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="..\..\glTF\src\viewer\PasGLTFViewer.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="VulcanTest">
+        <MSBuild Projects="..\Samples\TestVulkan\VulcanTest.dproj"/>
+    </Target>
+    <Target Name="VulcanTest:Clean">
+        <MSBuild Projects="..\Samples\TestVulkan\VulcanTest.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="VulcanTest:Make">
+        <MSBuild Projects="..\Samples\TestVulkan\VulcanTest.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="VulkanPkgR280">
+        <MSBuild Projects="VulkanPkgR280.dproj"/>
+    </Target>
+    <Target Name="VulkanPkgR280:Clean">
+        <MSBuild Projects="VulkanPkgR280.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="VulkanPkgR280:Make">
+        <MSBuild Projects="VulkanPkgR280.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="VulkanPkgD280">
+        <MSBuild Projects="VulkanPkgD280.dproj"/>
+    </Target>
+    <Target Name="VulkanPkgD280:Clean">
+        <MSBuild Projects="VulkanPkgD280.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="VulkanPkgD280:Make">
+        <MSBuild Projects="VulkanPkgD280.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="VulkanPkg_VCLR280">
+        <MSBuild Projects="VulkanPkg_VCLR280.dproj"/>
+    </Target>
+    <Target Name="VulkanPkg_VCLR280:Clean">
+        <MSBuild Projects="VulkanPkg_VCLR280.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="VulkanPkg_VCLR280:Make">
+        <MSBuild Projects="VulkanPkg_VCLR280.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="VulkanPkg_VCLD280">
+        <MSBuild Projects="VulkanPkg_VCLD280.dproj"/>
+    </Target>
+    <Target Name="VulkanPkg_VCLD280:Clean">
+        <MSBuild Projects="VulkanPkg_VCLD280.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="VulkanPkg_VCLD280:Make">
+        <MSBuild Projects="VulkanPkg_VCLD280.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="VulkanPkg_SingleR280">
+        <MSBuild Projects="..\Samples\TestVulkan\VulkanPkg_SingleR280.dproj"/>
+    </Target>
+    <Target Name="VulkanPkg_SingleR280:Clean">
+        <MSBuild Projects="..\Samples\TestVulkan\VulkanPkg_SingleR280.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="VulkanPkg_SingleR280:Make">
+        <MSBuild Projects="..\Samples\TestVulkan\VulkanPkg_SingleR280.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="VulcanPkg_ComThreadR280">
+        <MSBuild Projects="..\Samples\TestVulkan\VulcanPkg_ComThreadR280.dproj"/>
+    </Target>
+    <Target Name="VulcanPkg_ComThreadR280:Clean">
+        <MSBuild Projects="..\Samples\TestVulkan\VulcanPkg_ComThreadR280.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="VulcanPkg_ComThreadR280:Make">
+        <MSBuild Projects="..\Samples\TestVulkan\VulcanPkg_ComThreadR280.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="VulcanPkg_ComThreadD280">
+        <MSBuild Projects="..\Samples\TestVulkan\VulcanPkg_ComThreadD280.dproj"/>
+    </Target>
+    <Target Name="VulcanPkg_ComThreadD280:Clean">
+        <MSBuild Projects="..\Samples\TestVulkan\VulcanPkg_ComThreadD280.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="VulcanPkg_ComThreadD280:Make">
+        <MSBuild Projects="..\Samples\TestVulkan\VulcanPkg_ComThreadD280.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="VulkanPkg_OMNIThreadR280">
+        <MSBuild Projects="VulkanPkg_OMNIThreadR280.dproj"/>
+    </Target>
+    <Target Name="VulkanPkg_OMNIThreadR280:Clean">
+        <MSBuild Projects="VulkanPkg_OMNIThreadR280.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="VulkanPkg_OMNIThreadR280:Make">
+        <MSBuild Projects="VulkanPkg_OMNIThreadR280.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="VulkanPkg_OMNIThreadD350">
+        <MSBuild Projects="VulkanPkg_OMNIThreadD350.dproj"/>
+    </Target>
+    <Target Name="VulkanPkg_OMNIThreadD350:Clean">
+        <MSBuild Projects="VulkanPkg_OMNIThreadD350.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="VulkanPkg_OMNIThreadD350:Make">
+        <MSBuild Projects="VulkanPkg_OMNIThreadD350.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="VulkanPkg_FMXR350">
+        <MSBuild Projects="VulkanPkg_FMXR350.dproj"/>
+    </Target>
+    <Target Name="VulkanPkg_FMXR350:Clean">
+        <MSBuild Projects="VulkanPkg_FMXR350.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="VulkanPkg_FMXR350:Make">
+        <MSBuild Projects="VulkanPkg_FMXR350.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="VulcanTest_Components">
+        <MSBuild Projects="..\Samples\TestVulkan\VulcanTest_Components.dproj"/>
+    </Target>
+    <Target Name="VulcanTest_Components:Clean">
+        <MSBuild Projects="..\Samples\TestVulkan\VulcanTest_Components.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="VulcanTest_Components:Make">
+        <MSBuild Projects="..\Samples\TestVulkan\VulcanTest_Components.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="PasGLTFViewer">
+        <MSBuild Projects="..\..\glTF\src\viewer\PasGLTFViewer.dproj"/>
+    </Target>
+    <Target Name="PasGLTFViewer:Clean">
+        <MSBuild Projects="..\..\glTF\src\viewer\PasGLTFViewer.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="PasGLTFViewer:Make">
+        <MSBuild Projects="..\..\glTF\src\viewer\PasGLTFViewer.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="VulcanTest;VulkanPkgR280;VulkanPkgD280;VulkanPkg_VCLR280;VulkanPkg_VCLD280;VulkanPkg_SingleR280;VulcanPkg_ComThreadR280;VulcanPkg_ComThreadD280;VulkanPkg_OMNIThreadR280;VulkanPkg_OMNIThreadD350;VulkanPkg_FMXR350;VulcanTest_Components;PasGLTFViewer"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="VulcanTest:Clean;VulkanPkgR280:Clean;VulkanPkgD280:Clean;VulkanPkg_VCLR280:Clean;VulkanPkg_VCLD280:Clean;VulkanPkg_SingleR280:Clean;VulcanPkg_ComThreadR280:Clean;VulcanPkg_ComThreadD280:Clean;VulkanPkg_OMNIThreadR280:Clean;VulkanPkg_OMNIThreadD350:Clean;VulkanPkg_FMXR350:Clean;VulcanTest_Components:Clean;PasGLTFViewer:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="VulcanTest:Make;VulkanPkgR280:Make;VulkanPkgD280:Make;VulkanPkg_VCLR280:Make;VulkanPkg_VCLD280:Make;VulkanPkg_SingleR280:Make;VulcanPkg_ComThreadR280:Make;VulcanPkg_ComThreadD280:Make;VulkanPkg_OMNIThreadR280:Make;VulkanPkg_OMNIThreadD350:Make;VulkanPkg_FMXR350:Make;VulcanTest_Components:Make;PasGLTFViewer:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+    <ItemGroup Condition="'$(BuildGroup)'=='Vulkan Test Debug Build'">
+        <BuildGroupProject Include="VulkanPkg_FMXR350.dproj">
+            <ProjectGuid>{7A5191DC-1DCE-47E4-9333-FFAB9F09DFF6}</ProjectGuid>
+            <Configurations>Release</Configurations>
+            <Platforms>Win32</Platforms>
+            <Enabled>True</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="VulkanPkg_VCLD280.dproj">
+            <ProjectGuid>{356DDF75-3DBC-443F-89E9-544B2ADABEB1}</ProjectGuid>
+            <Configurations>Release</Configurations>
+            <Platforms>Win32</Platforms>
+            <Enabled>True</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="..\Samples\TestVulkan\VulcanTest.dproj">
+            <ProjectGuid>{37D3E49B-B817-4763-A03E-8750D5EA3819}</ProjectGuid>
+            <Configurations>Debug</Configurations>
+            <Platforms>Win32;Win64</Platforms>
+            <Enabled>True</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="VulkanPkgR280.dproj">
+            <ProjectGuid>{413EE3C7-D5AD-406F-A0F1-572F3176852E}</ProjectGuid>
+            <Configurations>Release</Configurations>
+            <Platforms>Win32;Win64</Platforms>
+            <Enabled>True</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="VulkanPkg_VCLR280.dproj">
+            <ProjectGuid>{83562F30-7D57-4313-AD52-22D359605E4F}</ProjectGuid>
+            <Configurations>Release</Configurations>
+            <Platforms>Win32;Win64</Platforms>
+            <Enabled>True</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="..\Samples\TestVulkan\VulcanTest_Components.dproj">
+            <ProjectGuid>{E4570A1B-1CF1-4704-B8AF-F1E7B613413F}</ProjectGuid>
+            <Configurations>Debug</Configurations>
+            <Platforms>Win32</Platforms>
+            <Enabled>True</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="VulkanPkgD280.dproj">
+            <ProjectGuid>{A9AF7B1C-5BA6-4894-9D17-DB28C6D8D675}</ProjectGuid>
+            <Configurations>Release</Configurations>
+            <Platforms>Win32</Platforms>
+            <Enabled>True</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="..\Samples\TestVulkan\VulkanPkg_SingleR280.dproj">
+            <ProjectGuid>{F2C9C16D-A9FB-45D1-8ED2-4441A200441C}</ProjectGuid>
+            <Configurations>Release</Configurations>
+            <Platforms>Win32;Win64</Platforms>
+            <Enabled>True</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="..\..\glTF\src\viewer\PasGLTFViewer.dproj">
+            <ProjectGuid>{BC8962C7-437D-47A7-906C-455C8C275AB3}</ProjectGuid>
+            <Configurations>Debug</Configurations>
+            <Platforms>Win32</Platforms>
+            <Enabled>False</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="VulkanPkg_OMNIThreadD350.dproj">
+            <ProjectGuid>{8A218F91-F3D6-4C55-96F9-298A1D00C6E9}</ProjectGuid>
+            <Configurations>Release</Configurations>
+            <Platforms>Win32</Platforms>
+            <Enabled>True</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="..\Samples\TestVulkan\VulcanPkg_ComThreadD280.dproj">
+            <ProjectGuid>{67AA8063-9A2A-4C02-9D70-9470C8BF315C}</ProjectGuid>
+            <Configurations>Debug</Configurations>
+            <Platforms>Win32</Platforms>
+            <Enabled>False</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="..\Samples\TestVulkan\VulcanPkg_ComThreadR280.dproj">
+            <ProjectGuid>{4C686A2B-09F5-459C-A03E-F326E4035697}</ProjectGuid>
+            <Configurations>Release</Configurations>
+            <Platforms>Win32</Platforms>
+            <Enabled>True</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="VulkanPkg_OMNIThreadR280.dproj">
+            <ProjectGuid>{DCBCA805-9440-40B1-8271-F450792978CD}</ProjectGuid>
+            <Configurations>Debug</Configurations>
+            <Platforms>Win32</Platforms>
+            <Enabled>True</Enabled>
+        </BuildGroupProject>
+    </ItemGroup>
+    <ItemGroup Condition="'$(BuildGroup)'=='Vulkan Test Build Group'">
+        <BuildGroupProject Include="VulkanPkg_FMXR350.dproj">
+            <ProjectGuid>{7A5191DC-1DCE-47E4-9333-FFAB9F09DFF6}</ProjectGuid>
+            <Configurations>Debug;Release</Configurations>
+            <Platforms>Win32</Platforms>
+            <Enabled>True</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="VulkanPkg_VCLD280.dproj">
+            <ProjectGuid>{356DDF75-3DBC-443F-89E9-544B2ADABEB1}</ProjectGuid>
+            <Configurations>Release</Configurations>
+            <Platforms>Win32</Platforms>
+            <Enabled>True</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="..\Samples\TestVulkan\VulcanTest.dproj">
+            <ProjectGuid>{37D3E49B-B817-4763-A03E-8750D5EA3819}</ProjectGuid>
+            <Configurations>Debug</Configurations>
+            <Platforms>Win32;Win64</Platforms>
+            <Enabled>True</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="VulkanPkgR280.dproj">
+            <ProjectGuid>{413EE3C7-D5AD-406F-A0F1-572F3176852E}</ProjectGuid>
+            <Configurations>Release</Configurations>
+            <Platforms>Win32;Win64</Platforms>
+            <Enabled>True</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="VulkanPkg_VCLR280.dproj">
+            <ProjectGuid>{83562F30-7D57-4313-AD52-22D359605E4F}</ProjectGuid>
+            <Configurations>Release</Configurations>
+            <Platforms>Win32;Win64</Platforms>
+            <Enabled>True</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="..\Samples\TestVulkan\VulcanTest_Components.dproj">
+            <ProjectGuid>{E4570A1B-1CF1-4704-B8AF-F1E7B613413F}</ProjectGuid>
+            <Configurations>Debug</Configurations>
+            <Platforms>Win32</Platforms>
+            <Enabled>False</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="VulkanPkgD280.dproj">
+            <ProjectGuid>{A9AF7B1C-5BA6-4894-9D17-DB28C6D8D675}</ProjectGuid>
+            <Configurations/>
+            <Platforms>Win32</Platforms>
+            <Enabled>False</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="..\Samples\TestVulkan\VulkanPkg_SingleR280.dproj">
+            <ProjectGuid>{F2C9C16D-A9FB-45D1-8ED2-4441A200441C}</ProjectGuid>
+            <Configurations>Release</Configurations>
+            <Platforms>Win32;Win64</Platforms>
+            <Enabled>True</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="..\..\glTF\src\viewer\PasGLTFViewer.dproj">
+            <ProjectGuid>{BC8962C7-437D-47A7-906C-455C8C275AB3}</ProjectGuid>
+            <Configurations>Debug</Configurations>
+            <Platforms>Win32</Platforms>
+            <Enabled>False</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="VulkanPkg_OMNIThreadD350.dproj">
+            <ProjectGuid>{8A218F91-F3D6-4C55-96F9-298A1D00C6E9}</ProjectGuid>
+            <Configurations>Release</Configurations>
+            <Platforms>Win32</Platforms>
+            <Enabled>True</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="..\Samples\TestVulkan\VulcanPkg_ComThreadD280.dproj">
+            <ProjectGuid>{67AA8063-9A2A-4C02-9D70-9470C8BF315C}</ProjectGuid>
+            <Configurations>Debug</Configurations>
+            <Platforms>Win32</Platforms>
+            <Enabled>False</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="..\Samples\TestVulkan\VulcanPkg_ComThreadR280.dproj">
+            <ProjectGuid>{4C686A2B-09F5-459C-A03E-F326E4035697}</ProjectGuid>
+            <Configurations/>
+            <Platforms>Win32</Platforms>
+            <Enabled>False</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="VulkanPkg_OMNIThreadR280.dproj">
+            <ProjectGuid>{DCBCA805-9440-40B1-8271-F450792978CD}</ProjectGuid>
+            <Configurations>Debug;Release</Configurations>
+            <Platforms>Win32;Win64</Platforms>
+            <Enabled>True</Enabled>
+        </BuildGroupProject>
+    </ItemGroup>
+</Project>

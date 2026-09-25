@@ -1,0 +1,446 @@
+﻿Thread Start: Thread ID: 32824. Process VulcanTest.exe (9532)
+Process Start: D:\X1\Vulkan_Package\Samples\TestVulkan\Win32\Debug\VulcanTest.exe. Base Address: $00400000. Process VulcanTest.exe (9532)
+Module Load: VulcanTest.exe. Has Debug Info. Base Address: $00400000. Process VulcanTest.exe (9532)
+Module Load: ntdll.dll. No Debug Info. Base Address: $77A40000. Process VulcanTest.exe (9532)
+Module Load: KERNEL32.dll. No Debug Info. Base Address: $760B0000. Process VulcanTest.exe (9532)
+Module Load: KERNELBASE.dll. No Debug Info. Base Address: $758B0000. Process VulcanTest.exe (9532)
+Thread Start: Thread ID: 34284. Process VulcanTest.exe (9532)
+Thread Start: Thread ID: 32708. Process VulcanTest.exe (9532)
+Module Load: USER32.dll. No Debug Info. Base Address: $754B0000. Process VulcanTest.exe (9532)
+Module Load: win32u.dll. No Debug Info. Base Address: $76430000. Process VulcanTest.exe (9532)
+Thread Start: Thread ID: 24500. Process VulcanTest.exe (9532)
+Module Load: WINMM.dll. No Debug Info. Base Address: $741C0000. Process VulcanTest.exe (9532)
+Module Load: GDI32.dll. No Debug Info. Base Address: $76590000. Process VulcanTest.exe (9532)
+Module Load: gdi32full.dll. No Debug Info. Base Address: $76B00000. Process VulcanTest.exe (9532)
+Module Load: ucrtbase.dll. No Debug Info. Base Address: $76240000. Process VulcanTest.exe (9532)
+Module Load: msvcp_win.dll. No Debug Info. Base Address: $77820000. Process VulcanTest.exe (9532)
+Module Load: rtl280.bpl. Has Debug Info. Base Address: $50050000. Process VulcanTest.exe (9532)
+Module Load: SHLWAPI.dll. No Debug Info. Base Address: $76CC0000. Process VulcanTest.exe (9532)
+Module Load: MPR.dll. No Debug Info. Base Address: $70650000. Process VulcanTest.exe (9532)
+Module Load: msvcrt.dll. No Debug Info. Base Address: $76450000. Process VulcanTest.exe (9532)
+Module Load: OLEACC.dll. No Debug Info. Base Address: $6C7D0000. Process VulcanTest.exe (9532)
+Module Load: vcl280.bpl. Has Debug Info. Base Address: $50C90000. Process VulcanTest.exe (9532)
+Module Load: WS2_32.dll. No Debug Info. Base Address: $76520000. Process VulcanTest.exe (9532)
+Module Load: RPCRT4.dll. No Debug Info. Base Address: $76C00000. Process VulcanTest.exe (9532)
+Module Load: COMDLG32.dll. No Debug Info. Base Address: $75C10000. Process VulcanTest.exe (9532)
+Module Load: OLEAUT32.dll. No Debug Info. Base Address: $76380000. Process VulcanTest.exe (9532)
+Module Load: combase.dll. No Debug Info. Base Address: $75DF0000. Process VulcanTest.exe (9532)
+Module Load: SHCORE.dll. No Debug Info. Base Address: $76A20000. Process VulcanTest.exe (9532)
+Module Load: ADVAPI32.dll. No Debug Info. Base Address: $75B80000. Process VulcanTest.exe (9532)
+Module Load: SECHOST.dll. No Debug Info. Base Address: $761B0000. Process VulcanTest.exe (9532)
+Module Load: WINSPOOL.DRV. No Debug Info. Base Address: $75380000. Process VulcanTest.exe (9532)
+Module Load: VERSION.dll. No Debug Info. Base Address: $751B0000. Process VulcanTest.exe (9532)
+Module Load: SHELL32.dll. No Debug Info. Base Address: $76FD0000. Process VulcanTest.exe (9532)
+Module Load: COMCTL32.dll. No Debug Info. Base Address: $6EB80000. Process VulcanTest.exe (9532)
+Module Load: imagehlp.dll. No Debug Info. Base Address: $76D20000. Process VulcanTest.exe (9532)
+Module Load: WinTypes.dll. No Debug Info. Base Address: $76D40000. Process VulcanTest.exe (9532)
+Module Load: ole32.dll. No Debug Info. Base Address: $01420000. Process VulcanTest.exe (9532)
+Module Load: ole32.dll. No Debug Info. Base Address: $75680000. Process VulcanTest.exe (9532)
+Module Load: CFGMGR32.dll. No Debug Info. Base Address: $75310000. Process VulcanTest.exe (9532)
+Module Unload: ole32.dll. Process VulcanTest.exe (9532)
+Module Load: NETAPI32.dll. No Debug Info. Base Address: $70C20000. Process VulcanTest.exe (9532)
+Module Load: WSOCK32.dll. No Debug Info. Base Address: $68850000. Process VulcanTest.exe (9532)
+Module Load: WINHTTP.dll. No Debug Info. Base Address: $69420000. Process VulcanTest.exe (9532)
+Module Load: SHFOLDER.dll. No Debug Info. Base Address: $70190000. Process VulcanTest.exe (9532)
+Module Load: oledlg.dll. No Debug Info. Base Address: $6F280000. Process VulcanTest.exe (9532)
+Module Load: netutils.dll. No Debug Info. Base Address: $70770000. Process VulcanTest.exe (9532)
+Module Load: IMM32.dll. No Debug Info. Base Address: $76080000. Process VulcanTest.exe (9532)
+Module Load: MSCTF.dll. No Debug Info. Base Address: $77600000. Process VulcanTest.exe (9532)
+Module Load: UxTheme.dll. No Debug Info. Base Address: $700F0000. Process VulcanTest.exe (9532)
+Module Load: AppCore.dll. No Debug Info. Base Address: $751C0000. Process VulcanTest.exe (9532)
+Module Load: bcryptPrimitives.dll. No Debug Info. Base Address: $779C0000. Process VulcanTest.exe (9532)
+Module Load: AudioDevProps2.dll. No Debug Info. Base Address: $702F0000. Process VulcanTest.exe (9532)
+Module Load: NahimicOSD.dll. No Debug Info. Base Address: $703F0000. Process VulcanTest.exe (9532)
+Module Load: ProductInfo.dll. No Debug Info. Base Address: $6EF60000. Process VulcanTest.exe (9532)
+Debug Output:
+Error 20 (this feature has not been implemented yet) in function AVolute::GetProductInfoT::<lambda_c1c69609f385576658f8def701163fcd>::operator ()
+
+Process VulcanTest.exe (9532)
+Module Load: WTSAPI32.dll. No Debug Info. Base Address: $75360000. Process VulcanTest.exe (9532)
+Module Load: WINSTA.dll. No Debug Info. Base Address: $69380000. Process VulcanTest.exe (9532)
+Module Load: TextInputFramework.dll. No Debug Info. Base Address: $6C500000. Process VulcanTest.exe (9532)
+Module Load: CoreMessaging.dll. No Debug Info. Base Address: $6C420000. Process VulcanTest.exe (9532)
+Module Load: CoreUIComponents.dll. No Debug Info. Base Address: $6C180000. Process VulcanTest.exe (9532)
+Module Load: CRYPTBASE.dll. No Debug Info. Base Address: $72B00000. Process VulcanTest.exe (9532)
+Module Load: dwmapi.dll. No Debug Info. Base Address: $70280000. Process VulcanTest.exe (9532)
+Module Load: TextShaping.dll. No Debug Info. Base Address: $6A230000. Process VulcanTest.exe (9532)
+Module Load: vulkan-1.dll. No Debug Info. Base Address: $665F0000. Process VulcanTest.exe (9532)
+Module Load: dxgi.dll. No Debug Info. Base Address: $6F6E0000. Process VulcanTest.exe (9532)
+Module Load: directxdatabasehelper.dll. No Debug Info. Base Address: $6F680000. Process VulcanTest.exe (9532)
+Module Load: dxcore.dll. No Debug Info. Base Address: $6F9F0000. Process VulcanTest.exe (9532)
+Module Unload: dxcore.dll. Process VulcanTest.exe (9532)
+Module Load: Windows.StateRepositoryCore.dll. No Debug Info. Base Address: $70240000. Process VulcanTest.exe (9532)
+Module Load: dxcore.dll. No Debug Info. Base Address: $6F9F0000. Process VulcanTest.exe (9532)
+Module Load: ResourcePolicyClient.dll. No Debug Info. Base Address: $6B910000. Process VulcanTest.exe (9532)
+Module Unload: ResourcePolicyClient.dll. Process VulcanTest.exe (9532)
+Module Load: igvk32.dll. No Debug Info. Base Address: $63DF0000. Process VulcanTest.exe (9532)
+Module Load: OPENGL32.dll. No Debug Info. Base Address: $66500000. Process VulcanTest.exe (9532)
+Module Load: GLU32.dll. No Debug Info. Base Address: $6B8E0000. Process VulcanTest.exe (9532)
+Module Load: igdgmm32.dll. No Debug Info. Base Address: $65520000. Process VulcanTest.exe (9532)
+Module Load: igc32.dll. No Debug Info. Base Address: $60EC0000. Process VulcanTest.exe (9532)
+Module Load: igdmd32.dll. No Debug Info. Base Address: $60B80000. Process VulcanTest.exe (9532)
+Module Load: nvoglv32.dll. No Debug Info. Base Address: $5F3A0000. Process VulcanTest.exe (9532)
+Module Load: SETUPAPI.dll. No Debug Info. Base Address: $765C0000. Process VulcanTest.exe (9532)
+Thread Start: Thread ID: 32080. Process VulcanTest.exe (9532)
+Module Load: MSASN1.dll. No Debug Info. Base Address: $70C40000. Process VulcanTest.exe (9532)
+Module Load: CRYPTNET.dll. No Debug Info. Base Address: $6FED0000. Process VulcanTest.exe (9532)
+Module Load: CRYPT32.dll. No Debug Info. Base Address: $778B0000. Process VulcanTest.exe (9532)
+Module Load: Wldp.dll. No Debug Info. Base Address: $70690000. Process VulcanTest.exe (9532)
+Module Load: drvstore.dll. No Debug Info. Base Address: $6EE30000. Process VulcanTest.exe (9532)
+Module Load: DEVOBJ.dll. No Debug Info. Base Address: $6EFD0000. Process VulcanTest.exe (9532)
+Module Load: WINTRUST.dll. No Debug Info. Base Address: $75CE0000. Process VulcanTest.exe (9532)
+Module Load: NTMARTA.dll. No Debug Info. Base Address: $74200000. Process VulcanTest.exe (9532)
+Thread Exit: Thread ID: 32080. Process VulcanTest.exe (9532)
+Thread Start: Thread ID: 31376. Process VulcanTest.exe (9532)
+Module Load: CRYPTSP.dll. No Debug Info. Base Address: $72B70000. Process VulcanTest.exe (9532)
+Module Load: RSAENH.dll. No Debug Info. Base Address: $72B30000. Process VulcanTest.exe (9532)
+Module Load: bcrypt.dll. No Debug Info. Base Address: $72B10000. Process VulcanTest.exe (9532)
+Module Load: nvgpucomp32.dll. No Debug Info. Base Address: $5CEF0000. Process VulcanTest.exe (9532)
+Module Load: CLBCatQ.DLL. No Debug Info. Base Address: $77790000. Process VulcanTest.exe (9532)
+Module Load: RoMetadata.dll. No Debug Info. Base Address: $6B8B0000. Process VulcanTest.exe (9532)
+Module Load: UNKNOWN_MODULE_18. No Debug Info. Base Address: $06000000. Process VulcanTest.exe (9532)
+Module Load: Windows.Storage.dll. No Debug Info. Base Address: $74230000. Process VulcanTest.exe (9532)
+Thread Start: Thread ID: 26524. Process VulcanTest.exe (9532)
+Module Unload: GLU32.dll. Process VulcanTest.exe (9532)
+Module Unload: OPENGL32.dll. Process VulcanTest.exe (9532)
+Module Unload: igdmd32.dll. Process VulcanTest.exe (9532)
+Module Unload: igc32.dll. Process VulcanTest.exe (9532)
+Module Unload: igdgmm32.dll. Process VulcanTest.exe (9532)
+Module Unload: igvk32.dll. Process VulcanTest.exe (9532)
+Module Load: igvk32.dll. No Debug Info. Base Address: $63DF0000. Process VulcanTest.exe (9532)
+Module Load: OPENGL32.dll. No Debug Info. Base Address: $66500000. Process VulcanTest.exe (9532)
+Module Load: GLU32.dll. No Debug Info. Base Address: $6B8E0000. Process VulcanTest.exe (9532)
+Module Load: igdgmm32.dll. No Debug Info. Base Address: $65520000. Process VulcanTest.exe (9532)
+Module Load: igc32.dll. No Debug Info. Base Address: $60EC0000. Process VulcanTest.exe (9532)
+Module Load: igdmd32.dll. No Debug Info. Base Address: $60B80000. Process VulcanTest.exe (9532)
+Module Unload: GLU32.dll. Process VulcanTest.exe (9532)
+Module Unload: OPENGL32.dll. Process VulcanTest.exe (9532)
+Module Unload: igdmd32.dll. Process VulcanTest.exe (9532)
+Module Unload: igc32.dll. Process VulcanTest.exe (9532)
+Module Unload: igdgmm32.dll. Process VulcanTest.exe (9532)
+Module Unload: igvk32.dll. Process VulcanTest.exe (9532)
+Module Load: igvk32.dll. No Debug Info. Base Address: $63DF0000. Process VulcanTest.exe (9532)
+Module Load: OPENGL32.dll. No Debug Info. Base Address: $68ED0000. Process VulcanTest.exe (9532)
+Module Load: GLU32.dll. No Debug Info. Base Address: $6B8E0000. Process VulcanTest.exe (9532)
+Module Load: igdgmm32.dll. No Debug Info. Base Address: $65520000. Process VulcanTest.exe (9532)
+Module Load: igc32.dll. No Debug Info. Base Address: $60EC0000. Process VulcanTest.exe (9532)
+Module Load: igdmd32.dll. No Debug Info. Base Address: $60B80000. Process VulcanTest.exe (9532)
+Module Unload: GLU32.dll. Process VulcanTest.exe (9532)
+Module Unload: OPENGL32.dll. Process VulcanTest.exe (9532)
+Module Unload: igdmd32.dll. Process VulcanTest.exe (9532)
+Module Unload: igc32.dll. Process VulcanTest.exe (9532)
+Module Unload: igdgmm32.dll. Process VulcanTest.exe (9532)
+Module Unload: igvk32.dll. Process VulcanTest.exe (9532)
+Module Load: igvk32.dll. No Debug Info. Base Address: $63DF0000. Process VulcanTest.exe (9532)
+Module Load: OPENGL32.dll. No Debug Info. Base Address: $68ED0000. Process VulcanTest.exe (9532)
+Module Load: GLU32.dll. No Debug Info. Base Address: $6B8E0000. Process VulcanTest.exe (9532)
+Module Load: igdgmm32.dll. No Debug Info. Base Address: $65520000. Process VulcanTest.exe (9532)
+Module Load: igc32.dll. No Debug Info. Base Address: $60EC0000. Process VulcanTest.exe (9532)
+Module Load: igdmd32.dll. No Debug Info. Base Address: $60B80000. Process VulcanTest.exe (9532)
+Module Unload: GLU32.dll. Process VulcanTest.exe (9532)
+Module Unload: OPENGL32.dll. Process VulcanTest.exe (9532)
+Module Unload: igdmd32.dll. Process VulcanTest.exe (9532)
+Module Unload: igc32.dll. Process VulcanTest.exe (9532)
+Module Unload: igdgmm32.dll. Process VulcanTest.exe (9532)
+Module Unload: igvk32.dll. Process VulcanTest.exe (9532)
+Module Load: igvk32.dll. No Debug Info. Base Address: $63DF0000. Process VulcanTest.exe (9532)
+Module Load: OPENGL32.dll. No Debug Info. Base Address: $68ED0000. Process VulcanTest.exe (9532)
+Module Load: GLU32.dll. No Debug Info. Base Address: $6B8E0000. Process VulcanTest.exe (9532)
+Module Load: igdgmm32.dll. No Debug Info. Base Address: $65520000. Process VulcanTest.exe (9532)
+Module Load: igc32.dll. No Debug Info. Base Address: $60EC0000. Process VulcanTest.exe (9532)
+Module Load: igdmd32.dll. No Debug Info. Base Address: $60B80000. Process VulcanTest.exe (9532)
+Module Unload: GLU32.dll. Process VulcanTest.exe (9532)
+Module Unload: OPENGL32.dll. Process VulcanTest.exe (9532)
+Module Unload: igdmd32.dll. Process VulcanTest.exe (9532)
+Module Unload: igc32.dll. Process VulcanTest.exe (9532)
+Module Unload: igdgmm32.dll. Process VulcanTest.exe (9532)
+Module Unload: igvk32.dll. Process VulcanTest.exe (9532)
+Module Load: igvk32.dll. No Debug Info. Base Address: $63DF0000. Process VulcanTest.exe (9532)
+Module Load: OPENGL32.dll. No Debug Info. Base Address: $68ED0000. Process VulcanTest.exe (9532)
+Module Load: GLU32.dll. No Debug Info. Base Address: $6B8E0000. Process VulcanTest.exe (9532)
+Module Load: igdgmm32.dll. No Debug Info. Base Address: $65520000. Process VulcanTest.exe (9532)
+Module Load: igc32.dll. No Debug Info. Base Address: $60EC0000. Process VulcanTest.exe (9532)
+Module Load: igdmd32.dll. No Debug Info. Base Address: $60B80000. Process VulcanTest.exe (9532)
+Module Unload: GLU32.dll. Process VulcanTest.exe (9532)
+Module Unload: OPENGL32.dll. Process VulcanTest.exe (9532)
+Module Unload: igdmd32.dll. Process VulcanTest.exe (9532)
+Module Unload: igc32.dll. Process VulcanTest.exe (9532)
+Module Unload: igdgmm32.dll. Process VulcanTest.exe (9532)
+Module Unload: igvk32.dll. Process VulcanTest.exe (9532)
+Source Breakpoint at $005A3EBC: D:\X1\Vulkan_Package\RunTime_Src\Vulkan_Components_Scene.pas line 398. Process VulcanTest.exe (9532)
+Source Breakpoint at $005A3D9D: D:\X1\Vulkan_Package\RunTime_Src\Vulkan_Components_Scene.pas line 356. Process VulcanTest.exe (9532)
+Source Breakpoint at $005A2C9F: D:\X1\Vulkan_Package\Samples\TestVulkan\Vulkan_Render_Tests.pas line 516. Process VulcanTest.exe (9532)
+Source Breakpoint at $005A3F84: D:\X1\Vulkan_Package\RunTime_Src\Vulkan_Components_Scene.pas line 418. Process VulcanTest.exe (9532)
+Thread Start: Thread ID: 35332. Process VulcanTest.exe (9532)
+Thread Exit: Thread ID: 31376. Process VulcanTest.exe (9532)
+Thread Start: Thread ID: 28996. Process VulcanTest.exe (9532)
+Module Load: igvk32.dll. No Debug Info. Base Address: $63DF0000. Process VulcanTest.exe (9532)
+Module Load: OPENGL32.dll. No Debug Info. Base Address: $66500000. Process VulcanTest.exe (9532)
+Module Load: GLU32.dll. No Debug Info. Base Address: $6B8E0000. Process VulcanTest.exe (9532)
+Module Load: igdgmm32.dll. No Debug Info. Base Address: $65520000. Process VulcanTest.exe (9532)
+Module Load: igc32.dll. No Debug Info. Base Address: $60EC0000. Process VulcanTest.exe (9532)
+Module Load: igdmd32.dll. No Debug Info. Base Address: $60B80000. Process VulcanTest.exe (9532)
+Module Load: VkLayer_khronos_validation.dll. No Debug Info. Base Address: $5BEC0000. Process VulcanTest.exe (9532)
+Module Load: VCRUNTIME140.dll. No Debug Info. Base Address: $6A480000. Process VulcanTest.exe (9532)
+Module Load: MSVCP140.dll. No Debug Info. Base Address: $69950000. Process VulcanTest.exe (9532)
+Module Load: PSAPI.DLL. No Debug Info. Base Address: $76370000. Process VulcanTest.exe (9532)
+Module Load: dbghelp.dll. No Debug Info. Base Address: $6FF00000. Process VulcanTest.exe (9532)
+Module Unload: PSAPI.DLL. Process VulcanTest.exe (9532)
+Module Unload: dbghelp.dll. Process VulcanTest.exe (9532)
+Module Load: PSAPI.DLL. No Debug Info. Base Address: $76370000. Process VulcanTest.exe (9532)
+Module Load: dbghelp.dll. No Debug Info. Base Address: $6FF00000. Process VulcanTest.exe (9532)
+Module Unload: PSAPI.DLL. Process VulcanTest.exe (9532)
+Module Unload: dbghelp.dll. Process VulcanTest.exe (9532)
+Module Load: PSAPI.DLL. No Debug Info. Base Address: $76370000. Process VulcanTest.exe (9532)
+Module Load: dbghelp.dll. No Debug Info. Base Address: $6FF00000. Process VulcanTest.exe (9532)
+Module Unload: PSAPI.DLL. Process VulcanTest.exe (9532)
+Module Unload: dbghelp.dll. Process VulcanTest.exe (9532)
+Module Load: PSAPI.DLL. No Debug Info. Base Address: $76370000. Process VulcanTest.exe (9532)
+Module Load: dbghelp.dll. No Debug Info. Base Address: $6FF00000. Process VulcanTest.exe (9532)
+Module Unload: PSAPI.DLL. Process VulcanTest.exe (9532)
+Module Unload: dbghelp.dll. Process VulcanTest.exe (9532)
+Thread Start: Thread ID: 28428. Process VulcanTest.exe (9532)
+Module Load: NvCameraAllowlisting32.dll. No Debug Info. Base Address: $5BE30000. Process VulcanTest.exe (9532)
+Thread Start: Thread ID: 26504. Process VulcanTest.exe (9532)
+Thread Start: Thread ID: 33160. Process VulcanTest.exe (9532)
+Thread Start: Thread ID: 4128. Process VulcanTest.exe (9532)
+Thread Start: Thread ID: 32700. Process VulcanTest.exe (9532)
+Thread Start: Thread ID: 6752. Process VulcanTest.exe (9532)
+Module Load: nvapi.dll. No Debug Info. Base Address: $5B810000. Process VulcanTest.exe (9532)
+Module Load: DispBroker.dll. No Debug Info. Base Address: $66480000. Process VulcanTest.exe (9532)
+Module Load: nvppe.dll. No Debug Info. Base Address: $5B730000. Process VulcanTest.exe (9532)
+Thread Start: Thread ID: 32024. Process VulcanTest.exe (9532)
+Module Load: POWRPROF.dll. No Debug Info. Base Address: $6BA10000. Process VulcanTest.exe (9532)
+Module Load: UMPDC.dll. No Debug Info. Base Address: $6B9F0000. Process VulcanTest.exe (9532)
+Debug Output:
+VUID-VkShaderModuleCreateInfo-pCode-08737(ERROR / SPEC): msgNum: -1520283006 - Validation Error: [ VUID-VkShaderModuleCreateInfo-pCode-08737 ] | MessageID = 0xa5625282 | vkCreateShaderModule(): pCreateInfo->pCode (spirv-val produced an error):
+[VUID-StandaloneSpirv-OpEntryPoint-08721] Entry-point has conflicting input location assignment at location 1, component 0
+  OpEntryPoint Vertex %main "main" %_ %inPosition %fragColor %inColor %fragTexCoord %inTexCoord
+The Vulkan spec states: If pCode is a pointer to SPIR-V code, pCode must adhere to the validation rules described by the Validation Rules within a Module section of the SPIR-V Environment appendix (https://vulkan.lunarg.com/doc/view/1.3.296.0/windows/1.3-extensions/vkspec.html#VUID-VkShaderModuleCreateInfo-pCode-08737)
+
+Process VulcanTest.exe (9532)
+Debug Output:
+VUID-VkGraphicsPipelineCreateInfo-layout-07987(ERROR / SPEC): msgNum: -69382866 - Validation Error: [ VUID-VkGraphicsPipelineCreateInfo-layout-07987 ] Object 0: handle = 0x210d07000000003a, type = VK_OBJECT_TYPE_SHADER_MODULE; Object 1: handle = 0x9f9b41000000003c, type = VK_OBJECT_TYPE_PIPELINE_LAYOUT; | MessageID = 0xfbdd4d2e | vkCreateGraphicsPipelines(): pCreateInfos[0].pStages[0] SPIR-V (VK_SHADER_STAGE_VERTEX_BIT) Push constant are used, but VkPipelineLayout 0x9f9b41000000003c[] doesn't set VK_SHADER_STAGE_VERTEX_BIT.
+The Vulkan spec states: If a push constant block is declared in a shader, a push constant range in layout must match the shader stage (https://vulkan.lunarg.com/doc/view/1.3.296.0/windows/1.3-extensions/vkspec.html#VUID-VkGraphicsPipelineCreateInfo-layout-07987)
+    Objects: 2
+       [0]  0x210d07000000003a, type: 15, name: NULL
+       [1]  0x9f9b41000000003c, type: 17, name: NULL
+
+Process VulcanTest.exe (9532)
+Debug Output:
+VUID-VkGraphicsPipelineCreateInfo-layout-07988(ERROR / SPEC): msgNum: 559874765 - Validation Error: [ VUID-VkGraphicsPipelineCreateInfo-layout-07988 ] Object 0: handle = 0x210d07000000003a, type = VK_OBJECT_TYPE_SHADER_MODULE; Object 1: handle = 0x9f9b41000000003c, type = VK_OBJECT_TYPE_PIPELINE_LAYOUT; | MessageID = 0x215f02cd | vkCreateGraphicsPipelines(): pCreateInfos[0].pStages[0] SPIR-V (VK_SHADER_STAGE_VERTEX_BIT) uses descriptor [Set 0, Binding 0, variable "viewproj"] (type VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK or VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER or VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC) but was not declared in the pipeline layout.
+The Vulkan spec states: If a resource variables is declared in a shader, a descriptor slot in layout must match the shader stage (https://vulkan.lunarg.com/doc/view/1.3.296.0/windows/1.3-extensions/vkspec.html#VUID-VkGraphicsPipelineCreateInfo-layout-07988)
+    Objects: 2
+       [0]  0x210d07000000003a, type: 15, name: NULL
+       [1]  0x9f9b41000000003c, type: 17, n
+Process VulcanTest.exe (9532)
+Debug Output:
+VUID-VkGraphicsPipelineCreateInfo-layout-07988(ERROR / SPEC): msgNum: 559874765 - Validation Error: [ VUID-VkGraphicsPipelineCreateInfo-layout-07988 ] Object 0: handle = 0x5eb05e000000003b, type = VK_OBJECT_TYPE_SHADER_MODULE; Object 1: handle = 0x9f9b41000000003c, type = VK_OBJECT_TYPE_PIPELINE_LAYOUT; | MessageID = 0x215f02cd | vkCreateGraphicsPipelines(): pCreateInfos[0].pStages[1] SPIR-V (VK_SHADER_STAGE_FRAGMENT_BIT) uses descriptor [Set 1, Binding 0, variable "texSampler"] (type VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) but was not declared in the pipeline layout.
+The Vulkan spec states: If a resource variables is declared in a shader, a descriptor slot in layout must match the shader stage (https://vulkan.lunarg.com/doc/view/1.3.296.0/windows/1.3-extensions/vkspec.html#VUID-VkGraphicsPipelineCreateInfo-layout-07988)
+    Objects: 2
+       [0]  0x5eb05e000000003b, type: 15, name: NULL
+       [1]  0x9f9b41000000003c, type: 17, name: NULL
+
+Process VulcanTest.exe (9532)
+Debug Output:
+VUID-VkGraphicsPipelineCreateInfo-Input-07904(ERROR / SPEC): msgNum: -862178626 - Validation Error: [ VUID-VkGraphicsPipelineCreateInfo-Input-07904 ] Object 0: handle = 0x210d07000000003a, type = VK_OBJECT_TYPE_SHADER_MODULE; | MessageID = 0xcc9c32be | vkCreateGraphicsPipelines(): pCreateInfos[0].pVertexInputState->pVertexAttributeDescriptions does not have a Location 2 but vertex shader has an input variable at that Location.
+The Vulkan spec states: If the pipeline is being created with vertex input state and pVertexInputState is not dynamic, then all variables with the Input storage class decorated with Location in the Vertex Execution Model OpEntryPoint must contain a location in VkVertexInputAttributeDescription::location (https://vulkan.lunarg.com/doc/view/1.3.296.0/windows/1.3-extensions/vkspec.html#VUID-VkGraphicsPipelineCreateInfo-Input-07904)
+    Objects: 1
+       [0]  0x210d07000000003a, type: 15, name: NULL
+
+Process VulcanTest.exe (9532)
+Debug Output:
+VUID-VkGraphicsPipelineCreateInfo-layout-07987(ERROR / SPEC): msgNum: -69382866 - Validation Error: [ VUID-VkGraphicsPipelineCreateInfo-layout-07987 ] Object 0: handle = 0x210d07000000003a, type = VK_OBJECT_TYPE_SHADER_MODULE; Object 1: handle = 0x9f9b41000000003c, type = VK_OBJECT_TYPE_PIPELINE_LAYOUT; | MessageID = 0xfbdd4d2e | vkCreateGraphicsPipelines(): pCreateInfos[1].pStages[0] SPIR-V (VK_SHADER_STAGE_VERTEX_BIT) Push constant are used, but VkPipelineLayout 0x9f9b41000000003c[] doesn't set VK_SHADER_STAGE_VERTEX_BIT.
+The Vulkan spec states: If a push constant block is declared in a shader, a push constant range in layout must match the shader stage (https://vulkan.lunarg.com/doc/view/1.3.296.0/windows/1.3-extensions/vkspec.html#VUID-VkGraphicsPipelineCreateInfo-layout-07987)
+    Objects: 2
+       [0]  0x210d07000000003a, type: 15, name: NULL
+       [1]  0x9f9b41000000003c, type: 17, name: NULL
+
+Process VulcanTest.exe (9532)
+Debug Output:
+VUID-VkGraphicsPipelineCreateInfo-layout-07988(ERROR / SPEC): msgNum: 559874765 - Validation Error: [ VUID-VkGraphicsPipelineCreateInfo-layout-07988 ] Object 0: handle = 0x210d07000000003a, type = VK_OBJECT_TYPE_SHADER_MODULE; Object 1: handle = 0x9f9b41000000003c, type = VK_OBJECT_TYPE_PIPELINE_LAYOUT; | MessageID = 0x215f02cd | vkCreateGraphicsPipelines(): pCreateInfos[1].pStages[0] SPIR-V (VK_SHADER_STAGE_VERTEX_BIT) uses descriptor [Set 0, Binding 0, variable "viewproj"] (type VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK or VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER or VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC) but was not declared in the pipeline layout.
+The Vulkan spec states: If a resource variables is declared in a shader, a descriptor slot in layout must match the shader stage (https://vulkan.lunarg.com/doc/view/1.3.296.0/windows/1.3-extensions/vkspec.html#VUID-VkGraphicsPipelineCreateInfo-layout-07988)
+    Objects: 2
+       [0]  0x210d07000000003a, type: 15, name: NULL
+       [1]  0x9f9b41000000003c, type: 17, n
+Process VulcanTest.exe (9532)
+Debug Output:
+VUID-VkGraphicsPipelineCreateInfo-layout-07988(ERROR / SPEC): msgNum: 559874765 - Validation Error: [ VUID-VkGraphicsPipelineCreateInfo-layout-07988 ] Object 0: handle = 0x5eb05e000000003b, type = VK_OBJECT_TYPE_SHADER_MODULE; Object 1: handle = 0x9f9b41000000003c, type = VK_OBJECT_TYPE_PIPELINE_LAYOUT; | MessageID = 0x215f02cd | vkCreateGraphicsPipelines(): pCreateInfos[1].pStages[1] SPIR-V (VK_SHADER_STAGE_FRAGMENT_BIT) uses descriptor [Set 1, Binding 0, variable "texSampler"] (type VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) but was not declared in the pipeline layout.
+The Vulkan spec states: If a resource variables is declared in a shader, a descriptor slot in layout must match the shader stage (https://vulkan.lunarg.com/doc/view/1.3.296.0/windows/1.3-extensions/vkspec.html#VUID-VkGraphicsPipelineCreateInfo-layout-07988)
+    Objects: 2
+       [0]  0x5eb05e000000003b, type: 15, name: NULL
+       [1]  0x9f9b41000000003c, type: 17, name: NULL
+
+Process VulcanTest.exe (9532)
+Debug Output:
+VUID-VkGraphicsPipelineCreateInfo-Input-07904(ERROR / SPEC): msgNum: -862178626 - Validation Error: [ VUID-VkGraphicsPipelineCreateInfo-Input-07904 ] Object 0: handle = 0x210d07000000003a, type = VK_OBJECT_TYPE_SHADER_MODULE; | MessageID = 0xcc9c32be | vkCreateGraphicsPipelines(): pCreateInfos[1].pVertexInputState->pVertexAttributeDescriptions does not have a Location 2 but vertex shader has an input variable at that Location.
+The Vulkan spec states: If the pipeline is being created with vertex input state and pVertexInputState is not dynamic, then all variables with the Input storage class decorated with Location in the Vertex Execution Model OpEntryPoint must contain a location in VkVertexInputAttributeDescription::location (https://vulkan.lunarg.com/doc/view/1.3.296.0/windows/1.3-extensions/vkspec.html#VUID-VkGraphicsPipelineCreateInfo-Input-07904)
+    Objects: 1
+       [0]  0x210d07000000003a, type: 15, name: NULL
+
+Process VulcanTest.exe (9532)
+Thread Start: Thread ID: 30004. Process VulcanTest.exe (9532)
+Debug Output:
+VUID-vkCmdDrawIndexed-None-08600(ERROR / SPEC): msgNum: 941228658 - Validation Error: [ VUID-vkCmdDrawIndexed-None-08600 ] Object 0: handle = 0x5c5283000000003e, type = VK_OBJECT_TYPE_PIPELINE; | MessageID = 0x381a0272 | vkCmdDrawIndexed():  The VkPipeline 0x5c5283000000003e[] (created with VkPipelineLayout 0x9f9b41000000003c[]) statically uses descriptor set 1, but all sets 0 to 1 are not compatible with the pipeline layout bound with INVALID_EMPTY (VkNonDispatchableHandle 0x0[])
+The set (1) is out of bounds for the number of sets bound (0)
+The Vulkan spec states: For each set n that is statically used by a bound shader, a descriptor set must have been bound to n at the same pipeline bind point, with a VkPipelineLayout that is compatible for set n, with the VkPipelineLayout used to create the current VkPipeline or the VkDescriptorSetLayout array used to create the current VkShaderEXT , as described in Pipeline Layout Compatibility (https://vulkan.lunarg.com/doc/view/1.3.296.0/windows/1.3-extensions/vkspec.h
+Process VulcanTest.exe (9532)
+Thread Start: Thread ID: 3368. Process VulcanTest.exe (9532)
+Thread Start: Thread ID: 20540. Process VulcanTest.exe (9532)
+Thread Exit: Thread ID: 3368. Process VulcanTest.exe (9532)
+Thread Exit: Thread ID: 30004. Process VulcanTest.exe (9532)
+Thread Exit: Thread ID: 20540. Process VulcanTest.exe (9532)
+Thread Exit: Thread ID: 6752. Process VulcanTest.exe (9532)
+Thread Exit: Thread ID: 32700. Process VulcanTest.exe (9532)
+Thread Exit: Thread ID: 33160. Process VulcanTest.exe (9532)
+Thread Exit: Thread ID: 4128. Process VulcanTest.exe (9532)
+Thread Exit: Thread ID: 26504. Process VulcanTest.exe (9532)
+Module Unload: MSVCP140.dll. Process VulcanTest.exe (9532)
+Module Unload: VCRUNTIME140.dll. Process VulcanTest.exe (9532)
+Module Unload: VkLayer_khronos_validation.dll. Process VulcanTest.exe (9532)
+Module Unload: igdmd32.dll. Process VulcanTest.exe (9532)
+Module Unload: igc32.dll. Process VulcanTest.exe (9532)
+Module Unload: igdgmm32.dll. Process VulcanTest.exe (9532)
+Module Unload: igvk32.dll. Process VulcanTest.exe (9532)
+Module Load: igvk32.dll. No Debug Info. Base Address: $63DF0000. Process VulcanTest.exe (9532)
+Module Load: igdgmm32.dll. No Debug Info. Base Address: $68C90000. Process VulcanTest.exe (9532)
+Module Load: igc32.dll. No Debug Info. Base Address: $60EC0000. Process VulcanTest.exe (9532)
+Module Load: igdmd32.dll. No Debug Info. Base Address: $65510000. Process VulcanTest.exe (9532)
+Module Unload: igdmd32.dll. Process VulcanTest.exe (9532)
+Module Unload: igc32.dll. Process VulcanTest.exe (9532)
+Module Unload: igdgmm32.dll. Process VulcanTest.exe (9532)
+Module Unload: igvk32.dll. Process VulcanTest.exe (9532)
+Module Load: igvk32.dll. No Debug Info. Base Address: $63DF0000. Process VulcanTest.exe (9532)
+Module Load: igdgmm32.dll. No Debug Info. Base Address: $68C90000. Process VulcanTest.exe (9532)
+Module Load: igc32.dll. No Debug Info. Base Address: $60EC0000. Process VulcanTest.exe (9532)
+Module Load: igdmd32.dll. No Debug Info. Base Address: $65510000. Process VulcanTest.exe (9532)
+Module Unload: igdmd32.dll. Process VulcanTest.exe (9532)
+Module Unload: igc32.dll. Process VulcanTest.exe (9532)
+Module Unload: igdgmm32.dll. Process VulcanTest.exe (9532)
+Module Unload: igvk32.dll. Process VulcanTest.exe (9532)
+Module Load: igvk32.dll. No Debug Info. Base Address: $63DF0000. Process VulcanTest.exe (9532)
+Module Load: igdgmm32.dll. No Debug Info. Base Address: $68C90000. Process VulcanTest.exe (9532)
+Module Load: igc32.dll. No Debug Info. Base Address: $60EC0000. Process VulcanTest.exe (9532)
+Module Load: igdmd32.dll. No Debug Info. Base Address: $65510000. Process VulcanTest.exe (9532)
+Module Unload: igdmd32.dll. Process VulcanTest.exe (9532)
+Module Unload: igc32.dll. Process VulcanTest.exe (9532)
+Module Unload: igdgmm32.dll. Process VulcanTest.exe (9532)
+Module Unload: igvk32.dll. Process VulcanTest.exe (9532)
+Module Load: igvk32.dll. No Debug Info. Base Address: $63DF0000. Process VulcanTest.exe (9532)
+Module Load: igdgmm32.dll. No Debug Info. Base Address: $68C90000. Process VulcanTest.exe (9532)
+Module Load: igc32.dll. No Debug Info. Base Address: $60EC0000. Process VulcanTest.exe (9532)
+Module Load: igdmd32.dll. No Debug Info. Base Address: $65510000. Process VulcanTest.exe (9532)
+Module Unload: igdmd32.dll. Process VulcanTest.exe (9532)
+Module Unload: igc32.dll. Process VulcanTest.exe (9532)
+Module Unload: igdgmm32.dll. Process VulcanTest.exe (9532)
+Module Unload: igvk32.dll. Process VulcanTest.exe (9532)
+Module Load: igvk32.dll. No Debug Info. Base Address: $63DF0000. Process VulcanTest.exe (9532)
+Module Load: igdgmm32.dll. No Debug Info. Base Address: $68C90000. Process VulcanTest.exe (9532)
+Module Load: igc32.dll. No Debug Info. Base Address: $60EC0000. Process VulcanTest.exe (9532)
+Module Load: igdmd32.dll. No Debug Info. Base Address: $65510000. Process VulcanTest.exe (9532)
+Module Unload: igdmd32.dll. Process VulcanTest.exe (9532)
+Module Unload: igc32.dll. Process VulcanTest.exe (9532)
+Module Unload: igdgmm32.dll. Process VulcanTest.exe (9532)
+Module Unload: igvk32.dll. Process VulcanTest.exe (9532)
+Module Load: igvk32.dll. No Debug Info. Base Address: $63DF0000. Process VulcanTest.exe (9532)
+Module Load: igdgmm32.dll. No Debug Info. Base Address: $68C90000. Process VulcanTest.exe (9532)
+Module Load: igc32.dll. No Debug Info. Base Address: $60EC0000. Process VulcanTest.exe (9532)
+Module Load: igdmd32.dll. No Debug Info. Base Address: $65510000. Process VulcanTest.exe (9532)
+Module Unload: igdmd32.dll. Process VulcanTest.exe (9532)
+Module Unload: igc32.dll. Process VulcanTest.exe (9532)
+Module Unload: igdgmm32.dll. Process VulcanTest.exe (9532)
+Module Unload: igvk32.dll. Process VulcanTest.exe (9532)
+Source Breakpoint at $77AB96CC: D:\X1\Vulkan_Package\RunTime_Src\Vulkan_Components_Scene.pas line 398. Process VulcanTest.exe (9532)
+Source Breakpoint at $005A3D9D: D:\X1\Vulkan_Package\RunTime_Src\Vulkan_Components_Scene.pas line 356. Process VulcanTest.exe (9532)
+Source Breakpoint at $005A2C9F: D:\X1\Vulkan_Package\Samples\TestVulkan\Vulkan_Render_Tests.pas line 516. Process VulcanTest.exe (9532)
+Source Breakpoint at $005A3F84: D:\X1\Vulkan_Package\RunTime_Src\Vulkan_Components_Scene.pas line 418. Process VulcanTest.exe (9532)
+Source Breakpoint at $005A4068: D:\X1\Vulkan_Package\RunTime_Src\Vulkan_Components_Scene.pas line 418. Process VulcanTest.exe (9532)
+Thread Exit: Thread ID: 28428. Process VulcanTest.exe (9532)
+Module Load: igvk32.dll. No Debug Info. Base Address: $63DF0000. Process VulcanTest.exe (9532)
+Module Load: igdgmm32.dll. No Debug Info. Base Address: $65520000. Process VulcanTest.exe (9532)
+Module Load: igc32.dll. No Debug Info. Base Address: $60EC0000. Process VulcanTest.exe (9532)
+Module Load: igdmd32.dll. No Debug Info. Base Address: $60B80000. Process VulcanTest.exe (9532)
+Module Load: VkLayer_khronos_validation.dll. No Debug Info. Base Address: $5BEC0000. Process VulcanTest.exe (9532)
+Module Load: MSVCP140.dll. No Debug Info. Base Address: $69950000. Process VulcanTest.exe (9532)
+Module Load: VCRUNTIME140.dll. No Debug Info. Base Address: $6A480000. Process VulcanTest.exe (9532)
+Thread Start: Thread ID: 20156. Process VulcanTest.exe (9532)
+Thread Start: Thread ID: 29412. Process VulcanTest.exe (9532)
+Thread Start: Thread ID: 19700. Process VulcanTest.exe (9532)
+Thread Start: Thread ID: 14484. Process VulcanTest.exe (9532)
+Thread Start: Thread ID: 27764. Process VulcanTest.exe (9532)
+Debug Output:
+VUID-VkShaderModuleCreateInfo-pCode-08737(ERROR / SPEC): msgNum: -1520283006 - Validation Error: [ VUID-VkShaderModuleCreateInfo-pCode-08737 ] | MessageID = 0xa5625282 | vkCreateShaderModule(): pCreateInfo->pCode (spirv-val produced an error):
+[VUID-StandaloneSpirv-OpEntryPoint-08721] Entry-point has conflicting input location assignment at location 1, component 0
+  OpEntryPoint Vertex %main "main" %_ %inPosition %fragColor %inColor %fragTexCoord %inTexCoord
+The Vulkan spec states: If pCode is a pointer to SPIR-V code, pCode must adhere to the validation rules described by the Validation Rules within a Module section of the SPIR-V Environment appendix (https://vulkan.lunarg.com/doc/view/1.3.296.0/windows/1.3-extensions/vkspec.html#VUID-VkShaderModuleCreateInfo-pCode-08737)
+
+Process VulcanTest.exe (9532)
+Debug Output:
+VUID-VkGraphicsPipelineCreateInfo-layout-07987(ERROR / SPEC): msgNum: -69382866 - Validation Error: [ VUID-VkGraphicsPipelineCreateInfo-layout-07987 ] Object 0: handle = 0x210d07000000003a, type = VK_OBJECT_TYPE_SHADER_MODULE; Object 1: handle = 0x9f9b41000000003c, type = VK_OBJECT_TYPE_PIPELINE_LAYOUT; | MessageID = 0xfbdd4d2e | vkCreateGraphicsPipelines(): pCreateInfos[0].pStages[0] SPIR-V (VK_SHADER_STAGE_VERTEX_BIT) Push constant are used, but VkPipelineLayout 0x9f9b41000000003c[] doesn't set VK_SHADER_STAGE_VERTEX_BIT.
+The Vulkan spec states: If a push constant block is declared in a shader, a push constant range in layout must match the shader stage (https://vulkan.lunarg.com/doc/view/1.3.296.0/windows/1.3-extensions/vkspec.html#VUID-VkGraphicsPipelineCreateInfo-layout-07987)
+    Objects: 2
+       [0]  0x210d07000000003a, type: 15, name: NULL
+       [1]  0x9f9b41000000003c, type: 17, name: NULL
+
+Process VulcanTest.exe (9532)
+Debug Output:
+VUID-VkGraphicsPipelineCreateInfo-layout-07988(ERROR / SPEC): msgNum: 559874765 - Validation Error: [ VUID-VkGraphicsPipelineCreateInfo-layout-07988 ] Object 0: handle = 0x210d07000000003a, type = VK_OBJECT_TYPE_SHADER_MODULE; Object 1: handle = 0x9f9b41000000003c, type = VK_OBJECT_TYPE_PIPELINE_LAYOUT; | MessageID = 0x215f02cd | vkCreateGraphicsPipelines(): pCreateInfos[0].pStages[0] SPIR-V (VK_SHADER_STAGE_VERTEX_BIT) uses descriptor [Set 0, Binding 0, variable "viewproj"] (type VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK or VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER or VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC) but was not declared in the pipeline layout.
+The Vulkan spec states: If a resource variables is declared in a shader, a descriptor slot in layout must match the shader stage (https://vulkan.lunarg.com/doc/view/1.3.296.0/windows/1.3-extensions/vkspec.html#VUID-VkGraphicsPipelineCreateInfo-layout-07988)
+    Objects: 2
+       [0]  0x210d07000000003a, type: 15, name: NULL
+       [1]  0x9f9b41000000003c, type: 17, n
+Process VulcanTest.exe (9532)
+Debug Output:
+VUID-VkGraphicsPipelineCreateInfo-layout-07988(ERROR / SPEC): msgNum: 559874765 - Validation Error: [ VUID-VkGraphicsPipelineCreateInfo-layout-07988 ] Object 0: handle = 0x5eb05e000000003b, type = VK_OBJECT_TYPE_SHADER_MODULE; Object 1: handle = 0x9f9b41000000003c, type = VK_OBJECT_TYPE_PIPELINE_LAYOUT; | MessageID = 0x215f02cd | vkCreateGraphicsPipelines(): pCreateInfos[0].pStages[1] SPIR-V (VK_SHADER_STAGE_FRAGMENT_BIT) uses descriptor [Set 1, Binding 0, variable "texSampler"] (type VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) but was not declared in the pipeline layout.
+The Vulkan spec states: If a resource variables is declared in a shader, a descriptor slot in layout must match the shader stage (https://vulkan.lunarg.com/doc/view/1.3.296.0/windows/1.3-extensions/vkspec.html#VUID-VkGraphicsPipelineCreateInfo-layout-07988)
+    Objects: 2
+       [0]  0x5eb05e000000003b, type: 15, name: NULL
+       [1]  0x9f9b41000000003c, type: 17, name: NULL
+
+Process VulcanTest.exe (9532)
+Debug Output:
+VUID-VkGraphicsPipelineCreateInfo-Input-07904(ERROR / SPEC): msgNum: -862178626 - Validation Error: [ VUID-VkGraphicsPipelineCreateInfo-Input-07904 ] Object 0: handle = 0x210d07000000003a, type = VK_OBJECT_TYPE_SHADER_MODULE; | MessageID = 0xcc9c32be | vkCreateGraphicsPipelines(): pCreateInfos[0].pVertexInputState->pVertexAttributeDescriptions does not have a Location 2 but vertex shader has an input variable at that Location.
+The Vulkan spec states: If the pipeline is being created with vertex input state and pVertexInputState is not dynamic, then all variables with the Input storage class decorated with Location in the Vertex Execution Model OpEntryPoint must contain a location in VkVertexInputAttributeDescription::location (https://vulkan.lunarg.com/doc/view/1.3.296.0/windows/1.3-extensions/vkspec.html#VUID-VkGraphicsPipelineCreateInfo-Input-07904)
+    Objects: 1
+       [0]  0x210d07000000003a, type: 15, name: NULL
+
+Process VulcanTest.exe (9532)
+Debug Output:
+VUID-VkGraphicsPipelineCreateInfo-layout-07987(ERROR / SPEC): msgNum: -69382866 - Validation Error: [ VUID-VkGraphicsPipelineCreateInfo-layout-07987 ] Object 0: handle = 0x210d07000000003a, type = VK_OBJECT_TYPE_SHADER_MODULE; Object 1: handle = 0x9f9b41000000003c, type = VK_OBJECT_TYPE_PIPELINE_LAYOUT; | MessageID = 0xfbdd4d2e | vkCreateGraphicsPipelines(): pCreateInfos[1].pStages[0] SPIR-V (VK_SHADER_STAGE_VERTEX_BIT) Push constant are used, but VkPipelineLayout 0x9f9b41000000003c[] doesn't set VK_SHADER_STAGE_VERTEX_BIT.
+The Vulkan spec states: If a push constant block is declared in a shader, a push constant range in layout must match the shader stage (https://vulkan.lunarg.com/doc/view/1.3.296.0/windows/1.3-extensions/vkspec.html#VUID-VkGraphicsPipelineCreateInfo-layout-07987)
+    Objects: 2
+       [0]  0x210d07000000003a, type: 15, name: NULL
+       [1]  0x9f9b41000000003c, type: 17, name: NULL
+
+Process VulcanTest.exe (9532)
+Debug Output:
+VUID-VkGraphicsPipelineCreateInfo-layout-07988(ERROR / SPEC): msgNum: 559874765 - Validation Error: [ VUID-VkGraphicsPipelineCreateInfo-layout-07988 ] Object 0: handle = 0x210d07000000003a, type = VK_OBJECT_TYPE_SHADER_MODULE; Object 1: handle = 0x9f9b41000000003c, type = VK_OBJECT_TYPE_PIPELINE_LAYOUT; | MessageID = 0x215f02cd | vkCreateGraphicsPipelines(): pCreateInfos[1].pStages[0] SPIR-V (VK_SHADER_STAGE_VERTEX_BIT) uses descriptor [Set 0, Binding 0, variable "viewproj"] (type VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK or VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER or VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC) but was not declared in the pipeline layout.
+The Vulkan spec states: If a resource variables is declared in a shader, a descriptor slot in layout must match the shader stage (https://vulkan.lunarg.com/doc/view/1.3.296.0/windows/1.3-extensions/vkspec.html#VUID-VkGraphicsPipelineCreateInfo-layout-07988)
+    Objects: 2
+       [0]  0x210d07000000003a, type: 15, name: NULL
+       [1]  0x9f9b41000000003c, type: 17, n
+Process VulcanTest.exe (9532)
+Debug Output:
+VUID-VkGraphicsPipelineCreateInfo-layout-07988(ERROR / SPEC): msgNum: 559874765 - Validation Error: [ VUID-VkGraphicsPipelineCreateInfo-layout-07988 ] Object 0: handle = 0x5eb05e000000003b, type = VK_OBJECT_TYPE_SHADER_MODULE; Object 1: handle = 0x9f9b41000000003c, type = VK_OBJECT_TYPE_PIPELINE_LAYOUT; | MessageID = 0x215f02cd | vkCreateGraphicsPipelines(): pCreateInfos[1].pStages[1] SPIR-V (VK_SHADER_STAGE_FRAGMENT_BIT) uses descriptor [Set 1, Binding 0, variable "texSampler"] (type VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) but was not declared in the pipeline layout.
+The Vulkan spec states: If a resource variables is declared in a shader, a descriptor slot in layout must match the shader stage (https://vulkan.lunarg.com/doc/view/1.3.296.0/windows/1.3-extensions/vkspec.html#VUID-VkGraphicsPipelineCreateInfo-layout-07988)
+    Objects: 2
+       [0]  0x5eb05e000000003b, type: 15, name: NULL
+       [1]  0x9f9b41000000003c, type: 17, name: NULL
+
+Process VulcanTest.exe (9532)
+Debug Output:
+VUID-VkGraphicsPipelineCreateInfo-Input-07904(ERROR / SPEC): msgNum: -862178626 - Validation Error: [ VUID-VkGraphicsPipelineCreateInfo-Input-07904 ] Object 0: handle = 0x210d07000000003a, type = VK_OBJECT_TYPE_SHADER_MODULE; | MessageID = 0xcc9c32be | vkCreateGraphicsPipelines(): pCreateInfos[1].pVertexInputState->pVertexAttributeDescriptions does not have a Location 2 but vertex shader has an input variable at that Location.
+The Vulkan spec states: If the pipeline is being created with vertex input state and pVertexInputState is not dynamic, then all variables with the Input storage class decorated with Location in the Vertex Execution Model OpEntryPoint must contain a location in VkVertexInputAttributeDescription::location (https://vulkan.lunarg.com/doc/view/1.3.296.0/windows/1.3-extensions/vkspec.html#VUID-VkGraphicsPipelineCreateInfo-Input-07904)
+    Objects: 1
+       [0]  0x210d07000000003a, type: 15, name: NULL
+
+Process VulcanTest.exe (9532)
+Thread Start: Thread ID: 32388. Process VulcanTest.exe (9532)
+Debug Output:
+VUID-vkCmdDraw-None-08600(ERROR / SPEC): msgNum: 1198051129 - Validation Error: [ VUID-vkCmdDraw-None-08600 ] Object 0: handle = 0x5c5283000000003e, type = VK_OBJECT_TYPE_PIPELINE; | MessageID = 0x4768cf39 | vkCmdDraw():  The VkPipeline 0x5c5283000000003e[] (created with VkPipelineLayout 0x9f9b41000000003c[]) statically uses descriptor set 1, but all sets 0 to 1 are not compatible with the pipeline layout bound with INVALID_EMPTY (VkNonDispatchableHandle 0x0[])
+The set (1) is out of bounds for the number of sets bound (0)
+The Vulkan spec states: For each set n that is statically used by a bound shader, a descriptor set must have been bound to n at the same pipeline bind point, with a VkPipelineLayout that is compatible for set n, with the VkPipelineLayout used to create the current VkPipeline or the VkDescriptorSetLayout array used to create the current VkShaderEXT , as described in Pipeline Layout Compatibility (https://vulkan.lunarg.com/doc/view/1.3.296.0/windows/1.3-extensions/vkspec.html#VUID-vkCmdDraw-N
+Process VulcanTest.exe (9532)
+Thread Start: Thread ID: 26840. Process VulcanTest.exe (9532)
+Thread Start: Thread ID: 27444. Process VulcanTest.exe (9532)
+Thread Start: Thread ID: 32604. Process VulcanTest.exe (9532)

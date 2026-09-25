@@ -1,0 +1,84 @@
+name: Delphi Tests
+
+# Runs the console test programs in Tests\ (see Tests\README.md) against a
+# real dcc32 build - not a lint pass, an actual compile-and-run of every
+# unit these tests cover.
+#
+# This NEEDS a self-hosted Windows runner with:
+#   - Delphi/RAD Studio installed (dcc32.exe on disk - Tests\RunTests.bat
+#     auto-detects Studio 37.0, 23.0 or 22.0 under Program Files (x86), or
+#     set the BDS env var below if yours is elsewhere/another version)
+#   - a PasVulkan checkout (Tests\RunTests.bat auto-detects it at
+#     ..\..\Vulkan relative to this repo, or D:\Vulkan, or C:\Vulkan; set
+#     PASVULKAN below if yours is elsewhere)
+#
+# No GitHub-hosted runner has a Delphi licence installed, so this cannot run
+# there. It also does not need a GPU or a Vulkan device: every test in the
+# suite is CPU-only by design (see "No device needed" in Tests\README.md).
+#
+# To register a self-hosted runner: repo Settings > Actions > Runners > New
+# self-hosted runner, follow the Windows instructions it gives you on the
+# machine that has Delphi and PasVulkan installed. The runner registers
+# itself with the "self-hosted" and "Windows" labels below automatically;
+# no extra configuration is needed for the runs-on selector as written.
+#
+# Note for public repos: GitHub already requires manual approval before a
+# workflow from a first-time external contributor's pull request runs on a
+# self-hosted runner (Settings > Actions > General > Fork pull request
+# workflows). Leave that on - a self-hosted runner executes whatever the PR
+# branch's workflow file says, with access to this machine.
+#
+# This workflow uses no external actions, because the repository restricts
+# Actions to allowed_actions=local_only. See the comment above the steps
+# before adding a `uses:` line.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: delphi-tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 20
+
+    steps:
+      # Deliberately no `uses:` anywhere in this job.  This repository is set
+      # to allowed_actions=local_only, which blocks external actions such as
+      # actions/checkout and actions/upload-artifact: a run referencing one
+      # dies at startup in about a second with startup_failure, before any job
+      # is created, and the only clue is "likely a workflow file issue".  Keep
+      # these steps plain shell unless that repository setting changes.
+      - name: Checkout
+        shell: cmd
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git init -q || exit /b 1
+          git fetch --depth=1 --force https://x-access-token:%GH_TOKEN%@github.com/%GITHUB_REPOSITORY%.git %GITHUB_SHA% || exit /b 1
+          git checkout --force FETCH_HEAD || exit /b 1
+          git --no-pager log -1 --oneline
+
+      - name: Run Delphi test suite
+        shell: cmd
+        run: Tests\RunTests.bat
+
+
+      # Stands in for actions/upload-artifact: dump the logs into the job
+      # output instead, where they are just as readable for a failed build.
+      - name: Show build logs on failure
+        if: failure()
+        shell: powershell
+        run: |
+          $logs = Get-ChildItem Tests\Win32\*.build.log -ErrorAction SilentlyContinue
+          if (-not $logs) { Write-Host 'No build logs found.'; return }
+          foreach ($log in $logs) {
+            Write-Host "===== $($log.Name) ====="
+            Get-Content -LiteralPath $log.FullName
+          }
