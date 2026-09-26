@@ -127,7 +127,6 @@
             <Form>VGEditor</Form>
             <FormType>dfm</FormType>
         </DCCReference>
-        <DCCReference Include="TestVulkanTestMF.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
