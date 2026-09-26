@@ -3,6 +3,9 @@
         <ProjectGuid>{FE136DA0-0C05-4F5F-8910-14F2CD2D4243}</ProjectGuid>
     </PropertyGroup>
     <ItemGroup>
+        <Projects Include="..\Samples\SimpleTest\SimpleTest.dproj">
+            <Dependencies/>
+        </Projects>
         <Projects Include="VulkanPkgR280.dproj">
             <Dependencies/>
         </Projects>
@@ -26,6 +29,15 @@
             <Default.Personality/>
         </BorlandProject>
     </ProjectExtensions>
+    <Target Name="SimpleTest">
+        <MSBuild Projects="..\Samples\SimpleTest\SimpleTest.dproj"/>
+    </Target>
+    <Target Name="SimpleTest:Clean">
+        <MSBuild Projects="..\Samples\SimpleTest\SimpleTest.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="SimpleTest:Make">
+        <MSBuild Projects="..\Samples\SimpleTest\SimpleTest.dproj" Targets="Make"/>
+    </Target>
     <Target Name="VulkanPkgR280">
         <MSBuild Projects="VulkanPkgR280.dproj"/>
     </Target>
@@ -72,13 +84,13 @@
         <MSBuild Projects="VulkanPkg_FMXR350.dproj" Targets="Make"/>
     </Target>
     <Target Name="Build">
-        <CallTarget Targets="VulkanPkgR280;VulkanPkgD280;VulkanPkg_VCLR280;VulkanPkg_VCLD280;VulkanPkg_FMXR350"/>
+        <CallTarget Targets="SimpleTest;VulkanPkgR280;VulkanPkgD280;VulkanPkg_VCLR280;VulkanPkg_VCLD280;VulkanPkg_FMXR350"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="VulkanPkgR280:Clean;VulkanPkgD280:Clean;VulkanPkg_VCLR280:Clean;VulkanPkg_VCLD280:Clean;VulkanPkg_FMXR350:Clean"/>
+        <CallTarget Targets="SimpleTest:Clean;VulkanPkgR280:Clean;VulkanPkgD280:Clean;VulkanPkg_VCLR280:Clean;VulkanPkg_VCLD280:Clean;VulkanPkg_FMXR350:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="VulkanPkgR280:Make;VulkanPkgD280:Make;VulkanPkg_VCLR280:Make;VulkanPkg_VCLD280:Make;VulkanPkg_FMXR350:Make"/>
+        <CallTarget Targets="SimpleTest:Make;VulkanPkgR280:Make;VulkanPkgD280:Make;VulkanPkg_VCLR280:Make;VulkanPkg_VCLD280:Make;VulkanPkg_FMXR350:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
     <ItemGroup Condition="'$(BuildGroup)'=='Vulkan Test Debug Build'">
@@ -105,6 +117,12 @@
             <Configurations>Release</Configurations>
             <Platforms>Win32;Win64</Platforms>
             <Enabled>True</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="..\Samples\SimpleTest\SimpleTest.dproj">
+            <ProjectGuid>{9547A1FF-1889-4BF6-BFE4-520037EDBDC7}</ProjectGuid>
+            <Configurations>Debug</Configurations>
+            <Platforms>Win32</Platforms>
+            <Enabled>False</Enabled>
         </BuildGroupProject>
         <BuildGroupProject Include="VulkanPkgD280.dproj">
             <ProjectGuid>{A9AF7B1C-5BA6-4894-9D17-DB28C6D8D675}</ProjectGuid>
@@ -137,6 +155,12 @@
             <Configurations>Release</Configurations>
             <Platforms>Win32;Win64</Platforms>
             <Enabled>True</Enabled>
+        </BuildGroupProject>
+        <BuildGroupProject Include="..\Samples\SimpleTest\SimpleTest.dproj">
+            <ProjectGuid>{9547A1FF-1889-4BF6-BFE4-520037EDBDC7}</ProjectGuid>
+            <Configurations>Debug</Configurations>
+            <Platforms>Win32</Platforms>
+            <Enabled>False</Enabled>
         </BuildGroupProject>
         <BuildGroupProject Include="VulkanPkgD280.dproj">
             <ProjectGuid>{A9AF7B1C-5BA6-4894-9D17-DB28C6D8D675}</ProjectGuid>
