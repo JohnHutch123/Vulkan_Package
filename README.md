@@ -7,7 +7,9 @@ The root `README.md` is minimal, so most real documentation is in `RunTime_Src/*
 
 ### Public and PRO packages
 This repository is the **public** core. Extras live in the private
-**Vulkan_Package_PRO** repository, which builds on this one:
+[**Vulkan_Package_PRO**](https://github.com/JohnHutch123/Vulkan_Package_PRO)
+repository, which builds on this one. It is available under licence from
+Datavis (johnh@datavis.com.au); the link works once you have been given access.
 
 | Public (this repo) | PRO |
 |---|---|
@@ -26,6 +28,11 @@ packages first:
 ```
 <parent>\Vulkan_Package        (public)
 <parent>\Vulkan_Package_PRO    (PRO: its packages require VulkanPkgR280)
+```
+
+```
+git clone https://github.com/JohnHutch123/Vulkan_Package.git
+git clone https://github.com/JohnHutch123/Vulkan_Package_PRO.git
 ```
 
 ### Licence
