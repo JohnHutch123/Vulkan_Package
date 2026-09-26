@@ -47,8 +47,7 @@ repository is not covered by this licence.
 - **Graphics API:** Vulkan (`Vulkan.pas`, `TVk*` types)
 - **Core dependency:** **PasVulkan** (`PasVulkan.Math`, `PasVulkan.Framework`, etc.)
 - **UI/frameworks:** VCL (primary), plus optional SDL2 windowing
-- **Shader path:** GLSL → SPIR-V via `glslangValidator` (`VULKAN_SDK`) and experimental `shaderc` DLL loader
-- **Optional threading:** OmniThreadLibrary integration (`Vulkan_OMNIThread_Renderer.pas`)
+- **Shader path:** GLSL → SPIR-V via `glslangValidator` (`VULKAN_SDK`)
 
 ---
 
