@@ -7,8 +7,7 @@ uses
   Vulkan_Components in 'RunTime_Src\Vulkan_Components.pas',
   Vulkan_WindowVCL in 'RunTime_Src\Vulkan_WindowVCL.pas',
   VulkanTestDM in 'VulkanTestDM.pas' {DataModule2: TDataModule},
-  VulkanGraphicsEdit in 'VulkanGraphicsEdit.pas' {VGEditor},
-  TestVulkanTestMF in 'TestVulkanTestMF.pas';
+  VulkanGraphicsEdit in 'VulkanGraphicsEdit.pas' {VGEditor};
 
 {$R *.res}
 
