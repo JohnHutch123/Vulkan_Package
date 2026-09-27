@@ -2318,9 +2318,6 @@ var
 
   Device :TvgLogicalDevice;
 begin
-    CustomAssert(assigned(fVulkanBuffer),  'Vulkan Buffer NOT assigned');
-
-
     If not (DF_UP in GetDataFlow) then exit;
     If not fUploadNeeded then exit;
 
@@ -2329,10 +2326,14 @@ begin
 
   //  If not IsDataUploadNeeded(aFrameIndex) then exit;
 
+  // Raising the upload flag drops the buffer (InvalidateForUpload), so it is
+  // rebuilt here, sized from the current ElementCount, before it is checked.
   if not (Active) then
     SetActiveState(True);
 
-  CustomAssert(assigned(aTransferPool),           'Transfer Buffer Pool NOT assigned');
+  CustomAssert(assigned(fVulkanBuffer),  'Vulkan Buffer NOT assigned');
+
+  CustomAssert(assigned(aTransferPool),          'Transfer Buffer Pool NOT assigned');
   CustomAssert(assigned(fDescriptorData),'Descriptor NOT assigned');
   CustomAssert(assigned(fDescriptorData.Descriptor),'Descriptor Array NOT assigned');
   CustomAssert(assigned(fDescriptorData.Descriptor.DescriptorItem),'Descriptor Array NOT assigned');
