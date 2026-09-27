@@ -241,6 +241,7 @@ Type
     Procedure SetDisabled ; Override;
     Procedure SetEnabled  ; Override;
     function HasPayload: Boolean; override;
+    procedure InvalidateForUpload; override;
 
     function GetWriteDescriptorPayload( out aBufInfo   : TVkDescriptorBufferInfo;
                                         out aImgInfo   : TVkDescriptorImageInfo  ): Boolean; Override;
@@ -557,6 +558,7 @@ TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
     Procedure SetDisabled ; Override;
     Procedure SetEnabled ; Override;
     function HasPayload: Boolean; override;
+    procedure InvalidateForUpload; override;
 
     function GetWriteDescriptorPayload( out aBufInfo   : TVkDescriptorBufferInfo;
                                         out aImgInfo   : TVkDescriptorImageInfo  ): Boolean; Override;
@@ -1158,6 +1160,17 @@ end;
 function TvgDescriptor_PerFrame_UniformBuffer<T>.HasPayload: Boolean;
 begin
   Result := assigned(fVulkanBuffer);
+end;
+
+procedure TvgDescriptor_PerFrame_UniformBuffer<T>.InvalidateForUpload;
+begin
+  // Keep the buffer while it is still the right size.  Dropping it on every
+  // upload flag left this frame with no payload until the upload, and in that
+  // gap ResolveFrameData redirected this frame's writes and flags to another
+  // frame's object - so frames drew each other's (stale) matrices.
+  If assigned(fVulkanBuffer) and (fVulkanBuffer.Size = fData.GetDataSize) then exit;
+
+  Inherited;
 end;
 
 function TvgDescriptor_PerFrame_UniformBuffer<T>.GetWriteDescriptorPayload( out aBufInfo: TVkDescriptorBufferInfo;
@@ -2249,6 +2262,17 @@ begin
      FreeAndNil(fVulkanBuffer);
 
 
+end;
+
+procedure TvgDescriptor_PerFrame_StorageBuffer<T>.InvalidateForUpload;
+begin
+  // As the uniform buffer: keep the buffer while the data fits, so this frame
+  // never loses its payload and ResolveFrameData never hands its writes to
+  // another frame.  The buffer is sized from ElementCount, and changing that
+  // deactivates anyway.
+  If assigned(fVulkanBuffer) and (fData.GetDataSize <= fVulkanBuffer.Size) then exit;
+
+  Inherited;
 end;
 
 Procedure TvgDescriptor_PerFrame_StorageBuffer<T>.SetEnabled;
