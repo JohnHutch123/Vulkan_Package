@@ -622,6 +622,78 @@ begin
   Check('scene freed mid-load', True, True);
 end;
 
+// ---------------------------------------------------------------------------
+{ TvgObject.VisibleON reaches the store: False hides the object from the
+  draw (TvgVulkanDataStore.SetObjectHidden) as well as from picking and the
+  data bounds, keeps its data, and notifies once per change so the frames
+  are recorded again. }
+procedure TestVisibleON;
+var
+  Scene     : TvgScene;
+  Store     : TvgObjectStore;
+  A, B      : TvgObject;
+  Log       : TChangeLog;
+  BMin,BMax : TpvVector3D;
+begin
+  Writeln('--- TvgObject.VisibleON ---');
+  Scene := TvgScene.Create(nil);
+  Log   := TChangeLog.Create;
+  try
+    if not Scene.Load_Begin then raise Exception.Create('Load_Begin refused');
+    Store := NewLineStore;
+    Scene.AddDataStore(Store);
+    A := AddSegment(Store, 0);
+    B := AddSegment(Store, 10);
+    Scene.Load_End;
+    Scene.OnDataChanged := Log.Changed;
+
+    Check('new object is visible', A.VisibleON, True);
+    Check('new object is drawn', Store.ShouldSkipObject(A.ObjIndex), False);
+
+    A.VisibleON := False;
+    Check('flag cleared', A.VisibleON, False);
+    Check('store hides it', Store.IsObjectHidden(A.ObjIndex), True);
+    Check('draw skips it', Store.ShouldSkipObject(A.ObjIndex), True);
+    CheckInt('its data is kept', A.VertexCount, 2);
+    CheckInt('one notification', Log.Count, 1);
+    Check('naming its store', Log.LastStore = Store, True);
+    Check('B still drawn', Store.ShouldSkipObject(B.ObjIndex), False);
+    Scene.GetDataBounds(BMin, BMax);
+    CheckNum('bounds leave it out', BMin.x, 10);
+
+    A.VisibleON := False;
+    CheckInt('same value: no notification', Log.Count, 1);
+
+    // Edits still work on a hidden object, and leave it hidden.
+    Check('translate while hidden', A.Translate(TpvVector3D.Create(0, 5, 0)), True);
+    CheckNum('moved', A.GetVertexWorldPosition(0).y, 5);
+    Check('still hidden after the edit', Store.IsObjectHidden(A.ObjIndex), True);
+
+    A.VisibleON := True;
+    Check('shown again', Store.IsObjectHidden(A.ObjIndex), False);
+    Check('drawn again', Store.ShouldSkipObject(A.ObjIndex), False);
+    Scene.GetDataBounds(BMin, BMax);
+    CheckNum('bounds take it back', BMin.x, 0);
+
+    // One repaint for a group of changes.
+    Log.Count := 0;
+    Scene.BeginUpdate;
+    A.VisibleON := False;
+    B.VisibleON := False;
+    CheckInt('nothing until EndUpdate', Log.Count, 0);
+    Scene.EndUpdate;
+    CheckInt('one notification for both', Log.Count, 1);
+
+    // A hidden object is removed like any other.
+    Store.RemoveObject(A);
+    Check('hidden object removed', Scene.IsLiveObject(A), False);
+    Check('B still hidden', Store.IsObjectHidden(B.ObjIndex), True);
+  finally
+    Scene.Free;
+    Log.Free;
+  end;
+end;
+
 begin
   try
     TestLiveObjects;
@@ -632,6 +704,7 @@ begin
     TestEditLayers;
     TestShapes;
     TestObjectEdits;
+    TestVisibleON;
     TestTeardown;
 
     if Failures = 0 then

@@ -134,6 +134,12 @@ type
     // index: TvgObject.ObjIndex and anything else holding an object index
     // stays valid across a delete.  False from the FillChar in AddDataObject.
     Deleted        : Boolean;
+
+    // Set by SetObjectHidden: the object keeps all its data but VulkanDraw
+    // skips it.  False (shown) from the FillChar in AddDataObject.  Every
+    // edit of a record reads it, changes fields and writes it back, so the
+    // flag survives resets, relocation, SetObjectData and Compact.
+    Hidden         : Boolean;
   end;
 
   // The three CPU arrays a store keeps.  Lets one routine grow, shrink,
@@ -269,6 +275,11 @@ type
     function  ObjectIsCulled(ObjectIndex: Integer;
                              const aFrustum: TvgFrustrumPlanes): Boolean;
 
+    { True if VulkanDraw passes over this record before culling: deleted,
+      hidden, or no vertices.  Split out, like ObjectIsCulled, so the public
+      ShouldSkipObject is the loop's own decision. }
+    class function RecordIsSkipped(const aObj: TvgVulkanObjectRecord): Boolean; static; inline;
+
     { --- Editing helpers.  CALLER MUST HOLD FCriticalSection for all. --- }
 
     { The record for ObjectIndex, raising for an index out of range and, for
@@ -402,6 +413,21 @@ type
       as a tombstone and is never handed out again. }
     procedure DeleteDataObject(ObjectIndex: Integer);
     function  IsObjectDeleted(ObjectIndex: Integer): Boolean;
+
+    { Hides or shows an object without touching its data: a hidden object
+      keeps its vertices, instances, indices and bounds, and every edit still
+      works on it, but VulkanDraw skips it.  Nothing is uploaded; to see the
+      change, the frames must be recorded again (TvgScene.NotifyDataChanged
+      - which TvgObject.VisibleON does).  Raises for a deleted object.
+      Objects start shown. }
+    procedure SetObjectHidden(ObjectIndex: Integer; aHidden: Boolean);
+    function  IsObjectHidden(ObjectIndex: Integer): Boolean;
+
+    { True if VulkanDraw skips this object before any culling: it is
+      deleted, hidden, or has no vertices.  The loop calls the same code, so
+      this can check it without a device.  See ShouldCullObject for the
+      culling that follows. }
+    function  ShouldSkipObject(ObjectIndex: Integer): Boolean;
 
     { Objects not deleted - GetObjectCount counts tombstones too. }
     function  GetLiveObjectCount: Integer;
@@ -1463,6 +1489,50 @@ begin
   FCriticalSection.Enter;
   try
     Result := CheckObject(ObjectIndex).Deleted;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+procedure TvgVulkanDataStore.SetObjectHidden(ObjectIndex: Integer; aHidden: Boolean);
+var
+  Obj : TvgVulkanObjectRecord;
+begin
+  FCriticalSection.Enter;
+  try
+    Obj := CheckLiveObject(ObjectIndex);
+    if Obj.Hidden = aHidden then Exit;
+
+    // The data is untouched: no upload, no SetDataDirty.  The draw loop
+    // reads the flag under this lock when a frame is next recorded.
+    Obj.Hidden := aHidden;
+    FDataObjects[ObjectIndex] := Obj;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+function TvgVulkanDataStore.IsObjectHidden(ObjectIndex: Integer): Boolean;
+begin
+  FCriticalSection.Enter;
+  try
+    Result := CheckObject(ObjectIndex).Hidden;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+class function TvgVulkanDataStore.RecordIsSkipped(const aObj: TvgVulkanObjectRecord): Boolean;
+begin
+  //A deleted object has no ranges; its record only keeps its index taken.
+  Result := aObj.Deleted or aObj.Hidden or (aObj.VertexCount <= 0);
+end;
+
+function TvgVulkanDataStore.ShouldSkipObject(ObjectIndex: Integer): Boolean;
+begin
+  FCriticalSection.Enter;
+  try
+    Result := RecordIsSkipped(CheckObject(ObjectIndex));
   finally
     FCriticalSection.Leave;
   end;
@@ -3988,8 +4058,9 @@ begin
     begin
       Obj := FDataObjects[I];
 
-      //A deleted object has no ranges; its record only keeps its index taken.
-      if Obj.Deleted or (Obj.VertexCount <= 0) then
+      //Deleted, hidden, or nothing to draw.  Before the cull, so a hidden
+      //object costs no binds and is not counted as culled.
+      if RecordIsSkipped(Obj) then
         Continue;
 
       //Frustum cull before ANY recording for this object.  Skipping here also

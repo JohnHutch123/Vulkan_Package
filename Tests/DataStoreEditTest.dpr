@@ -658,6 +658,96 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
+{ SetObjectHidden: the draw skips the object (ShouldSkipObject, the loop's
+  own decision) while its data stays, and the flag survives every edit that
+  rewrites the object's record - growing past a neighbour (relocation),
+  ResetObject, SetObjectData, RemoveObjectVertex, SetObjectVertexCount and
+  Compact. }
+procedure TestHidden;
+var
+  DS      : TvgVulkanDataStore;
+  A, B, C : Integer;
+  L       : Integer;
+begin
+  Writeln('--- SetObjectHidden ---');
+  DS := NewStore(POINT_LIST);
+  try
+    A := AddObj(DS, 3, 0);
+    B := AddObj(DS, 2, 100);
+
+    Check('new object is shown', DS.IsObjectHidden(A), False);
+    Check('shown object is drawn', DS.ShouldSkipObject(A), False);
+
+    DS.SetObjectHidden(A, True);
+    Check('A reports hidden', DS.IsObjectHidden(A), True);
+    Check('hidden object is skipped', DS.ShouldSkipObject(A), True);
+    CheckObjIntact(DS, 'hidden A keeps its data', A, 3, 0);
+    Check('hidden A keeps its bounds', DS.GetObjectWorldBounds(A).Valid, True);
+    Check('B still shown', DS.IsObjectHidden(B), False);
+    Check('B still drawn', DS.ShouldSkipObject(B), False);
+
+    // Setting it again changes nothing.
+    DS.SetObjectHidden(A, True);
+    Check('hide twice: still hidden', DS.IsObjectHidden(A), True);
+
+    // Grow A past B: it is relocated to the end of the arrays.
+    L := DS.AddObjectVertex(A);
+    DS.SetObjectVertexPosition(A, L, 3, 0, 0);
+    CheckObjIntact(DS, 'A grown while hidden', A, 4, 0);
+    Check('hidden after relocation', DS.IsObjectHidden(A), True);
+    CheckObjIntact(DS, 'B untouched', B, 2, 100);
+
+    DS.RemoveObjectVertex(A, 3);
+    Check('hidden after RemoveObjectVertex', DS.IsObjectHidden(A), True);
+
+    DS.SetObjectVertexCount(A, 2);
+    Check('hidden after SetObjectVertexCount', DS.IsObjectHidden(A), True);
+
+    DS.SetObjectData(A, DS.GetObjectData(B));
+    CheckObjIntact(DS, 'A takes B''s data', A, 2, 100);
+    Check('hidden after SetObjectData', DS.IsObjectHidden(A), True);
+
+    DS.ResetObject(A);
+    Check('hidden after ResetObject', DS.IsObjectHidden(A), True);
+    L := DS.AddObjectVertex(A);
+    DS.SetObjectVertexPosition(A, L, 0, 0, 0);
+    Check('hidden after refill', DS.IsObjectHidden(A), True);
+    Check('refilled hidden object is skipped', DS.ShouldSkipObject(A), True);
+
+    C := AddObj(DS, 2, 200);
+    DS.DeleteDataObject(B);
+    DS.Compact;
+    Check('hidden after Compact', DS.IsObjectHidden(A), True);
+    Check('C shown after Compact', DS.IsObjectHidden(C), False);
+    CheckObjIntact(DS, 'C intact after Compact', C, 2, 200);
+
+    DS.SetObjectHidden(A, False);
+    Check('A shown again', DS.IsObjectHidden(A), False);
+    Check('shown again: drawn', DS.ShouldSkipObject(A), False);
+
+    // The other reasons the loop skips an object.
+    Check('deleted object is skipped', DS.ShouldSkipObject(B), True);
+    DS.ResetObject(C);
+    Check('empty object is skipped', DS.ShouldSkipObject(C), True);
+
+    try
+      DS.SetObjectHidden(B, True);
+      Check('hiding a deleted object raises', False, True);
+    except
+      on EVulkanDataStoreException do Check('hiding a deleted object raises', True, True);
+    end;
+    try
+      DS.ShouldSkipObject(99);
+      Check('bad index raises', False, True);
+    except
+      on EVulkanDataStoreException do Check('bad index raises', True, True);
+    end;
+  finally
+    DS.Free;
+  end;
+end;
+
+// ---------------------------------------------------------------------------
 begin
   try
     TestGrowBuriedObject;
@@ -672,6 +762,7 @@ begin
     TestAutoCompact;
     TestClearAllThenReuse;
     TestGPUCapacityWithoutDevice;
+    TestHidden;
 
     if Failures = 0 then
       Writeln('ALL CHECKS PASSED')
