@@ -86,6 +86,11 @@ type
     Procedure SetDisabled; Override;
     Procedure SetEnabled; Override;
 
+    // VisibleON False also stops the store drawing the object
+    // (TvgVulkanDataStore.SetObjectHidden), so it is hidden everywhere: not
+    // drawn, not picked, not in GetDataBounds.  Its data is kept.
+    procedure SetVisibleON(const Value: Boolean); Override;
+
     procedure SetInstanceObjID(ID1, ID2: Cardinal);
 
   Public
@@ -1460,6 +1465,23 @@ procedure TvgObject.NotifyEdited;
 begin
   if Assigned(fDataStore) and Assigned(fDataStore.Scene) then
     fDataStore.Scene.NotifyDataChanged(fDataStore);
+end;
+
+procedure TvgObject.SetVisibleON(const Value: Boolean);
+begin
+  if Value = VisibleON then Exit;
+  inherited SetVisibleON(Value);
+
+  // Not in a store (yet, or any more): the flag is all there is.  A deleted
+  // object's record is a tombstone that draws nothing anyway.
+  if not Assigned(fDataStore) or (fObjIndex < 0) or
+     fDataStore.IsObjectDeleted(fObjIndex) then
+    Exit;
+
+  fDataStore.SetObjectHidden(fObjIndex, not Value);
+  // The data did not change, but the frames must be recorded again without
+  // (or with) the object.
+  NotifyEdited;
 end;
 
 function TvgObject.CanEdit: Boolean;

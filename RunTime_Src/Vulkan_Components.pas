@@ -247,12 +247,15 @@ type
     procedure SetFrozenON(const Value: Boolean);
     procedure SetLockedON(const Value: Boolean);
     procedure SetSelectable(const Value: Boolean);
-    procedure SetVisibleON(const Value: Boolean);
   Protected
 
     fObjHigh,
     fObjLow         : Longword;       //Object ID (pointer) for use if Selection is ON  set in Create
     fFlags          : TvgObjectStateFlags;
+
+    // Virtual so a descendant can act on it: TvgObject stops its store
+    // drawing it.
+    procedure SetVisibleON(const Value: Boolean); Virtual;
 
 
      Procedure SetActiveState(aValue:Boolean);
