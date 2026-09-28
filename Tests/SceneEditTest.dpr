@@ -806,6 +806,83 @@ begin
   end;
 end;
 
+// ---------------------------------------------------------------------------
+{ An object with no indices in a store that has an index type (every store
+  does by default) is drawn unindexed - VulkanDraw decides per object.
+  GetPrimitives, and so picking, must read it the same way: its vertices in
+  order.  It used to take the store's index type and find no primitives in
+  the object's empty index list, so the object was drawn but could not be
+  picked, outlined, snapped to or split. }
+procedure TestPrimitivesFollowDraw;
+const
+  VIEW_W = 800;
+  VIEW_H = 600;
+var
+  Scene   : TvgScene;
+  Store   : TvgObjectStore;
+  Tools   : TvgToolManager;
+  Cam     : TvgCamera;
+  P, Q, L : TvgObject;
+  Prims   : TArray<Integer>;
+  K       : Integer;
+  SX, SY  : Double;
+  Mid     : TpvVector3D;
+begin
+  Writeln('--- primitives read as the draw reads them ---');
+  Scene := TvgScene.Create(nil);
+  Tools := TvgToolManager.Create(nil);
+  try
+    Cam := TvgCamera.Create;
+    Cam.InitializeAsDefault;
+    Scene.Cameras.AddCamera('main', Cam);
+    Scene.Cameras.SetActiveCamera('main');
+    if not Scene.Load_Begin then raise Exception.Create('Load_Begin refused');
+    Store := NewLineStore;
+    Scene.AddDataStore(Store);
+    Scene.Load_End;
+    Check('the store has an index type', Store.GetIndexType <> itNONE, True);
+
+    // Built vertex by vertex: no indices.
+    P := AddSegment(Store, 0);
+    Q := Store.AddObject(False);
+    for K := 0 to 3 do
+    begin
+      Q.AddVertex;
+      Q.SetVertexPosition(10 + K, 0, 0);
+    end;
+    // Built by AddLine: indexed.
+    L := Store.AddLine(TpvVector3D.Create(20, 0, 0), TpvVector3D.Create(21, 0, 0));
+    CheckInt('P has no indices', Store.GetObjectIndexCount(P.ObjIndex), 0);
+    CheckInt('L has indices', Store.GetObjectIndexCount(L.ObjIndex), 2);
+
+    CheckInt('P: two corners per primitive', P.GetPrimitives(Prims), 2);
+    CheckInt('P: one segment, from its vertices', Length(Prims), 2);
+    Check('P: 0-1', (Length(Prims) = 2) and (Prims[0] = 0) and (Prims[1] = 1), True);
+    Q.GetPrimitives(Prims);
+    CheckInt('Q: two segments from four vertices', Length(Prims), 4);
+    Check('Q: 0-1, 2-3', (Length(Prims) = 4) and (Prims[2] = 2) and (Prims[3] = 3), True);
+    L.GetPrimitives(Prims);
+    CheckInt('L: its index list', Length(Prims), 2);
+
+    // Picked where it is drawn.
+    Tools.Scene := Scene;
+    Tools.SetFallbackViewport(VIEW_W, VIEW_H);
+    Mid := (P.GetVertexWorldPosition(0) + P.GetVertexWorldPosition(1)) * 0.5;
+    Check('P on screen', Tools.WorldToScreen(Mid, SX, SY), True);
+    Check('P picked', Tools.PickObject(Round(SX), Round(SY)) = P, True);
+
+    // Split like any plain line list: its two vertices become four.
+    Check('P split', P.SplitSegment(0, 1, Mid) >= 0, True);
+    CheckInt('...four vertices', P.VertexCount, 4);
+    CheckInt('...still no indices', Store.GetObjectIndexCount(P.ObjIndex), 0);
+    P.GetPrimitives(Prims);
+    CheckInt('...two segments', Length(Prims), 4);
+  finally
+    Tools.Free;
+    Scene.Free;
+  end;
+end;
+
 begin
   try
     TestLiveObjects;
@@ -818,6 +895,7 @@ begin
     TestObjectEdits;
     TestVisibleON;
     TestColorOverride;
+    TestPrimitivesFollowDraw;
     TestTeardown;
 
     if Failures = 0 then
