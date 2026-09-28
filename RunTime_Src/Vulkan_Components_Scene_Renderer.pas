@@ -208,7 +208,12 @@ type
       come out as separate segments / triangles; the adjacency and patch
       topologies without a simple reading come out as points.  Primitives
       naming a vertex the object does not have (a strip's restart index,
-      say) are left out.  Instancing is not applied. }
+      say) are left out.  Instancing is not applied.
+
+      Read as VulkanDraw draws the object: from its index list when it has
+      one, and from its vertices in order when it has none - also in a store
+      that has an index type, where such an object is drawn unindexed.  So
+      what is picked, outlined or snapped to is what is on screen. }
     function  GetPrimitives(out aIndices: TArray<Integer>): Integer;
 
     { Everything the object holds, byte for byte, and the reverse (see
@@ -1677,8 +1682,10 @@ begin
 
   D       := GetData;
   VS      := Length(D.Vertices) div VC;
-  Indexed := fDataStore.GetIndexType <> itNONE;
   IC      := fDataStore.GetObjectIndexCount(fObjIndex);
+  // Per object, as the draw decides: one with no indices is a plain list or
+  // strip even in a store that has an index type.
+  Indexed := (fDataStore.GetIndexType <> itNONE) and (IC > 0);
   IS_     := 0;
   if Indexed and (IC > 0) then
     IS_ := Length(D.Indices) div IC;
@@ -1857,8 +1864,11 @@ begin
 
   VC := fDataStore.GetObjectVertexCount(fObjIndex);
 
-  // The vertex numbers in draw order: the index list, or 0..VC-1.
-  if fDataStore.GetIndexType <> itNONE then
+  // The vertex numbers in draw order: the index list, or 0..VC-1.  Decided
+  // per object, as VulkanDraw decides it: an object with no indices is drawn
+  // from its vertices in order even in a store that has an index type.
+  if (fDataStore.GetIndexType <> itNONE) and
+     (fDataStore.GetObjectIndexCount(fObjIndex) > 0) then
   begin
     // All at once: a call per index takes the store's lock per index.
     Raw := fDataStore.GetObjectIndices(fObjIndex);
