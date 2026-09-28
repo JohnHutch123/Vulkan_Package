@@ -9,11 +9,13 @@ program SceneEditTest;
 
 uses
   System.SysUtils,
+  Vulkan,
   PasVulkan.Math,
   PasVulkan.Math.Double,
   Vulkan_Components_Lookups,
   Vulkan_Components_Camera,
   Vulkan_Components,
+  Vulkan_Components_Descriptors,
   Vulkan_Components_DataStore,
   Vulkan_Components_Scene_Renderer;
 
@@ -694,6 +696,116 @@ begin
   end;
 end;
 
+// ---------------------------------------------------------------------------
+{ TvgObject.SetColorOverride reaches the store and notifies once per change;
+  TvgObjectStore gives its pipelines the push constant VulkanDraw pushes it
+  through - vertex stage, after the renderer's, with that offset in its
+  GLSL.  The pipelines are built by hand: no device. }
+procedure TestColorOverride;
+var
+  Scene  : TvgScene;
+  Store  : TvgObjectStore;
+  A      : TvgObject;
+  Log    : TChangeLog;
+  C      : TpvVector4;
+  GP     : TvgGraphicPipeline;
+  PCI    : TvgPushConstantItem;
+  Off    : TVkUInt32;
+  Stages : TVkShaderStageFlags;
+  I, N   : Integer;
+begin
+  Writeln('--- TvgObject.SetColorOverride ---');
+  Scene := TvgScene.Create(nil);
+  Log   := TChangeLog.Create;
+  try
+    if not Scene.Load_Begin then raise Exception.Create('Load_Begin refused');
+    Store := NewLineStore;
+    Scene.AddDataStore(Store);
+    A := AddSegment(Store, 0);
+    Scene.Load_End;
+    Scene.OnDataChanged := Log.Changed;
+
+    Check('no override to start', A.GetColorOverride(C), False);
+    A.SetColorOverride(TpvVector4.Create(0, 0, 1, 1));
+    Check('override set', A.GetColorOverride(C), True);
+    Check('...blue', (C.z = 1) and (C.x = 0) and (C.w = 1), True);
+    CheckInt('in the store', Store.GetObjectColorOverridePacked(A.ObjIndex), $FFFF0000);
+    CheckInt('one notification', Log.Count, 1);
+    A.SetColorOverride(TpvVector4.Create(0, 0, 1, 1));
+    CheckInt('same colour: no notification', Log.Count, 1);
+
+    A.LockON := True;
+    A.SetColorOverride(TpvVector4.Create(1, 1, 0, 1));
+    CheckInt('not an edit: works on a locked object', Store.GetObjectColorOverridePacked(A.ObjIndex), $FF00FFFF);
+    A.LockON := False;
+
+    A.ClearColorOverride;
+    Check('cleared', A.GetColorOverride(C), False);
+    CheckInt('two more notifications', Log.Count, 3);
+  finally
+    Scene.Free;
+    Log.Free;
+  end;
+
+  // The pipeline side.
+  Store := NewLineStore;
+  GP    := TvgGraphicPipeline.Create(nil);
+  try
+    Check('ColorOverrideON by default', Store.ColorOverrideON, True);
+    Check('a bare pipeline has none',
+      TvgVulkanDataStore.FindObjectColorPushConstant(GP, Off, Stages), False);
+
+    // As the renderer's storage-buffer picking adds its screen size first.
+    PCI := GP.PushConstantCol.Add;
+    PCI.Name             := 'inScreenSize';
+    PCI.PushConstantName := TvgPushConstant_2UI.GetPropertyName;
+    PCI.PushConstant.ShaderFlags := [SS_FRAGMENT_BIT];
+
+    Store.UpdateGraphicPipeline(GP);
+    Check('UpdateGraphicPipeline adds it',
+      TvgVulkanDataStore.FindObjectColorPushConstant(GP, Off, Stages), True);
+    CheckInt('after the screen size: offset 8', Off, 8);
+    Check('vertex stage only', Stages = TVkShaderStageFlags(VK_SHADER_STAGE_VERTEX_BIT), True);
+    PCI := GP.PushConstantCol[GP.PushConstantCol.Count - 1];
+    Check('it comes last', PCI.PushConstant is TvgPushConstant_ObjectColor, True);
+    Check('its GLSL declares that offset',
+      Pos('layout(offset = 8) uint value', PCI.PushConstant.GetGLSLDeclaration('pc')) > 0, True);
+    CheckInt('4 bytes', PCI.PushConstant.DataStride, 4);
+
+    Store.UpdateGraphicPipeline(GP);
+    N := 0;
+    for I := 0 to GP.PushConstantCol.Count - 1 do
+      if GP.PushConstantCol[I].PushConstant is TvgPushConstant_ObjectColor then Inc(N);
+    CheckInt('updated again: still one', N, 1);
+  finally
+    GP.Free;
+    Store.Free;
+  end;
+
+  Store := NewLineStore;
+  GP    := TvgGraphicPipeline.Create(nil);
+  try
+    Store.UpdateGraphicPipeline(GP);
+    TvgVulkanDataStore.FindObjectColorPushConstant(GP, Off, Stages);
+    CheckInt('alone: offset 0', Off, 0);
+  finally
+    GP.Free;
+    Store.Free;
+  end;
+
+  Store := NewLineStore;
+  GP    := TvgGraphicPipeline.Create(nil);
+  try
+    Store.ColorOverrideON := False;
+    Store.UpdateGraphicPipeline(GP);
+    Check('ColorOverrideON False: none',
+      TvgVulkanDataStore.FindObjectColorPushConstant(GP, Off, Stages), False);
+  finally
+    GP.Free;
+    Store.Free;
+  end;
+end;
+
 begin
   try
     TestLiveObjects;
@@ -705,6 +817,7 @@ begin
     TestShapes;
     TestObjectEdits;
     TestVisibleON;
+    TestColorOverride;
     TestTeardown;
 
     if Failures = 0 then

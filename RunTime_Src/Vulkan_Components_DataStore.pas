@@ -140,6 +140,11 @@ type
     // edit of a record reads it, changes fields and writes it back, so the
     // flag survives resets, relocation, SetObjectData and Compact.
     Hidden         : Boolean;
+
+    // Set by SetObjectColorOverride: the colour VulkanDraw pushes before
+    // drawing the object, packed RGBA8 (TvgPushConstant_ObjectColor).  0 (no
+    // override) from the FillChar in AddDataObject; kept like Hidden.
+    ColorOverride  : Cardinal;
   end;
 
   // The three CPU arrays a store keeps.  Lets one routine grow, shrink,
@@ -428,6 +433,28 @@ type
       this can check it without a device.  See ShouldCullObject for the
       culling that follows. }
     function  ShouldSkipObject(ObjectIndex: Integer): Boolean;
+
+    { The pipeline's TvgPushConstant_ObjectColor, as VulkanDraw pushes it:
+      its offset in the push-constant block and its stages.  False when
+      aPipe has none (or it has no stage or size, so no range in the
+      layout): the draw pushes nothing. }
+    class function FindObjectColorPushConstant(aPipe: TvgGraphicPipeline;
+                                               out aOffset: TVkUInt32;
+                                               out aStages: TVkShaderStageFlags): Boolean; static;
+
+    { A colour to draw the object in, in place of its own, without touching
+      its data: VulkanDraw pushes it (TvgPushConstant_ObjectColor) before the
+      object's draw, for a shader that declares it to use.  RGBA 0..1, stored
+      as 8 bits a channel; an alpha that rounds to 0 clears it.  As with
+      SetObjectHidden, nothing is uploaded and the frames must be recorded
+      again to see it (TvgObject.SetColorOverride does).  Raises for a deleted
+      object.  Objects start with none. }
+    procedure SetObjectColorOverride(ObjectIndex: Integer; const aColor: TpvVector4);
+    procedure ClearObjectColorOverride(ObjectIndex: Integer);
+    { False, aColor untouched, when the object has no override. }
+    function  GetObjectColorOverride(ObjectIndex: Integer; out aColor: TpvVector4): Boolean;
+    { The value VulkanDraw pushes: packed RGBA8, 0 for none. }
+    function  GetObjectColorOverridePacked(ObjectIndex: Integer): Cardinal;
 
     { Objects not deleted - GetObjectCount counts tombstones too. }
     function  GetLiveObjectCount: Integer;
@@ -1533,6 +1560,76 @@ begin
   FCriticalSection.Enter;
   try
     Result := RecordIsSkipped(CheckObject(ObjectIndex));
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+procedure TvgVulkanDataStore.SetObjectColorOverride(ObjectIndex: Integer; const aColor: TpvVector4);
+var
+  Obj   : TvgVulkanObjectRecord;
+  Value : Cardinal;
+begin
+  Value := TvgPushConstant_ObjectColor.Pack(aColor);
+  FCriticalSection.Enter;
+  try
+    Obj := CheckLiveObject(ObjectIndex);
+    if Obj.ColorOverride = Value then Exit;
+    Obj.ColorOverride := Value;
+    FDataObjects[ObjectIndex] := Obj;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+class function TvgVulkanDataStore.FindObjectColorPushConstant(aPipe: TvgGraphicPipeline;
+  out aOffset: TVkUInt32; out aStages: TVkShaderStageFlags): Boolean;
+var
+  I   : Integer;
+  PCI : TvgPushConstantItem;
+  PC  : TvgPushConstant;
+begin
+  Result  := False;
+  aOffset := 0;
+  aStages := 0;
+  if not Assigned(aPipe) or not Assigned(aPipe.PushConstantCol) then Exit;
+
+  for I := 0 to aPipe.PushConstantCol.Count - 1 do
+  begin
+    PCI := aPipe.PushConstantCol[I];
+    if not Assigned(PCI) then Continue;
+    PC := PCI.PushConstant;
+    // The same test the pipeline makes before giving it a range.
+    if (PC is TvgPushConstant_ObjectColor) and (PC.ShaderFlags <> []) and
+       (PC.DataStride > 0) then
+    begin
+      aOffset := PCI.Offset;
+      aStages := GetVKStageFlags(PC.ShaderFlags);
+      Exit(True);
+    end;
+  end;
+end;
+
+procedure TvgVulkanDataStore.ClearObjectColorOverride(ObjectIndex: Integer);
+begin
+  SetObjectColorOverride(ObjectIndex, TpvVector4.Create(0, 0, 0, 0));
+end;
+
+function TvgVulkanDataStore.GetObjectColorOverride(ObjectIndex: Integer; out aColor: TpvVector4): Boolean;
+var
+  Value : Cardinal;
+begin
+  Value := GetObjectColorOverridePacked(ObjectIndex);
+  Result := Value <> 0;
+  if Result then
+    aColor := TvgPushConstant_ObjectColor.Unpack(Value);
+end;
+
+function TvgVulkanDataStore.GetObjectColorOverridePacked(ObjectIndex: Integer): Cardinal;
+begin
+  FCriticalSection.Enter;
+  try
+    Result := CheckObject(ObjectIndex).ColorOverride;
   finally
     FCriticalSection.Leave;
   end;
@@ -3992,6 +4089,9 @@ var
   CullON  : Boolean;
   Frustum : TvgFrustrumPlanes;
   Short   : Boolean;
+  ColorON     : Boolean;
+  ColorOffset : TVkUInt32;
+  ColorStages : TVkShaderStageFlags;
 begin
   if not Assigned(aCommandBuffer) then
     Exit;
@@ -4043,6 +4143,10 @@ begin
     if Assigned(aPipe) and Assigned(aPipe.Renderer) then
       CullON := aPipe.Renderer.GetFrustumPlanes(Frustum);
 
+    //Per-object colour: pushed before every object drawn - its override or
+    //0 - so one object's colour never carries over to the next.  Only when
+    //the pipeline's layout has the range.
+    ColorON := FindObjectColorPushConstant(aPipe, ColorOffset, ColorStages);
 
     // Determine index type
     case FIndexType of
@@ -4118,6 +4222,11 @@ begin
                                  [I, FI]), Self);
         Continue;
       end;
+
+      if ColorON then
+        aCommandBuffer.CmdPushConstants(aPipe.PipelineLayoutHandle, ColorStages,
+                                        ColorOffset, SizeOf(Obj.ColorOverride),
+                                        @Obj.ColorOverride);
 
       // Bind vertex and instance buffers
       BufferCount := 0;

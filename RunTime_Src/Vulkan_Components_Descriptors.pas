@@ -892,6 +892,43 @@ TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
     Property Value : TvgVector2I read GetValue write SetValue;  //the single struct pushed to the shader
   End;
 
+  { Per-object colour override, pushed by TvgVulkanDataStore.VulkanDraw
+    before each object's draw (TvgVulkanDataStore.SetObjectColorOverride).
+    TvgObjectStore adds one to its pipelines (ColorOverrideON).
+
+    One packed RGBA8 uint, red in the lowest byte - GLSL unpackUnorm4x8 reads
+    it back as a vec4.  Zero (alpha 0) means no override: the shader keeps
+    the object's own colour.  4 bytes, so it is legal at any 4-byte offset.
+
+    Vertex stage only: GLSL allows one push_constant block per stage, and
+    the fragment stage may already have the screen-size one
+    (TvgPushConstant_2UI).  A shader that uses the override passes it to the
+    fragment stage itself, as a flat varying.
+
+    It is added after every other push constant of the pipeline, so its
+    offset may not be 0: the GLSL declaration names it (Offset, set by
+    whoever adds it once the collection's offsets are known).  A shader that
+    does not declare it simply ignores the override. }
+  TvgPushConstant_ObjectColor = Class(TvgPushConstant_Data<Cardinal>)
+  Protected
+    fOffset : TVkUInt32;
+  Public
+    Class Function GetPropertyName : String; Override;
+
+    Constructor Create(AOwner: TComponent);  Override;
+
+    function GetGLSLDeclaration(const aBlockName: String): String; Override;
+
+    { RGBA 0..1 to the packed value, and back; each channel clamped and
+      rounded to 8 bits.  Pack of a colour whose alpha rounds to 0 is 0: no
+      override. }
+    Class Function Pack(const aColor: TpvVector4): Cardinal; static;
+    Class Function Unpack(aPacked: Cardinal): TpvVector4; static;
+
+    // Byte offset in the pipeline's push-constant block.
+    Property Offset : TVkUInt32 read fOffset write fOffset;
+  End;
+
 
 function GetGLSLTypeNameForPascalType(const aTypeName: String): String;  //must be global
 
@@ -2982,6 +3019,54 @@ begin
   Items[0] := V;
 end;
 
+{ TvgPushConstant_ObjectColor }
+
+constructor TvgPushConstant_ObjectColor.Create(AOwner: TComponent);
+begin
+  inherited;
+  ShaderFlags := [SS_VERTEX_BIT];
+end;
+
+class function TvgPushConstant_ObjectColor.GetPropertyName: String;
+begin
+  Result := 'PushConstant_ObjectColor';
+end;
+
+function TvgPushConstant_ObjectColor.GetGLSLDeclaration(const aBlockName: String): String;
+begin
+  Result :=
+    'layout(push_constant) uniform ' + GetPropertyName + sLineBreak +
+    '{' + sLineBreak +
+    '    layout(offset = ' + IntToStr(fOffset) + ') uint value;   // RGBA8, 0 = no override' + sLineBreak +
+    '} ' + aBlockName + ';' + sLineBreak;
+end;
+
+class function TvgPushConstant_ObjectColor.Pack(const aColor: TpvVector4): Cardinal;
+
+  function Channel(aValue: Single): Cardinal;
+  begin
+    if aValue <= 0 then Exit(0);
+    if aValue >= 1 then Exit(255);
+    Result := Round(aValue * 255);
+  end;
+
+var
+  A : Cardinal;
+begin
+  A := Channel(aColor.w);
+  if A = 0 then Exit(0);
+  Result := Channel(aColor.x) or (Channel(aColor.y) shl 8) or
+            (Channel(aColor.z) shl 16) or (A shl 24);
+end;
+
+class function TvgPushConstant_ObjectColor.Unpack(aPacked: Cardinal): TpvVector4;
+begin
+  Result.x := ( aPacked         and $FF) / 255;
+  Result.y := ((aPacked shr 8)  and $FF) / 255;
+  Result.z := ((aPacked shr 16) and $FF) / 255;
+  Result.w := ((aPacked shr 24) and $FF) / 255;
+end;
+
 
 { TvgDescriptor_Data_StorageImage }
 
@@ -4325,6 +4410,7 @@ Initialization
 
 
   RegisterPushConstantType(TvgPushConstant_2UI);
+  RegisterPushConstantType(TvgPushConstant_ObjectColor);
 
 
 Finalization

@@ -16,6 +16,7 @@ uses
   PasVulkan.Math,
   Vulkan_Components_Lookups,
   Vulkan_Components_Camera,
+  Vulkan_Components_Descriptors,
   Vulkan_Components_DataStore;
 
 var
@@ -748,6 +749,84 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
+{ SetObjectColorOverride: the packed RGBA8 VulkanDraw pushes, 8 bits a
+  channel, alpha 0 for none; kept through every edit that rewrites the
+  record, as Hidden is. }
+procedure TestColorOverride;
+
+  function Near(const A, B: TpvVector4): Boolean;
+  begin
+    Result := (Abs(A.x - B.x) < 0.003) and (Abs(A.y - B.y) < 0.003) and
+              (Abs(A.z - B.z) < 0.003) and (Abs(A.w - B.w) < 0.003);
+  end;
+
+var
+  DS   : TvgVulkanDataStore;
+  A, B : Integer;
+  L    : Integer;
+  C    : TpvVector4;
+begin
+  Writeln('--- SetObjectColorOverride ---');
+
+  // The packing the shader reads with unpackUnorm4x8: red in the low byte.
+  CheckInt('pack red',   TvgPushConstant_ObjectColor.Pack(TpvVector4.Create(1, 0, 0, 1)), $FF0000FF);
+  CheckInt('pack blue',  TvgPushConstant_ObjectColor.Pack(TpvVector4.Create(0, 0, 1, 1)), $FFFF0000);
+  CheckInt('pack half grey', TvgPushConstant_ObjectColor.Pack(TpvVector4.Create(0.5, 0.5, 0.5, 1)), $FF808080);
+  CheckInt('alpha 0 packs to none', TvgPushConstant_ObjectColor.Pack(TpvVector4.Create(1, 1, 1, 0)), 0);
+  CheckInt('alpha rounding to 0 is none', TvgPushConstant_ObjectColor.Pack(TpvVector4.Create(1, 1, 1, 0.001)), 0);
+  CheckInt('channels clamped', TvgPushConstant_ObjectColor.Pack(TpvVector4.Create(2, -1, 0, 5)), $FF0000FF);
+  Check('unpack round trip',
+    Near(TvgPushConstant_ObjectColor.Unpack(TvgPushConstant_ObjectColor.Pack(
+      TpvVector4.Create(0.2, 0.4, 0.6, 0.8))), TpvVector4.Create(0.2, 0.4, 0.6, 0.8)), True);
+
+  DS := NewStore(POINT_LIST);
+  try
+    A := AddObj(DS, 3, 0);
+    B := AddObj(DS, 2, 100);
+
+    Check('new object has no override', DS.GetObjectColorOverride(A, C), False);
+    CheckInt('...and pushes 0', DS.GetObjectColorOverridePacked(A), 0);
+
+    DS.SetObjectColorOverride(A, TpvVector4.Create(1, 0, 0, 1));
+    Check('override set', DS.GetObjectColorOverride(A, C), True);
+    Check('...red', Near(C, TpvVector4.Create(1, 0, 0, 1)), True);
+    CheckInt('pushes the packed value', DS.GetObjectColorOverridePacked(A), $FF0000FF);
+    CheckObjIntact(DS, 'A''s data untouched', A, 3, 0);
+    CheckInt('B has none', DS.GetObjectColorOverridePacked(B), 0);
+    Check('an override does not skip the draw', DS.ShouldSkipObject(A), False);
+
+    // Kept through the edits that rewrite the record.
+    L := DS.AddObjectVertex(A);
+    DS.SetObjectVertexPosition(A, L, 3, 0, 0);
+    CheckInt('kept after relocation', DS.GetObjectColorOverridePacked(A), $FF0000FF);
+    DS.RemoveObjectVertex(A, 3);
+    DS.SetObjectData(A, DS.GetObjectData(B));
+    CheckInt('kept after SetObjectData', DS.GetObjectColorOverridePacked(A), $FF0000FF);
+    DS.ResetObject(A);
+    CheckInt('kept after ResetObject', DS.GetObjectColorOverridePacked(A), $FF0000FF);
+    AddObj(DS, 1, 300);
+    DS.DeleteDataObject(B);
+    DS.Compact;
+    CheckInt('kept after Compact', DS.GetObjectColorOverridePacked(A), $FF0000FF);
+
+    DS.SetObjectColorOverride(A, TpvVector4.Create(0, 1, 0, 0));
+    Check('alpha 0 clears it', DS.GetObjectColorOverride(A, C), False);
+    DS.SetObjectColorOverride(A, TpvVector4.Create(0, 1, 0, 1));
+    DS.ClearObjectColorOverride(A);
+    CheckInt('ClearObjectColorOverride', DS.GetObjectColorOverridePacked(A), 0);
+
+    try
+      DS.SetObjectColorOverride(B, TpvVector4.Create(1, 1, 1, 1));
+      Check('override on a deleted object raises', False, True);
+    except
+      on EVulkanDataStoreException do Check('override on a deleted object raises', True, True);
+    end;
+  finally
+    DS.Free;
+  end;
+end;
+
+// ---------------------------------------------------------------------------
 begin
   try
     TestGrowBuriedObject;
@@ -763,6 +842,7 @@ begin
     TestClearAllThenReuse;
     TestGPUCapacityWithoutDevice;
     TestHidden;
+    TestColorOverride;
 
     if Failures = 0 then
       Writeln('ALL CHECKS PASSED')
