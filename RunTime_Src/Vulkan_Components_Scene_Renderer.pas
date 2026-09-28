@@ -482,6 +482,13 @@ type
     // scene state.  AddDataStore and AddDataStoreLive decide when to call it.
     Procedure DoAddDataStore(aDataStore: TvgObjectStore);
 
+    // Unlinks aDataStore from the scene and takes it out of fSceneData
+    // WITHOUT freeing it.  RemoveDataStore frees it afterwards; a store being
+    // freed some other way (its owner, or directly) calls this from its
+    // destructor so the scene is not left holding a dangling pointer.
+    // False when the store is not in this scene.
+    Function DetachDataStore(aDataStore: TvgObjectStore): Boolean;
+
     Function SetDisabled :Boolean; Override;
     Function SetEnabled  :Boolean; Override;
 
@@ -2020,7 +2027,6 @@ begin
   inherited Create(aOwner);
   fObjects        := TObjectList<TvgObject>.Create(True);  // Owns objects
 
-
   fUseShaders    := [PS_VERTEX, PS_FRAGMENT];           // TvgPipelineShaders;
   fPolygonMode   := VK_POLYGON_MODE_FILL;               // TVkPolygonMode;
   fCullMode      := TVkCullModeFlags(VK_CULL_MODE_NONE);// TVkCullModeFlags;
@@ -2040,8 +2046,16 @@ end;
 
 destructor TvgObjectStore.Destroy;
 begin
+  // A store freed by anything other than its scene (a TComponent owner, or a
+  // direct Free) must leave the scene's owning list, or ClearScene later
+  // runs ClearData on the freed store.  A no-op when the scene is the one
+  // freeing it.
+  If assigned(fScene) then
+    fScene.DetachDataStore(Self);
+
   ReleaseFromScene;
   FreeAndNil(fObjects);
+
   inherited;
 end;
 
@@ -2491,12 +2505,14 @@ begin
     for J := 0 to fScene.fRendererList.Count-1 do
       DisConnectDataFromSceneandRenderer(fScene.fRendererList.Items[J]);
 
-  If fObjects.Count>0 then
-    For I:=0 to fObjects.Count-1 do
-      fObjects.Items[I].Active := False;
+  If assigned(fObjects ) then
+  Begin
+    If fObjects.Count>0 then
+      For I:=0 to fObjects.Count-1 do
+        fObjects.Items[I].Active := False;
 
-
-  fObjects.Clear;
+    fObjects.Clear;
+  End;
 
   ClearAll(True);
 
@@ -2694,11 +2710,23 @@ begin
 end;
 
 Procedure TvgScene.RemoveDataStore(aDataStore: TvgObjectStore);
+begin
+  If not DetachDataStore(aDataStore) then exit;
+
+  aDataStore.Free;   // detached, so its destructor finds nothing left to undo
+end;
+
+Function TvgScene.DetachDataStore(aDataStore: TvgObjectStore): Boolean;
   Var I  : Integer;
       TM : TvgToolManager;
 begin
+  Result := False;
   If not assigned(aDataStore) then exit;
+  // Nil while the scene is being destroyed: FreeAndNil clears the field
+  // before the list frees its stores.
   If not assigned(fSceneData) then exit;
+  // The list takes an item out before freeing it, so a store freed by
+  // ClearScene or RemoveDataStore is no longer found here.
   If fSceneData.IndexOf(aDataStore) < 0 then exit;
 
   // A frame may be recording or executing from this store's pipelines and
@@ -2728,9 +2756,10 @@ begin
   aDataStore.Active := False;
   ForgetEditStore(aDataStore);
 
-  fSceneData.Remove(aDataStore);   // owned: frees it
+  fSceneData.Extract(aDataStore);   // out of the owning list, not freed
 
   NotifyDataChanged(nil);
+  Result := True;
 end;
 
 Procedure TvgScene.NotifyDataChanged(aDataStore: TvgObjectStore);
