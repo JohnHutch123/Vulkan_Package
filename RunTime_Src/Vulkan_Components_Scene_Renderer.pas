@@ -219,6 +219,18 @@ type
     function  GetData: TvgObjectData;
     procedure SetData(const aData: TvgObjectData);
 
+    { Draws the object in aColor in place of its own colour, leaving its data
+      as it is (TvgVulkanDataStore.SetObjectColorOverride) - for a layer
+      colour, a highlight.  Needs the store's ColorOverrideON (the default)
+      and a shader that reads the override.  Alpha 0 clears it, as does
+      ClearColorOverride.  Not an edit: works on a locked or frozen object.
+      Notifies once per change.  Nothing happens for an object not in a
+      store. }
+    procedure SetColorOverride(const aColor: TpvVector4);
+    procedure ClearColorOverride;
+    { False, aColor untouched, for none. }
+    function  GetColorOverride(out aColor: TpvVector4): Boolean;
+
     Property VertexCount : Integer read GetVertexCount;
 
     // Properties
@@ -251,6 +263,7 @@ type
 
     fInDataBounds  : Boolean;
     fDepthTest     : Boolean;
+    fColorOverrideON : Boolean;
 
     // Builds one object from world points for AddPoint/AddLine/AddPolyline.
     function  AddShape(const aPoints: array of TpvVector3D; aClosed: Boolean;
@@ -281,6 +294,11 @@ type
 
     // Every renderer of the scene records its frames again.
     procedure GPUBuffersReplaced; Override;
+
+    { Appends a TvgPushConstant_ObjectColor to aPipe's push constants, once,
+      with its GLSL offset set.  UpdateGraphicPipeline calls it when
+      ColorOverrideON. }
+    class procedure AddColorOverridePushConstant(aPipe: TvgGraphicPipeline); static;
 
   public
     constructor Create(AOwner: TComponent);  Override;
@@ -382,6 +400,12 @@ type
     // no depth write.  Default True.  Read when the pipeline is built, so set
     // it before the store is connected.
     Property DepthTest : Boolean read fDepthTest write fDepthTest;
+
+    // True (the default) gives every pipeline of the store a
+    // TvgPushConstant_ObjectColor, so an object's colour override
+    // (TvgObject.SetColorOverride) reaches a shader that declares it.  Read
+    // when the pipeline is built, so set it before the store is connected.
+    Property ColorOverrideON : Boolean read fColorOverrideON write fColorOverrideON;
 
     Property Scene: TvgScene read fScene ;
     Property Active: Boolean read GetActive write SetActiveState;
@@ -1484,6 +1508,32 @@ begin
   NotifyEdited;
 end;
 
+procedure TvgObject.SetColorOverride(const aColor: TpvVector4);
+var
+  Before : Cardinal;
+begin
+  if not Assigned(fDataStore) or (fObjIndex < 0) or
+     fDataStore.IsObjectDeleted(fObjIndex) then
+    Exit;
+
+  Before := fDataStore.GetObjectColorOverridePacked(fObjIndex);
+  fDataStore.SetObjectColorOverride(fObjIndex, aColor);
+  if fDataStore.GetObjectColorOverridePacked(fObjIndex) <> Before then
+    NotifyEdited;   // recorded again with the new colour
+end;
+
+procedure TvgObject.ClearColorOverride;
+begin
+  SetColorOverride(TpvVector4.Create(0, 0, 0, 0));
+end;
+
+function TvgObject.GetColorOverride(out aColor: TpvVector4): Boolean;
+begin
+  Result := Assigned(fDataStore) and (fObjIndex >= 0) and
+            not fDataStore.IsObjectDeleted(fObjIndex) and
+            fDataStore.GetObjectColorOverride(fObjIndex, aColor);
+end;
+
 function TvgObject.CanEdit: Boolean;
 begin
   Result := Assigned(fDataStore) and (fObjIndex >= 0) and
@@ -2058,6 +2108,7 @@ begin
   fDefaultColor  := TpvVector4.Create(1, 1, 1, 1);
   fInDataBounds  := True;
   fDepthTest     := True;
+  fColorOverrideON := True;
 
 
 //  fInstanceDataON   := False;
@@ -2614,6 +2665,29 @@ begin
     aPipe.DepthStencil.DepthTestEnable  := False;
     aPipe.DepthStencil.DepthWriteEnable := False;
   end;
+
+  // Last, after the renderer's push constants: theirs are declared at
+  // offset 0 in their shaders, so nothing may go in front of them.
+  if fColorOverrideON then
+    AddColorOverridePushConstant(aPipe);
+end;
+
+class procedure TvgObjectStore.AddColorOverridePushConstant(aPipe: TvgGraphicPipeline);
+var
+  Off    : TVkUInt32;
+  Stages : TVkShaderStageFlags;
+  PCI    : TvgPushConstantItem;
+begin
+  if not Assigned(aPipe) or not Assigned(aPipe.PushConstantCol) then Exit;
+  // Once: the pipeline may be updated again.
+  if TvgVulkanDataStore.FindObjectColorPushConstant(aPipe, Off, Stages) then Exit;
+
+  PCI := aPipe.PushConstantCol.Add;
+  PCI.Name             := 'inObjectColor';
+  PCI.PushConstantName := TvgPushConstant_ObjectColor.GetPropertyName;
+  aPipe.PushConstantCol.UpdateOffsets;
+  if PCI.PushConstant is TvgPushConstant_ObjectColor then
+    TvgPushConstant_ObjectColor(PCI.PushConstant).Offset := PCI.Offset;
 end;
 
 procedure TvgObjectStore.ConnectDataToRenderer(aRenderer: TvgBaseRenderEngine);
