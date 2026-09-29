@@ -2,6 +2,7 @@ package VulkanPkg_VCLD280;
 
 {$R *.res}
 {$R *.dres}
+{$R '..\Design_Src\VulkanPkg_DesignIconsVCL.res' '..\Design_Src\VulkanPkg_DesignIconsVCL.rc'}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
 {$ALIGN 8}
 {$ASSERTIONS ON}

@@ -170,6 +170,9 @@
             <Form>vgSessionEditorFM</Form>
         </DCCReference>
         <DCCReference Include="..\Design_Src\VulkanPkg_DataModuleReg.pas"/>
+        <RcCompile Include="..\Design_Src\VulkanPkg_DesignIconsVCL.rc">
+            <Form>..\Design_Src\VulkanPkg_DesignIconsVCL.res</Form>
+        </RcCompile>
         <RcItem Include="..\Design_Src\TVGWINDOWVCL.bmp">
             <ResourceType>BITMAP</ResourceType>
             <ResourceId>TVGWINDOWVCL</ResourceId>
