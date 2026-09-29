@@ -34,6 +34,8 @@
           Build Vulkan Session
           Enable / Disable Vulkan Session
           Add Linker (another window)
+          Add Scene
+          Load Scene File...
     * Active property editor on every session component (instance, devices,
       linkers, TvgWindowVCL): setting Active to True at design time starts the
       whole session the component is connected to - every device, linker and
@@ -43,6 +45,14 @@
     * File > New > Other > Delphi Files > "Vulkan Session Data Module" creates
       a new unit whose data module descends from TvgVulkanDataModule.
     * TvgScreenRenderDevice goes on the palette so it can sit on the module.
+
+  Scenes: Add Scene creates a TvgScene connected to the primary linker and
+  renderer; Load Scene... picks a file and loads it with a registered scene
+  loader (by SceneLoaderType, or by extension).  SceneLoaderType drops down
+  the registered loaders; SceneFileName has a file-open button.  Any
+  TvgScene also gets "Load Scene File..." / "Clear Scene" on its menu.
+  Loaders register themselves in Vulkan_SceneLoaders (the glTF loader is in
+  the PRO package).
 
   Extra windows: drop another TvgLinker (or use Add Linker), set its
   ScreenDevice, and set the second TvgWindowVCL's VulkanLink to it - all
@@ -65,6 +75,8 @@ uses
   DMForm,
   ToolsAPI,
   Vulkan_Components,
+  Vulkan_Components_Scene_Renderer,
+  Vulkan_SceneLoaders,
   Vulkan_WindowVCL,
   Vulkan_DataModule,
   VulkanDataModuleEditFM;
@@ -74,6 +86,28 @@ type
   TvgSessionActiveProperty = class(TBoolProperty)
   public
     procedure SetValue(const Value: string); override;
+  end;
+
+  { SceneLoaderType: the registered scene loaders. }
+  TvgSceneLoaderTypeProperty = class(TStringProperty)
+  public
+    function  GetAttributes: TPropertyAttributes; override;
+    procedure GetValues(Proc: TGetStrProc); override;
+  end;
+
+  { SceneFileName: file-open dialog filtered to the registered formats. }
+  TvgSceneFileNameProperty = class(TStringProperty)
+  public
+    function  GetAttributes: TPropertyAttributes; override;
+    procedure Edit; override;
+  end;
+
+  { Load / clear any TvgScene from its context menu. }
+  TvgSceneEditor = class(TComponentEditor)
+  public
+    function  GetVerbCount: Integer; override;
+    function  GetVerb(Index: Integer): string; override;
+    procedure ExecuteVerb(Index: Integer); override;
   end;
 
   TvgVulkanDataModuleCustomModule = class(TDataModuleCustomModule)
@@ -142,6 +176,16 @@ procedure BuildSessionInDesigner(aModule: TvgVulkanDataModule; const aDesigner: 
 { Adds a linker on the module's ScreenDevice through the designer. }
 procedure AddLinkerInDesigner(aModule: TvgVulkanDataModule; const aDesigner: IDesigner);
 
+{ Creates the module's Scene through the designer and connects it. }
+procedure BuildSceneInDesigner(aModule: TvgVulkanDataModule; const aDesigner: IDesigner);
+
+{ Asks for a scene file (aAsk, or no SceneFileName yet), enables the session
+  when it can and loads the file, so the scene shows in the designer. }
+procedure LoadSceneInDesigner(aModule: TvgVulkanDataModule; const aDesigner: IDesigner; aAsk: Boolean);
+
+{ Open dialog for a scene file; aFileName in and out. }
+function  PickSceneFile(var aFileName: string): Boolean;
+
 { Marks the module and the window's form as modified. }
 procedure NotifySessionModified(aModule: TvgVulkanDataModule; const aDesigner: IDesigner);
 
@@ -159,9 +203,11 @@ const
   cVerbEdit      = 0;
   cVerbBuild     = 1;
   cVerbAddLinker = 2;
-  cVerbToggle    = 3;
-  cVerbAbout     = 4;
-  cVerbCount     = 5;
+  cVerbAddScene  = 3;
+  cVerbLoadScene = 4;
+  cVerbToggle    = 5;
+  cVerbAbout     = 6;
+  cVerbCount     = 7;
 
   cUnitSource =
     'unit %0:s;'                                                   + sLineBreak +
@@ -193,7 +239,12 @@ const
 
 procedure Register;
 begin
-  RegisterComponents('Vulkan Graphics', [TvgScreenRenderDevice]);
+  RegisterComponents('Vulkan Graphics', [TvgScreenRenderDevice, TvgScene]);
+
+  RegisterComponentEditor(TvgScene, TvgSceneEditor);
+
+  RegisterPropertyEditor(TypeInfo(string), TvgVulkanDataModule, 'SceneLoaderType', TvgSceneLoaderTypeProperty);
+  RegisterPropertyEditor(TypeInfo(string), TvgVulkanDataModule, 'SceneFileName',   TvgSceneFileNameProperty);
 
   RegisterCustomModule(TvgVulkanDataModule, TvgVulkanDataModuleCustomModule);
 
@@ -224,6 +275,9 @@ begin
   Result :=
     function(aClass: TComponentClass; aIndex: Integer): TComponent
     begin
+      If aIndex = cSceneSlot then
+        Result := D.CreateComponent(aClass, aModule, 24, 120, 0, 0)
+      else
       If aIndex < 3 then
         Result := D.CreateComponent(aClass, aModule, 24 + aIndex * 112, 24, 0, 0)
       else
@@ -262,6 +316,150 @@ begin
     aDesigner.SelectComponent(L);   //ready for its window in the Object Inspector
 end;
 
+procedure BuildSceneInDesigner(aModule: TvgVulkanDataModule; const aDesigner: IDesigner);
+begin
+  If not assigned(aModule) then exit;
+
+  If assigned(aDesigner) then
+    aModule.BuildScene(DesignerFactory(aModule, aDesigner))
+  else
+    aModule.BuildScene;
+
+  NotifySessionModified(aModule, aDesigner);
+end;
+
+function PickSceneFile(var aFileName: string): Boolean;
+  Var D : TOpenDialog;
+begin
+  D := TOpenDialog.Create(nil);
+  Try
+    D.Title   := 'Load Scene';
+    D.Filter  := SceneLoaderDialogFilter;
+    D.Options := [ofFileMustExist, ofHideReadOnly, ofEnableSizing];
+
+    If aFileName <> '' then
+    Begin
+      D.InitialDir := ExtractFilePath(aFileName);
+      D.FileName   := ExtractFileName(aFileName);
+    End;
+
+    Result := D.Execute;
+    If Result then
+      aFileName := D.FileName;
+  Finally
+    D.Free;
+  End;
+end;
+
+procedure LoadSceneInDesigner(aModule: TvgVulkanDataModule; const aDesigner: IDesigner; aAsk: Boolean);
+  Var FileName  : string;
+      WasActive : Boolean;
+begin
+  If not assigned(aModule) then exit;
+
+  FileName := aModule.SceneFileName;
+  If aAsk or (FileName = '') then
+  Begin
+    If not PickSceneFile(FileName) then exit;
+
+    If FileName <> aModule.SceneFileName then
+    Begin
+      aModule.SceneFileName := FileName;
+      If assigned(aDesigner) then
+        aDesigner.Modified;
+    End;
+  End;
+
+  If not assigned(aModule.Scene) then
+    BuildSceneInDesigner(aModule, aDesigner);
+
+  //show it: bring the session up when it can be; otherwise just load the
+  //data, which draws once the session is enabled
+  WasActive := aModule.SessionActive;
+  If not WasActive and aModule.CanEnableSession then
+    aModule.EnableSession;     //loads it already with LoadSceneOnEnable
+
+  If WasActive or not aModule.SessionActive or not aModule.LoadSceneOnEnable then
+    aModule.LoadScene;
+end;
+
+{ TvgSceneLoaderTypeProperty }
+
+function TvgSceneLoaderTypeProperty.GetAttributes: TPropertyAttributes;
+begin
+  Result := [paValueList, paSortList, paRevertable, paMultiSelect];
+end;
+
+procedure TvgSceneLoaderTypeProperty.GetValues(Proc: TGetStrProc);
+  Var Info : TvgSceneLoaderInfo;
+begin
+  For Info in SceneLoaders do
+    Proc(Info.Name);
+end;
+
+{ TvgSceneFileNameProperty }
+
+function TvgSceneFileNameProperty.GetAttributes: TPropertyAttributes;
+begin
+  Result := [paDialog, paRevertable, paMultiSelect];
+end;
+
+procedure TvgSceneFileNameProperty.Edit;
+  Var FileName : string;
+begin
+  FileName := GetValue;
+  If PickSceneFile(FileName) then
+    SetValue(FileName);
+end;
+
+{ TvgSceneEditor }
+
+function TvgSceneEditor.GetVerbCount: Integer;
+begin
+  Result := 2;
+end;
+
+function TvgSceneEditor.GetVerb(Index: Integer): string;
+begin
+  Case Index of
+    0 : Result := '&Load Scene File...';
+    1 : Result := '&Clear Scene';
+  else
+    Result := '';
+  End;
+end;
+
+procedure TvgSceneEditor.ExecuteVerb(Index: Integer);
+  Var Scene    : TvgScene;
+      M        : TvgVulkanDataModule;
+      FileName : string;
+begin
+  Scene := Component as TvgScene;
+
+  //the module's own scene: use its loader settings and remember the file
+  M := nil;
+  If (Scene.Owner is TvgVulkanDataModule) and (TvgVulkanDataModule(Scene.Owner).Scene = Scene) then
+    M := TvgVulkanDataModule(Scene.Owner);
+
+  Try
+    Case Index of
+      0 : If assigned(M) then
+            LoadSceneInDesigner(M, Designer, True)
+          else
+          Begin
+            FileName := '';
+            If PickSceneFile(FileName) then
+              vgLoadSceneFile(Scene, FileName);   //loader chosen by extension
+          End;
+
+      1 : Scene.ClearScene;
+    End;
+  Except
+    On E: Exception do
+      MessageDlg('Scene:' + sLineBreak + E.Message, mtError, [mbOK], 0);
+  End;
+end;
+
 { TvgSessionActiveProperty }
 
 procedure TvgSessionActiveProperty.SetValue(const Value: string);
@@ -286,6 +484,12 @@ begin
     //a session that presents to windows starts as a whole - devices, every
     //linker and window.  Anything else (an instance on its own, a renderer)
     //just switches itself on.
+    //the instance of a session data module: start it as the module does,
+    //so LoadSceneOnEnable loads the scene too
+    If assigned(Inst) and (Inst.Owner is TvgVulkanDataModule) and
+       (TvgVulkanDataModule(Inst.Owner).Instance = Inst) then
+      TvgVulkanDataModule(Inst.Owner).EnableSession
+    else
     If assigned(Inst) and (Length(vgSessionLinkers(Inst)) > 0) then
       vgEnableSession(Inst)       //raises with the reason: shown by the Object Inspector
     else
@@ -311,6 +515,8 @@ begin
     cVerbEdit   : Result := '&Edit Vulkan Session...';
     cVerbBuild  : Result := '&Build Vulkan Session';
     cVerbAddLinker : Result := 'Add &Linker (another window)';
+    cVerbAddScene  : Result := 'Add &Scene';
+    cVerbLoadScene : Result := 'Load Scene &File...';
     cVerbToggle : If M.SessionActive then
                     Result := '&Disable Vulkan Session'
                   else
@@ -338,6 +544,10 @@ begin
         procedure
         begin
           AddLinkerInDesigner(M, D);
+        end,
+        procedure
+        begin
+          LoadSceneInDesigner(M, D, True);
         end);
 
     cVerbBuild :
@@ -349,6 +559,22 @@ begin
       Except
         On E: Exception do
           MessageDlg(E.Message, mtError, [mbOK], 0);
+      End;
+
+    cVerbAddScene :
+      Try
+        BuildSceneInDesigner(M, D);
+      Except
+        On E: Exception do
+          MessageDlg(E.Message, mtError, [mbOK], 0);
+      End;
+
+    cVerbLoadScene :
+      Try
+        LoadSceneInDesigner(M, D, True);
+      Except
+        On E: Exception do
+          MessageDlg('Load scene:' + sLineBreak + E.Message, mtError, [mbOK], 0);
       End;
 
     cVerbToggle :

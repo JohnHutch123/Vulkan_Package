@@ -29,6 +29,7 @@
   The tree follows the session the way it is connected:
 
       Instance > Physical Device(s) > Screen Device > Linker(s) > Window
+                                                              > Renderer > Scene
 
   so a second window and its linker appear under the same screen device.
   Vulkan components on the module that are not connected to the session
@@ -70,6 +71,8 @@ uses
   Vcl.CheckLst,
   DesignIntf,
   Vulkan_Components,
+  Vulkan_Components_Scene_Renderer,
+  Vulkan_SceneLoaders,
   Vulkan_WindowVCL,
   Vulkan_DataModule;
 
@@ -79,6 +82,7 @@ type
     lblStatus: TLabel;
     btnBuild: TButton;
     btnAddLinker: TButton;
+    btnLoadScene: TButton;
     btnEnable: TButton;
     btnDisable: TButton;
     btnRefresh: TButton;
@@ -106,6 +110,7 @@ type
     procedure edValueKeyPress(Sender: TObject; var Key: Char);
     procedure btnBuildClick(Sender: TObject);
     procedure btnAddLinkerClick(Sender: TObject);
+    procedure btnLoadSceneClick(Sender: TObject);
     procedure btnEnableClick(Sender: TObject);
     procedure btnDisableClick(Sender: TObject);
     procedure btnRefreshClick(Sender: TObject);
@@ -114,6 +119,7 @@ type
     fDesigner    : IDesigner;
     fOnBuild     : TProc;
     fOnAddLinker : TProc;
+    fOnLoadScene : TProc;
 
     fObject      : TPersistent;   //object whose properties are listed
     fProp        : PPropInfo;     //property being edited
@@ -144,11 +150,12 @@ type
     property Designer : IDesigner read fDesigner;
   end;
 
-{ aBuild creates the missing session components and aAddLinker adds one more
-  linker; the designer passes procedures that create them through IDesigner
-  so they are named and streamed. }
+{ aBuild creates the missing session components, aAddLinker adds one more
+  linker and aLoadScene picks and loads a scene file; the designer passes
+  procedures that create components through IDesigner so they are named and
+  streamed. }
 procedure RunVulkanSessionEditor(aModule: TvgVulkanDataModule; const aDesigner: IDesigner;
-                                 const aBuild, aAddLinker: TProc);
+                                 const aBuild, aAddLinker, aLoadScene: TProc);
 
 implementation
 
@@ -158,7 +165,7 @@ const
   cMaxDepth = 6;   //sub-object nesting shown in the tree
 
 procedure RunVulkanSessionEditor(aModule: TvgVulkanDataModule; const aDesigner: IDesigner;
-                                 const aBuild, aAddLinker: TProc);
+                                 const aBuild, aAddLinker, aLoadScene: TProc);
   Var F : TvgSessionEditorFM;
 begin
   If not assigned(aModule) then exit;
@@ -169,6 +176,7 @@ begin
     F.fDesigner := aDesigner;
     F.fOnBuild  := aBuild;
     F.fOnAddLinker := aAddLinker;
+    F.fOnLoadScene := aLoadScene;
     F.Caption   := Format('Vulkan Session Editor - %s', [aModule.Name]);
     F.ShowModal;
   Finally
@@ -405,7 +413,7 @@ begin
 end;
 
 procedure TvgSessionEditorFM.BuildTree(aSelect: TPersistent = nil);
-  Var Node, InstNode, PDNode, LDNode, LNode, Other : TTreeNode;
+  Var Node, InstNode, PDNode, LDNode, LNode, RNode, Other : TTreeNode;
       Shown : TList<TObject>;
       Inst  : TvgInstance;
       PD    : TvgPhysicalDevice;
@@ -456,6 +464,10 @@ begin
             Begin
               LNode := AddComponentNode(LDNode, L, Shown);
               AddComponentNode(LNode, vgLinkerWindow(L), Shown);
+
+              RNode := AddComponentNode(LNode, L.Renderer, Shown);
+              If assigned(RNode) and (L.Renderer is TvgRenderEngine) then
+                AddComponentNode(RNode, TvgRenderEngine(L.Renderer).Scene, Shown);
             End;
       End;
     End;
@@ -465,6 +477,9 @@ begin
     AddOther(fModule.ScreenDevice);
     AddOther(fModule.Linker);
     AddOther(fModule.Window);
+    AddOther(fModule.Renderer);
+    AddOther(fModule.Scene);
+    AddOther(fModule.SceneLoader);
 
     For I := 0 to fModule.ComponentCount - 1 do
     Begin
@@ -599,6 +614,7 @@ procedure TvgSessionEditorFM.ShowEditor;
       Current : string;
       Running : Boolean;
       Comp    : TComponent;
+      Info    : TvgSceneLoaderInfo;
 begin
   fUpdating := True;
   Try
@@ -629,6 +645,19 @@ begin
 
     Current := PropValueText(fObject, fProp);
     TD      := GetTypeData(vgPropType(fProp));
+
+    //the module's loader type: offer the registered loaders
+    If (fObject is TvgVulkanDataModule) and SameText(vgPropName(fProp), 'SceneLoaderType') then
+    Begin
+      cbValue.Items.Add('');   //blank: by file extension
+      For Info in SceneLoaders do
+        cbValue.Items.Add(Info.Name);
+      cbValue.ItemIndex := cbValue.Items.IndexOf(Current);
+      cbValue.Visible   := True;
+      cbValue.Enabled   := not Running;
+      lblHint.Caption   := lblHint.Caption + ' Blank picks the loader by file extension.';
+      exit;
+    End;
 
     Case vgPropType(fProp)^.Kind of
       tkEnumeration :
@@ -754,7 +783,12 @@ begin
         SetFloatProp(fObject, fProp, StrToFloat(Trim(edValue.Text)));
 
       tkString, tkLString, tkUString, tkWString :
-        SetStrProp(fObject, fProp, edValue.Text);
+        If cbValue.Visible then    //a string offered as a pick list
+        Begin
+          If cbValue.ItemIndex < 0 then exit;
+          SetStrProp(fObject, fProp, cbValue.Items[cbValue.ItemIndex]);
+        End else
+          SetStrProp(fObject, fProp, edValue.Text);
 
       tkEnumeration :
         Begin
@@ -863,6 +897,7 @@ begin
 
   btnBuild.Enabled     := not Running and assigned(fOnBuild);
   btnAddLinker.Enabled := not Running and assigned(fOnAddLinker) and assigned(fModule.ScreenDevice);
+  btnLoadScene.Enabled := assigned(fOnLoadScene);
   btnEnable.Enabled  := not Running and (Problem = '');
   btnDisable.Enabled := Running;
 end;
@@ -933,6 +968,26 @@ begin
   End;
 
   BuildTree(Added);
+  UpdateStatus;
+end;
+
+procedure TvgSessionEditorFM.btnLoadSceneClick(Sender: TObject);
+begin
+  If not assigned(fOnLoadScene) then exit;
+
+  Screen.Cursor := crHourGlass;
+  Try
+    Try
+      fOnLoadScene();
+    Except
+      On E: Exception do
+        MessageDlg('Unable to load the scene:' + sLineBreak + E.Message, mtError, [mbOK], 0);
+    End;
+  Finally
+    Screen.Cursor := crDefault;
+  End;
+
+  BuildTree(fObject);
   UpdateStatus;
 end;
 

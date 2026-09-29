@@ -60,6 +60,14 @@
   At run time call EnableSession once the forms holding the windows have
   their handles, e.g. from the main form's OnShow.
 
+  Scene: Scene and Renderer hang off the primary Linker (drop a renderer such
+  as TvgRenderEngine_Single; Add Scene creates the TvgScene).  LoadScene reads
+  SceneFileName with a registered scene loader - SceneLoaderType names one
+  (e.g. 'glTF'), or leave it blank to pick by file extension - or with the
+  SceneLoader component if one is assigned.  LoadSceneOnEnable loads the file
+  every time the session is enabled, at design time too, so the scene can be
+  seen in the designer.  Loaders register in Vulkan_SceneLoaders.
+
   A TvgVulkanDataModule needs a .dfm, as every TDataModule descendant does.
   To build one purely in code use CreateNew:
 
@@ -67,7 +75,10 @@
       DM.BuildSession;
       DM.Window := VulkanWindow1;
       DM.AddLinker(VulkanWindow2);
+      DM.Renderer := TvgRenderEngine_Single.Create(DM);
+      DM.BuildScene;
       DM.EnableSession;
+      DM.LoadScene('C:\Models\Box.glb');     //loader picked by extension
 }
 
 unit Vulkan_DataModule;
@@ -80,16 +91,22 @@ uses
   System.Generics.Collections,
   Vcl.Controls,
   Vulkan_Components,
+  Vulkan_Components_Scene_Renderer,
+  Vulkan_SceneLoaders,
   Vulkan_WindowVCL;
 
 type
   EvgVulkanSessionError = class(Exception);
 
   { Creates one session component.  aIndex is its layout slot: 0 = instance,
-    1 = physical device, 2 = screen device, 3.. = linkers.  The designer uses
-    it to place new components; code may ignore it. }
+    1 = physical device, 2 = screen device, 3.. = linkers, cSceneSlot =
+    scene.  The designer uses it to place new components; code may ignore it. }
   TvgSessionComponentFactory = reference to function(aClass: TComponentClass; aIndex: Integer): TComponent;
 
+const
+  cSceneSlot = 100;   //layout slot a factory gets for the scene
+
+type
   TvgVulkanDataModule = class(TDataModule)
   private
     fInstance          : TvgInstance;
@@ -97,6 +114,13 @@ type
     fScreenDevice      : TvgScreenRenderDevice;
     fLinker            : TvgLinker;
     fWindow            : TvgWindowVCL;
+
+    fScene             : TvgScene;
+    fRenderer          : TvgRenderEngine;
+    fSceneLoader       : TvgSceneLoaderStorer;
+    fSceneLoaderType   : string;
+    fSceneFileName     : string;
+    fLoadSceneOnEnable : Boolean;
 
     fOnSessionEnabled  : TNotifyEvent;
     fOnSessionDisabled : TNotifyEvent;
@@ -106,6 +130,9 @@ type
     procedure SetScreenDevice(const Value: TvgScreenRenderDevice);
     procedure SetLinker(const Value: TvgLinker);
     procedure SetWindow(const Value: TvgWindowVCL);
+    procedure SetScene(const Value: TvgScene);
+    procedure SetRenderer(const Value: TvgRenderEngine);
+    procedure SetSceneLoader(const Value: TvgSceneLoaderStorer);
 
     function  GetSessionActive: Boolean;
     procedure SetSessionActive(const Value: Boolean);
@@ -136,7 +163,24 @@ type
       A running session is disabled first. }
     procedure ConnectSession;
 
-    { Every component connected under Instance: devices, linkers, windows. }
+    { Creates Scene if missing and connects it (see ConnectScene).  The
+      renderer is not created: drop one (e.g. TvgRenderEngine_Single) and
+      assign Renderer, as its class lives in its own package. }
+    procedure BuildScene; overload;
+    procedure BuildScene(const aFactory: TvgSessionComponentFactory); overload;
+
+    { Renderer.Linker, Scene.Linker and Renderer.Scene to the primary Linker,
+      and a default camera for an empty scene.  Called by ConnectSession. }
+    procedure ConnectScene;
+
+    { Loads aFileName (SceneFileName when blank) into Scene with SceneLoader,
+      or a loader of SceneLoaderType, or one chosen by the file's extension.
+      Raises EvgSceneLoaderError with the reason when it can't. }
+    procedure LoadScene(const aFileName: string = '');
+    procedure ClearScene;
+
+    { Every component connected under Instance: devices, linkers, windows,
+      renderers and scenes. }
     procedure GetSessionComponents(aList: TList<TComponent>);
     function  SessionLinkers: TArray<TvgLinker>;
 
@@ -161,6 +205,21 @@ type
     { Switches the whole session on/off.  Never stored: a session always
       starts disabled and is enabled in code (or from the designer). }
     property SessionActive  : Boolean read GetSessionActive write SetSessionActive stored False;
+
+    { The primary linker's renderer and scene. }
+    property Renderer       : TvgRenderEngine        read fRenderer       write SetRenderer;
+    property Scene          : TvgScene               read fScene          write SetScene;
+
+    { Optional loader component (with its own settings); without one a loader
+      of SceneLoaderType - or picked by extension - is made for each load. }
+    property SceneLoader    : TvgSceneLoaderStorer   read fSceneLoader    write SetSceneLoader;
+
+    { A registered loader name, e.g. 'glTF'.  Blank: by file extension. }
+    property SceneLoaderType : string read fSceneLoaderType write fSceneLoaderType;
+    property SceneFileName   : string read fSceneFileName   write fSceneFileName;
+
+    { Load SceneFileName each time the session is enabled (design time too). }
+    property LoadSceneOnEnable : Boolean read fLoadSceneOnEnable write fLoadSceneOnEnable default False;
 
     property OnSessionEnabled  : TNotifyEvent read fOnSessionEnabled  write fOnSessionEnabled;
     property OnSessionDisabled : TNotifyEvent read fOnSessionDisabled write fOnSessionDisabled;
@@ -305,6 +364,9 @@ begin
   Begin
     Add(L);
     Add(vgLinkerWindow(L));
+    Add(L.Renderer);
+    If L.Renderer is TvgRenderEngine then
+      Add(TvgRenderEngine(L.Renderer).Scene);
   End;
 end;
 
@@ -444,6 +506,9 @@ begin
   If AComponent = fScreenDevice   then fScreenDevice   := nil;
   If AComponent = fLinker         then fLinker         := nil;
   If AComponent = fWindow         then fWindow         := nil;
+  If AComponent = fScene          then fScene          := nil;
+  If AComponent = fRenderer       then fRenderer       := nil;
+  If AComponent = fSceneLoader    then fSceneLoader    := nil;
 end;
 
 procedure TvgVulkanDataModule.ReferenceChanged(aOld, aNew: TComponent);
@@ -507,6 +572,39 @@ begin
   Old     := fWindow;
   fWindow := Value;
   ReferenceChanged(Old, Value);
+end;
+
+procedure TvgVulkanDataModule.SetScene(const Value: TvgScene);
+  Var Old : TComponent;
+begin
+  If fScene = Value then exit;
+  DisableSession;
+  Old    := fScene;
+  fScene := Value;
+  ReferenceChanged(Old, Value);
+end;
+
+procedure TvgVulkanDataModule.SetRenderer(const Value: TvgRenderEngine);
+  Var Old : TComponent;
+begin
+  If fRenderer = Value then exit;
+  DisableSession;
+  Old       := fRenderer;
+  fRenderer := Value;
+  ReferenceChanged(Old, Value);
+end;
+
+procedure TvgVulkanDataModule.SetSceneLoader(const Value: TvgSceneLoaderStorer);
+begin
+  If fSceneLoader = Value then exit;
+
+  If assigned(fSceneLoader) and (fSceneLoader.Owner <> Self) then
+    fSceneLoader.RemoveFreeNotification(Self);
+
+  fSceneLoader := Value;
+
+  If assigned(fSceneLoader) then
+    fSceneLoader.FreeNotification(Self);
 end;
 
 function TvgVulkanDataModule.MakeUniqueName(const aBase: string): string;
@@ -611,6 +709,68 @@ begin
   If assigned(fWindow) and assigned(fLinker) and
      (fWindow.VulkanLink <> fLinker) then
     fWindow.VulkanLink := fLinker;
+
+  ConnectScene;
+end;
+
+procedure TvgVulkanDataModule.ConnectScene;
+begin
+  DisableSession;
+
+  If assigned(fRenderer) and assigned(fLinker) and (fRenderer.Linker <> fLinker) then
+    fRenderer.Linker := fLinker;
+
+  If assigned(fScene) and assigned(fLinker) and (fScene.Linker <> fLinker) then
+    fScene.Linker := fLinker;
+
+  If assigned(fRenderer) and assigned(fScene) and (fRenderer.Scene <> fScene) then
+    fRenderer.Scene := fScene;
+
+  //adds one only when the scene has none
+  If assigned(fScene) and assigned(fScene.Cameras) then
+    fScene.Cameras.AddBaseCamera('Default');
+end;
+
+procedure TvgVulkanDataModule.BuildScene;
+begin
+  BuildScene(nil);
+end;
+
+procedure TvgVulkanDataModule.BuildScene(const aFactory: TvgSessionComponentFactory);
+  Var C : TComponent;
+begin
+  If not assigned(fScene) then
+  Begin
+    If assigned(aFactory) then
+      C := aFactory(TvgScene, cSceneSlot)
+    else
+    Begin
+      C      := TvgScene.Create(Self);
+      C.Name := MakeUniqueName('vgScene');
+    End;
+
+    If not (C is TvgScene) then
+      raise EvgVulkanSessionError.Create('Unable to create a TvgScene');
+
+    Scene := TvgScene(C);   //connects it
+  End else
+    ConnectScene;
+end;
+
+procedure TvgVulkanDataModule.LoadScene(const aFileName: string = '');
+  Var FileName : string;
+begin
+  FileName := aFileName;
+  If FileName = '' then
+    FileName := fSceneFileName;
+
+  vgLoadSceneFile(fScene, FileName, fSceneLoader, fSceneLoaderType);
+end;
+
+procedure TvgVulkanDataModule.ClearScene;
+begin
+  If assigned(fScene) then
+    fScene.ClearScene;
 end;
 
 procedure TvgVulkanDataModule.GetSessionComponents(aList: TList<TComponent>);
@@ -667,6 +827,10 @@ begin
   ConnectSession;
   vgEnableSession(fInstance);
 
+  //the session stays up if the file can't be read: the error says why
+  If fLoadSceneOnEnable and (fSceneFileName <> '') and assigned(fScene) then
+    LoadScene;
+
   If assigned(fOnSessionEnabled) and not (csDesigning in ComponentState) then
     fOnSessionEnabled(Self);
 end;
@@ -688,6 +852,6 @@ end;
 initialization
   //TvgScreenRenderDevice is not on the run time palette, so register all the
   //session classes for streaming a data module's .dfm at run time.
-  RegisterClasses([TvgInstance, TvgPhysicalDevice, TvgScreenRenderDevice, TvgLinker]);
+  RegisterClasses([TvgInstance, TvgPhysicalDevice, TvgScreenRenderDevice, TvgLinker, TvgScene]);
 
 end.

@@ -59,6 +59,15 @@ and connects it to a `TvgWindowVCL` on any form.
   form/module, as a dataset's `Connection` does.
 - **Test like a dataset:** set `Active` to True on any session component (instance, device, linker or
   window) at design time to start the whole session it belongs to; the reason is shown if it can't start.
+- **Scene:** drop a renderer (e.g. `TvgRenderEngine_Single`) and set the module's `Renderer`, then
+  right-click > *Add Scene*. *Load Scene File...* picks a file and loads it with a registered scene loader:
+  `SceneLoaderType` drops down the registered loaders (blank = choose by file extension), `SceneFileName`
+  has a file-open button, and `LoadSceneOnEnable` reloads it whenever the session is enabled, at design
+  time too. Any `TvgScene` also gets *Load Scene File...* / *Clear Scene* on its menu. In code:
+  `DM.LoadScene('model.glb')`.
+- **Scene loaders** register themselves in `Vulkan_SceneLoaders` (core package), e.g. in the PRO glTF unit:
+  `RegisterSceneLoader(TvgSceneLoaderStorer_GLTF, 'glTF', 'glTF 2.0 scene', '.gltf;.glb', 'FileName');`
+  where the last argument is the loader's published file-name property.
 - **Edit everything:** right-click > *Edit Vulkan Session...* opens an editor showing the session as it is
   connected (Instance > devices > linkers > windows, plus anything not yet connected) and the published
   properties of each component (read only while the session runs).
