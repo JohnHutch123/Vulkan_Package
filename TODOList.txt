@@ -1,0 +1,4 @@
+TO DO
+	Remove Vulkan_Components_Nodes.pas
+	Design time module registered/installed and tested
+	Introduction document
