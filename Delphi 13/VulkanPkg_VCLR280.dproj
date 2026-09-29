@@ -112,6 +112,7 @@
         <DCCReference Include="VulkanPkgR280.dcp"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_WindowVCL.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_PointerValidation.pas"/>
+        <DCCReference Include="..\Design_Src\Vulkan_DataModule.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

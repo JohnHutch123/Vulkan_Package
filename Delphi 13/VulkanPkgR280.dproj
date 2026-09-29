@@ -153,6 +153,7 @@
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_DataStore.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_Nodes.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_PointerValidation.pas"/>
+        <DCCReference Include="..\RunTime_Src\Vulkan_SceneLoaders.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

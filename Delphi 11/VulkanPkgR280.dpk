@@ -71,7 +71,8 @@ contains
   Vulkan_Components_PointerValidation in '..\RunTime_Src\Vulkan_Components_PointerValidation.pas',
   Vulkan_CriticalSection in '..\RunTime_Src\Vulkan_CriticalSection.pas',
   Vulkan_Components_ShaderCompiler in '..\RunTime_Src\Vulkan_Components_ShaderCompiler.pas',
-  Vulkan_Components_Compute in '..\RunTime_Src\Vulkan_Components_Compute.pas';
+  Vulkan_Components_Compute in '..\RunTime_Src\Vulkan_Components_Compute.pas',
+  Vulkan_SceneLoaders in '..\RunTime_Src\Vulkan_SceneLoaders.pas';
 
 end.
 

@@ -161,9 +161,18 @@
         </DelphiCompile>
         <DCCReference Include="rtl.dcp"/>
         <DCCReference Include="vcl.dcp"/>
+        <DCCReference Include="vclx.dcp"/>
         <DCCReference Include="DesignIDE.dcp"/>
         <DCCReference Include="VulkanPkgR280.dcp"/>
+        <DCCReference Include="VulkanPkg_VCLR280.dcp"/>
         <DCCReference Include="..\Design_Src\VulkanPkg_DesignersVCL.pas"/>
+        <DCCReference Include="..\Design_Src\VulkanDataModuleEditFM.pas">
+            <Form>vgSessionEditorFM</Form>
+        </DCCReference>
+        <DCCReference Include="..\Design_Src\VulkanPkg_DataModuleReg.pas"/>
+        <RcCompile Include="..\Design_Src\VulkanPkg_DesignIconsVCL.rc">
+            <Form>..\Design_Src\VulkanPkg_DesignIconsVCL.res</Form>
+        </RcCompile>
         <RcItem Include="..\Design_Src\TVGWINDOWVCL.bmp">
             <ResourceType>BITMAP</ResourceType>
             <ResourceId>TVGWINDOWVCL</ResourceId>

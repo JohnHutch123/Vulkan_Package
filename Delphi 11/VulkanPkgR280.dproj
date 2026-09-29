@@ -195,6 +195,7 @@
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_Resources.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Assert.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_Scene.pas"/>
+        <DCCReference Include="..\RunTime_Src\Vulkan_SceneLoaders.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

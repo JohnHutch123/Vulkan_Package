@@ -2,6 +2,7 @@ package VulkanPkg_VCLD280;
 
 {$R *.res}
 {$R *.dres}
+{$R '..\Design_Src\VulkanPkg_DesignIconsVCL.res' '..\Design_Src\VulkanPkg_DesignIconsVCL.rc'}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
 {$ALIGN 8}
 {$ASSERTIONS ON}
@@ -32,10 +33,14 @@ package VulkanPkg_VCLD280;
 requires
   rtl,
   vcl,
+  vclx,
   DesignIDE,
-  VulkanPkgR280;
+  VulkanPkgR280,
+  VulkanPkg_VCLR280;
 
 contains
-  VulkanPkg_DesignersVCL in '..\Design_Src\VulkanPkg_DesignersVCL.pas';
+  VulkanPkg_DesignersVCL in '..\Design_Src\VulkanPkg_DesignersVCL.pas',
+  VulkanDataModuleEditFM in '..\Design_Src\VulkanDataModuleEditFM.pas' {vgSessionEditorFM},
+  VulkanPkg_DataModuleReg in '..\Design_Src\VulkanPkg_DataModuleReg.pas';
 
 end.

@@ -1,0 +1,6 @@
+/* Component palette icons - compiled into the package by
+     {$R '..\..\Design_Src\VulkanPkg_RendererIcons.res' '..\..\Design_Src\VulkanPkg_RendererIcons.rc'}
+   in the .dpk.  The IDE finds a component's icon by a BITMAP resource named
+   after its class in upper case; 24x24, lower-left pixel = transparent. */
+
+TVGRENDERENGINE_SINGLE   BITMAP "TVGRENDERENGINE_S.bmp"

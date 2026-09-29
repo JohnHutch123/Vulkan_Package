@@ -2,6 +2,7 @@ package VulcanPkg_SingleD280;
 
 {$R *.res}
 {$R *.dres}
+{$R '..\..\Design_Src\VulkanPkg_RendererIcons.res' '..\..\Design_Src\VulkanPkg_RendererIcons.rc'}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
 {$ALIGN 8}
 {$ASSERTIONS ON}

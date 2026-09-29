@@ -42,6 +42,47 @@ repository is not covered by this licence.
 
 ---
 
+### Vulkan session data module (`TvgVulkanDataModule`)
+A `TDataModule` descendant that holds a whole Vulkan session -
+`TvgInstance` -> `TvgPhysicalDevice` -> `TvgScreenRenderDevice` -> `TvgLinker` -
+and connects it to a `TvgWindowVCL` on any form.
+
+- **Create one:** File > New > Other > Delphi Files > *Vulkan Session Data Module*.
+- **Build the session:** right-click the module > *Build Vulkan Session* (adds and wires the components).
+- **Connect the window:** set the module's `Window` property to a `TvgWindowVCL`.
+- **Enable / disable at design time:** right-click > *Enable/Disable Vulkan Session*, or toggle `SessionActive`.
+- **More windows:** right-click > *Add Linker* (or drop a `TvgLinker` and set its `ScreenDevice`), then set
+  the second `TvgWindowVCL`'s `VulkanLink` to it. Every linker connected under the instance is part of the
+  session.
+- **Connect in the Object Inspector:** `PhysicalDevice.Instance`, `ScreenDevice.PhysicalDevice`,
+  `Linker.ScreenDevice` and `VulkanWindow.VulkanLink` drop down the matching components in every open
+  form/module, as a dataset's `Connection` does.
+- **Test like a dataset:** set `Active` to True on any session component (instance, device, linker or
+  window) at design time to start the whole session it belongs to; the reason is shown if it can't start.
+- **Scene:** drop a renderer (e.g. `TvgRenderEngine_Single`) and set the module's `Renderer`, then
+  right-click > *Add Scene*. *Load Scene File...* picks a file and loads it with a registered scene loader:
+  `SceneLoaderType` drops down the registered loaders (blank = choose by file extension), `SceneFileName`
+  has a file-open button, and `LoadSceneOnEnable` reloads it whenever the session is enabled, at design
+  time too. Any `TvgScene` also gets *Load Scene File...* / *Clear Scene* on its menu. In code:
+  `DM.LoadScene('model.glb')`.
+- **Tool manager:** right-click > *Add Tool Manager* creates a `TvgToolManager` (camera orbit mode) connected
+  to the primary linker, scene and renderer, so the window can be orbited/picked; `ZoomAllOnLoad` (default on)
+  frames each loaded scene. A PRO `TvgEditToolManager` can be assigned to `ToolManager` instead. Each extra
+  window gets its own tool manager: set its linker's `ToolManager` (or the tool manager's `Linker`).
+- **Scene loaders** register themselves in `Vulkan_SceneLoaders` (core package), e.g. in the PRO glTF unit:
+  `RegisterSceneLoader(TvgSceneLoaderStorer_GLTF, 'glTF', 'glTF 2.0 scene', '.gltf;.glb', 'FileName');`
+  where the last argument is the loader's published file-name property.
+- **Edit everything:** right-click > *Edit Vulkan Session...* opens an editor showing the session as it is
+  connected (Instance > devices > linkers > windows, plus anything not yet connected) and the published
+  properties of each component (read only while the session runs).
+- **At run time:** call `EnableSession` once the window's form is showing (e.g. in `OnShow`),
+  `DisableSession` to shut down.
+
+Files (all in `Design_Src`): `Vulkan_DataModule.pas` (runtime base class, in `VulkanPkg_VCLR280`),
+`VulkanPkg_DataModuleReg.pas` and `VulkanDataModuleEditFM.pas/.dfm` (IDE side, in `VulkanPkg_VCLD280`).
+
+---
+
 ### Key technologies
 - **Language:** Object Pascal (Delphi)
 - **Graphics API:** Vulkan (`Vulkan.pas`, `TVk*` types)
