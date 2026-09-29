@@ -26,9 +26,15 @@
 
 { Design-time editor for a TvgVulkanDataModule session.
 
-  The tree lists the module and every session component (Instance,
-  PhysicalDevice, ScreenDevice, Linker, Window) with their published
-  sub-objects and collection items.  The list shows the published properties
+  The tree follows the session the way it is connected:
+
+      Instance > Physical Device(s) > Screen Device > Linker(s) > Window
+
+  so a second window and its linker appear under the same screen device.
+  Vulkan components on the module that are not connected to the session
+  are listed under "Not connected to the session" - connect them by setting
+  their reference properties here or in the Object Inspector.  Each node also
+  holds its published sub-objects and collection items.  The list shows the published properties
   of the selected object; the panel under it edits the selected property:
 
       numbers / strings         edit box        (Enter or Apply)
@@ -53,6 +59,7 @@ uses
   System.Variants,
   System.Classes,
   System.TypInfo,
+  System.Generics.Collections,
   Vcl.Graphics,
   Vcl.Controls,
   Vcl.Forms,
@@ -63,6 +70,7 @@ uses
   Vcl.CheckLst,
   DesignIntf,
   Vulkan_Components,
+  Vulkan_WindowVCL,
   Vulkan_DataModule;
 
 type
@@ -70,6 +78,7 @@ type
     pnlTop: TPanel;
     lblStatus: TLabel;
     btnBuild: TButton;
+    btnAddLinker: TButton;
     btnEnable: TButton;
     btnDisable: TButton;
     btnRefresh: TButton;
@@ -96,6 +105,7 @@ type
     procedure clbValueClickCheck(Sender: TObject);
     procedure edValueKeyPress(Sender: TObject; var Key: Char);
     procedure btnBuildClick(Sender: TObject);
+    procedure btnAddLinkerClick(Sender: TObject);
     procedure btnEnableClick(Sender: TObject);
     procedure btnDisableClick(Sender: TObject);
     procedure btnRefreshClick(Sender: TObject);
@@ -103,6 +113,7 @@ type
     fModule      : TvgVulkanDataModule;
     fDesigner    : IDesigner;
     fOnBuild     : TProc;
+    fOnAddLinker : TProc;
 
     fObject      : TPersistent;   //object whose properties are listed
     fProp        : PPropInfo;     //property being edited
@@ -112,7 +123,8 @@ type
     procedure AddRefName(const S: string);
 
     procedure BuildTree(aSelect: TPersistent = nil);
-    procedure AddObjectNode(aParent: TTreeNode; const aCaption: string; aObj: TPersistent; aDepth: Integer);
+    function  AddObjectNode(aParent: TTreeNode; const aCaption: string; aObj: TPersistent; aDepth: Integer): TTreeNode;
+    function  AddComponentNode(aParent: TTreeNode; aComp: TComponent; aShown: TList<TObject>): TTreeNode;
     function  FindNode(aObj: TPersistent): TTreeNode;
 
     procedure ShowProperties(aObj: TPersistent);
@@ -132,9 +144,11 @@ type
     property Designer : IDesigner read fDesigner;
   end;
 
-{ aBuild creates the missing session components; the designer passes one that
-  creates them through IDesigner so they are named and streamed. }
-procedure RunVulkanSessionEditor(aModule: TvgVulkanDataModule; const aDesigner: IDesigner; const aBuild: TProc);
+{ aBuild creates the missing session components and aAddLinker adds one more
+  linker; the designer passes procedures that create them through IDesigner
+  so they are named and streamed. }
+procedure RunVulkanSessionEditor(aModule: TvgVulkanDataModule; const aDesigner: IDesigner;
+                                 const aBuild, aAddLinker: TProc);
 
 implementation
 
@@ -143,7 +157,8 @@ implementation
 const
   cMaxDepth = 6;   //sub-object nesting shown in the tree
 
-procedure RunVulkanSessionEditor(aModule: TvgVulkanDataModule; const aDesigner: IDesigner; const aBuild: TProc);
+procedure RunVulkanSessionEditor(aModule: TvgVulkanDataModule; const aDesigner: IDesigner;
+                                 const aBuild, aAddLinker: TProc);
   Var F : TvgSessionEditorFM;
 begin
   If not assigned(aModule) then exit;
@@ -153,6 +168,7 @@ begin
     F.fModule   := aModule;
     F.fDesigner := aDesigner;
     F.fOnBuild  := aBuild;
+    F.fOnAddLinker := aAddLinker;
     F.Caption   := Format('Vulkan Session Editor - %s', [aModule.Name]);
     F.ShowModal;
   Finally
@@ -332,15 +348,17 @@ begin
   End;
 end;
 
-procedure TvgSessionEditorFM.AddObjectNode(aParent: TTreeNode; const aCaption: string; aObj: TPersistent; aDepth: Integer);
+function TvgSessionEditorFM.AddObjectNode(aParent: TTreeNode; const aCaption: string; aObj: TPersistent; aDepth: Integer): TTreeNode;
   Var Node      : TTreeNode;
       PropList  : PPropList;
       Count, I  : Integer;
       Child     : TPersistent;
 begin
+  Result := nil;
   If not assigned(aObj) then exit;
 
-  Node := tvObjects.Items.AddChildObject(aParent, aCaption, aObj);
+  Node   := tvObjects.Items.AddChildObject(aParent, aCaption, aObj);
+  Result := Node;
 
   If aDepth >= cMaxDepth then exit;
 
@@ -372,33 +390,101 @@ begin
       Exit(tvObjects.Items[I]);
 end;
 
-procedure TvgSessionEditorFM.BuildTree(aSelect: TPersistent = nil);
-  Var Node : TTreeNode;
+function TvgSessionEditorFM.AddComponentNode(aParent: TTreeNode; aComp: TComponent; aShown: TList<TObject>): TTreeNode;
+  Var Caption : string;
 begin
+  Result := nil;
+  If not assigned(aComp) then exit;
+
+  Caption := Format('%s: %s', [ComponentName(aComp), aComp.ClassName]);
+  If (aComp = fModule.Linker) or (aComp = fModule.Window) then
+    Caption := Caption + '  (primary)';
+
+  Result := AddObjectNode(aParent, Caption, aComp, 0);
+  aShown.Add(aComp);
+end;
+
+procedure TvgSessionEditorFM.BuildTree(aSelect: TPersistent = nil);
+  Var Node, InstNode, PDNode, LDNode, LNode, Other : TTreeNode;
+      Shown : TList<TObject>;
+      Inst  : TvgInstance;
+      PD    : TvgPhysicalDevice;
+      L     : TvgLinker;
+      Comp  : TComponent;
+      I     : Integer;
+
+  Procedure AddOther(aComp: TComponent);
+  Begin
+    If not assigned(aComp) or (Shown.IndexOf(aComp) <> -1) then exit;
+    If csSubComponent in aComp.ComponentStyle then exit;   //shown under its owner
+
+    If not assigned(Other) then
+      Other := tvObjects.Items.AddChildObject(nil, 'Not connected to the session', nil);
+
+    AddComponentNode(Other, aComp, Shown);
+  End;
+
+begin
+  Shown := TList<TObject>.Create;
   tvObjects.Items.BeginUpdate;
   Try
     tvObjects.Items.Clear;
     fObject := nil;
     fProp   := nil;
+    Other   := nil;
 
     AddObjectNode(nil, 'Session: ' + fModule.Name, fModule, cMaxDepth);  //references only, no children
 
-    If assigned(fModule.Instance) then
-      AddObjectNode(nil, ObjectCaption(fModule.Instance), fModule.Instance, 0);
+    //the session as it is connected, wherever its components live
+    Inst := fModule.Instance;
+    If assigned(Inst) then
+    Begin
+      InstNode := AddComponentNode(nil, Inst, Shown);
 
-    If assigned(fModule.PhysicalDevice) then
-      AddObjectNode(nil, ObjectCaption(fModule.PhysicalDevice), fModule.PhysicalDevice, 0);
+      For I := 0 to Inst.DevicesCount - 1 do
+      Begin
+        PD := Inst.Devices[I];
+        If not assigned(PD) then continue;
+        PDNode := AddComponentNode(InstNode, PD, Shown);
 
-    If assigned(fModule.ScreenDevice) then
-      AddObjectNode(nil, ObjectCaption(fModule.ScreenDevice), fModule.ScreenDevice, 0);
+        If not assigned(PD.LogicalDevice) then continue;
+        LDNode := AddComponentNode(PDNode, PD.LogicalDevice, Shown);
 
-    If assigned(fModule.Linker) then
-      AddObjectNode(nil, ObjectCaption(fModule.Linker), fModule.Linker, 0);
+        If PD.LogicalDevice is TvgScreenRenderDevice then
+          For L in vgSessionLinkers(Inst) do
+            If L.ScreenDevice = PD.LogicalDevice then
+            Begin
+              LNode := AddComponentNode(LDNode, L, Shown);
+              AddComponentNode(LNode, vgLinkerWindow(L), Shown);
+            End;
+      End;
+    End;
 
-    If assigned(fModule.Window) then
-      AddObjectNode(nil, ComponentName(fModule.Window) + ': ' + fModule.Window.ClassName, fModule.Window, 0);
+    //the rest: dropped but not (yet) connected under the instance
+    AddOther(fModule.PhysicalDevice);
+    AddOther(fModule.ScreenDevice);
+    AddOther(fModule.Linker);
+    AddOther(fModule.Window);
+
+    For I := 0 to fModule.ComponentCount - 1 do
+    Begin
+      Comp := fModule.Components[I];
+      If (Comp is TvgBaseComponent) or (Comp is TvgWindowVCL) then
+        AddOther(Comp);
+    End;
+
+    tvObjects.FullCollapse;
+    For I := 0 to tvObjects.Items.Count - 1 do
+    Begin
+      //open the session chain, leave sub-objects closed
+      Node := tvObjects.Items[I];
+      If (TObject(Node.Data) is TComponent) and (Shown.IndexOf(TObject(Node.Data)) <> -1) and
+         assigned(Node.Parent) then
+        Node.Parent.Expand(False);
+    End;
   Finally
     tvObjects.Items.EndUpdate;
+    Shown.Free;
   End;
 
   Node := FindNode(aSelect);
@@ -775,7 +861,8 @@ begin
     lblStatus.Font.Color := clWindowText;
   End;
 
-  btnBuild.Enabled   := not Running and assigned(fOnBuild);
+  btnBuild.Enabled     := not Running and assigned(fOnBuild);
+  btnAddLinker.Enabled := not Running and assigned(fOnAddLinker) and assigned(fModule.ScreenDevice);
   btnEnable.Enabled  := not Running and (Problem = '');
   btnDisable.Enabled := Running;
 end;
@@ -814,6 +901,38 @@ begin
       MessageDlg('Unable to build the session:' + sLineBreak + E.Message, mtError, [mbOK], 0);
   End;
   BuildTree(fObject);
+  UpdateStatus;
+end;
+
+procedure TvgSessionEditorFM.btnAddLinkerClick(Sender: TObject);
+  Var Before : TArray<TvgLinker>;
+      L, B   : TvgLinker;
+      IsNew  : Boolean;
+      Added  : TPersistent;
+begin
+  If not assigned(fOnAddLinker) then exit;
+
+  Before := fModule.SessionLinkers;
+  Try
+    fOnAddLinker();
+  Except
+    On E: Exception do
+      MessageDlg('Unable to add a linker:' + sLineBreak + E.Message, mtError, [mbOK], 0);
+  End;
+
+  //select the new linker, ready to give it a window
+  Added := fObject;
+  For L in fModule.SessionLinkers do
+  Begin
+    IsNew := True;
+    For B in Before do
+      If B = L then
+        IsNew := False;
+    If IsNew then
+      Added := L;
+  End;
+
+  BuildTree(Added);
   UpdateStatus;
 end;
 

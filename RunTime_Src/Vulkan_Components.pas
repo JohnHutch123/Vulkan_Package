@@ -23996,14 +23996,21 @@ begin
 end;
 
 procedure TvgLinker.SetScreenDevice(const Value: TvgScreenRenderDevice);
+  Var OldDevice : TvgScreenRenderDevice;
 begin
   If fScreenDevice = Value then exit;
   SetActiveState(False);
 
-  If assigned(fScreenDevice) then
-     fScreenDevice.RemoveFreeNotification(self);
-
+  OldDevice     := fScreenDevice;
   fScreenDevice := Value;
+
+  //leave the old device's linker list, or it keeps enabling this linker.
+  //fScreenDevice has already moved on, so RemoveLinker does not call back.
+  If assigned(OldDevice) then
+  Begin
+     OldDevice.RemoveFreeNotification(self);
+     OldDevice.RemoveLinker(self);
+  End;
 
   If assigned(fScreenDevice) then
   Begin

@@ -3,10 +3,10 @@ object vgSessionEditorFM: TvgSessionEditorFM
   Top = 0
   Caption = 'Vulkan Session Editor'
   ClientHeight = 560
-  ClientWidth = 820
+  ClientWidth = 900
   Color = clBtnFace
   Constraints.MinHeight = 400
-  Constraints.MinWidth = 640
+  Constraints.MinWidth = 820
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
   Font.Height = -12
@@ -28,13 +28,13 @@ object vgSessionEditorFM: TvgSessionEditorFM
   object pnlTop: TPanel
     Left = 0
     Top = 0
-    Width = 820
+    Width = 900
     Height = 41
     Align = alTop
     BevelOuter = bvNone
     TabOrder = 0
     object lblStatus: TLabel
-      Left = 352
+      Left = 463
       Top = 12
       Width = 95
       Height = 15
@@ -58,8 +58,20 @@ object vgSessionEditorFM: TvgSessionEditorFM
       TabOrder = 0
       OnClick = btnBuildClick
     end
-    object btnEnable: TButton
+    object btnAddLinker: TButton
       Left = 95
+      Top = 8
+      Width = 105
+      Height = 25
+      Hint = 'Add another Linker on the Screen Device - one per window'
+      Caption = 'Add &Linker'
+      ParentShowHint = False
+      ShowHint = True
+      TabOrder = 4
+      OnClick = btnAddLinkerClick
+    end
+    object btnEnable: TButton
+      Left = 206
       Top = 8
       Width = 81
       Height = 25
@@ -71,7 +83,7 @@ object vgSessionEditorFM: TvgSessionEditorFM
       OnClick = btnEnableClick
     end
     object btnDisable: TButton
-      Left = 182
+      Left = 293
       Top = 8
       Width = 81
       Height = 25
@@ -83,7 +95,7 @@ object vgSessionEditorFM: TvgSessionEditorFM
       OnClick = btnDisableClick
     end
     object btnRefresh: TButton
-      Left = 269
+      Left = 380
       Top = 8
       Width = 75
       Height = 25
@@ -98,16 +110,16 @@ object vgSessionEditorFM: TvgSessionEditorFM
   object pnlBottom: TPanel
     Left = 0
     Top = 519
-    Width = 820
+    Width = 900
     Height = 41
     Align = alBottom
     BevelOuter = bvNone
     TabOrder = 3
     DesignSize = (
-      820
+      900
       41)
     object btnClose: TButton
-      Left = 737
+      Left = 817
       Top = 8
       Width = 75
       Height = 25
@@ -133,7 +145,7 @@ object vgSessionEditorFM: TvgSessionEditorFM
   object pnlRight: TPanel
     Left = 263
     Top = 41
-    Width = 557
+    Width = 637
     Height = 478
     Align = alClient
     BevelOuter = bvNone
@@ -141,7 +153,7 @@ object vgSessionEditorFM: TvgSessionEditorFM
     object lvProps: TListView
       Left = 0
       Top = 0
-      Width = 557
+      Width = 637
       Height = 358
       Align = alClient
       Columns = <
@@ -167,13 +179,13 @@ object vgSessionEditorFM: TvgSessionEditorFM
     object pnlEdit: TPanel
       Left = 0
       Top = 358
-      Width = 557
+      Width = 637
       Height = 120
       Align = alBottom
       BevelOuter = bvNone
       TabOrder = 1
       DesignSize = (
-        557
+        637
         120)
       object lblPropName: TLabel
         Left = 8
@@ -190,7 +202,7 @@ object vgSessionEditorFM: TvgSessionEditorFM
       object lblHint: TLabel
         Left = 8
         Top = 100
-        Width = 541
+        Width = 621
         Height = 15
         Anchors = [akLeft, akRight, akBottom]
         AutoSize = False
@@ -205,7 +217,7 @@ object vgSessionEditorFM: TvgSessionEditorFM
       object edValue: TEdit
         Left = 8
         Top = 28
-        Width = 460
+        Width = 540
         Height = 23
         Anchors = [akLeft, akTop, akRight]
         TabOrder = 0
@@ -215,7 +227,7 @@ object vgSessionEditorFM: TvgSessionEditorFM
       object cbValue: TComboBox
         Left = 8
         Top = 28
-        Width = 460
+        Width = 540
         Height = 23
         Style = csDropDownList
         Anchors = [akLeft, akTop, akRight]
@@ -227,7 +239,7 @@ object vgSessionEditorFM: TvgSessionEditorFM
       object clbValue: TCheckListBox
         Left = 8
         Top = 28
-        Width = 541
+        Width = 621
         Height = 68
         Anchors = [akLeft, akTop, akRight, akBottom]
         Columns = 2
@@ -237,7 +249,7 @@ object vgSessionEditorFM: TvgSessionEditorFM
         OnClickCheck = clbValueClickCheck
       end
       object btnApply: TButton
-        Left = 474
+        Left = 554
         Top = 27
         Width = 75
         Height = 25

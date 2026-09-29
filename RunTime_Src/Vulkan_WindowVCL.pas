@@ -753,12 +753,19 @@ begin
 end;
 
 procedure TvgWindowVCL.SetLinker(const Value: TvgLinker);
+  Var OldLinker : TvgLinker;
 begin
   If fLinker=Value then exit;
   If assigned( fLinker) then
   Begin
-     fLinker.RemoveFreeNotification(self);
-     fLinker:=Nil;
+     OldLinker := fLinker;
+     fLinker   := Nil;
+     OldLinker.RemoveFreeNotification(self);
+
+     //release the old linker too, or two linkers present to this window.
+     //fLinker is already nil, so the linker does not call back.
+     If OldLinker.WindowIntf = IvgVulkanWindow(self) then
+        OldLinker.WindowIntf := nil;
   End;
 
   fLinker := Value;

@@ -33,9 +33,21 @@
           Edit Vulkan Session...
           Build Vulkan Session
           Enable / Disable Vulkan Session
+          Add Linker (another window)
+    * Active property editor on every session component (instance, devices,
+      linkers, TvgWindowVCL): setting Active to True at design time starts the
+      whole session the component is connected to - every device, linker and
+      window under its instance - the way setting a dataset's Active opens its
+      connection.  If it can't start, the reason is shown and nothing is left
+      half enabled.  Setting it False shuts that component down as before.
     * File > New > Other > Delphi Files > "Vulkan Session Data Module" creates
       a new unit whose data module descends from TvgVulkanDataModule.
     * TvgScreenRenderDevice goes on the palette so it can sit on the module.
+
+  Extra windows: drop another TvgLinker (or use Add Linker), set its
+  ScreenDevice, and set the second TvgWindowVCL's VulkanLink to it - all
+  from the Object Inspector's drop downs, across forms.  The editor and the
+  Active test cover every linker connected under the instance.
 
   Design time only: in the VCL design package (VulkanPkg_VCLD280). }
 
@@ -53,10 +65,17 @@ uses
   DMForm,
   ToolsAPI,
   Vulkan_Components,
+  Vulkan_WindowVCL,
   Vulkan_DataModule,
   VulkanDataModuleEditFM;
 
 type
+  { Active on a session component: True tests the whole session. }
+  TvgSessionActiveProperty = class(TBoolProperty)
+  public
+    procedure SetValue(const Value: string); override;
+  end;
+
   TvgVulkanDataModuleCustomModule = class(TDataModuleCustomModule)
   public
     function  GetVerbCount: Integer; override;
@@ -120,6 +139,9 @@ type
   named, selectable and streamed like dropped components. }
 procedure BuildSessionInDesigner(aModule: TvgVulkanDataModule; const aDesigner: IDesigner);
 
+{ Adds a linker on the module's ScreenDevice through the designer. }
+procedure AddLinkerInDesigner(aModule: TvgVulkanDataModule; const aDesigner: IDesigner);
+
 { Marks the module and the window's form as modified. }
 procedure NotifySessionModified(aModule: TvgVulkanDataModule; const aDesigner: IDesigner);
 
@@ -134,10 +156,12 @@ resourcestring
   vgDMAbout         = 'Vulkan Session Data Module'#13'built by Datavis';
 
 const
-  cVerbEdit   = 0;
-  cVerbBuild  = 1;
-  cVerbToggle = 2;
-  cVerbAbout  = 3;
+  cVerbEdit      = 0;
+  cVerbBuild     = 1;
+  cVerbAddLinker = 2;
+  cVerbToggle    = 3;
+  cVerbAbout     = 4;
+  cVerbCount     = 5;
 
   cUnitSource =
     'unit %0:s;'                                                   + sLineBreak +
@@ -173,6 +197,9 @@ begin
 
   RegisterCustomModule(TvgVulkanDataModule, TvgVulkanDataModuleCustomModule);
 
+  RegisterPropertyEditor(TypeInfo(Boolean), TvgBaseComponent, 'Active', TvgSessionActiveProperty);
+  RegisterPropertyEditor(TypeInfo(Boolean), TvgWindowVCL,     'Active', TvgSessionActiveProperty);
+
   RegisterPackageWizard(TvgVulkanDataModuleWizard.Create);
 end;
 
@@ -188,30 +215,91 @@ begin
     D.Modified;
 end;
 
-procedure BuildSessionInDesigner(aModule: TvgVulkanDataModule; const aDesigner: IDesigner);
+{ Instance, physical device and screen device left to right; the linkers
+  in a column after them. }
+function DesignerFactory(aModule: TvgVulkanDataModule; const aDesigner: IDesigner): TvgSessionComponentFactory;
   Var D : IDesigner;
 begin
-  If not assigned(aModule) then exit;
   D := aDesigner;
+  Result :=
+    function(aClass: TComponentClass; aIndex: Integer): TComponent
+    begin
+      If aIndex < 3 then
+        Result := D.CreateComponent(aClass, aModule, 24 + aIndex * 112, 24, 0, 0)
+      else
+        Result := D.CreateComponent(aClass, aModule, 24 + 3 * 112, 24 + (aIndex - 3) * 72, 0, 0);
+    end;
+end;
 
-  If assigned(D) then
-    aModule.BuildSession(
-      function(aClass: TComponentClass; aIndex: Integer): TComponent
-      begin
-        //left to right, in chain order
-        Result := D.CreateComponent(aClass, aModule, 24 + aIndex * 112, 24, 0, 0);
-      end)
+procedure BuildSessionInDesigner(aModule: TvgVulkanDataModule; const aDesigner: IDesigner);
+begin
+  If not assigned(aModule) then exit;
+
+  If assigned(aDesigner) then
+    aModule.BuildSession(DesignerFactory(aModule, aDesigner))
   else
     aModule.BuildSession;
 
-  NotifySessionModified(aModule, D);
+  NotifySessionModified(aModule, aDesigner);
+end;
+
+procedure AddLinkerInDesigner(aModule: TvgVulkanDataModule; const aDesigner: IDesigner);
+  Var L : TvgLinker;
+begin
+  If not assigned(aModule) then exit;
+
+  If not assigned(aModule.ScreenDevice) then
+    raise EvgVulkanSessionError.Create('Build the session (or set ScreenDevice) before adding a linker.');
+
+  If assigned(aDesigner) then
+    L := aModule.AddLinker(nil, DesignerFactory(aModule, aDesigner))
+  else
+    L := aModule.AddLinker(nil);
+
+  NotifySessionModified(aModule, aDesigner);
+
+  If assigned(aDesigner) then
+    aDesigner.SelectComponent(L);   //ready for its window in the Object Inspector
+end;
+
+{ TvgSessionActiveProperty }
+
+procedure TvgSessionActiveProperty.SetValue(const Value: string);
+  Var I    : Integer;
+      C    : TPersistent;
+      Inst : TvgInstance;
+begin
+  //False (or not a Boolean): the component's own setter, as before
+  If GetEnumValue(GetPropType, Value) <> 1 then
+  Begin
+    inherited;
+    exit;
+  End;
+
+  For I := 0 to PropCount - 1 do
+  Begin
+    C    := GetComponent(I);
+    Inst := nil;
+    If C is TComponent then
+      Inst := vgSessionInstance(TComponent(C));
+
+    //a session that presents to windows starts as a whole - devices, every
+    //linker and window.  Anything else (an instance on its own, a renderer)
+    //just switches itself on.
+    If assigned(Inst) and (Length(vgSessionLinkers(Inst)) > 0) then
+      vgEnableSession(Inst)       //raises with the reason: shown by the Object Inspector
+    else
+      SetOrdProp(C, GetPropInfo, 1);
+  End;
+
+  Modified;
 end;
 
 { TvgVulkanDataModuleCustomModule }
 
 function TvgVulkanDataModuleCustomModule.GetVerbCount: Integer;
 begin
-  Result := inherited GetVerbCount + 4;
+  Result := inherited GetVerbCount + cVerbCount;
 end;
 
 function TvgVulkanDataModuleCustomModule.GetVerb(Index: Integer): string;
@@ -222,6 +310,7 @@ begin
   Case Index - inherited GetVerbCount of
     cVerbEdit   : Result := '&Edit Vulkan Session...';
     cVerbBuild  : Result := '&Build Vulkan Session';
+    cVerbAddLinker : Result := 'Add &Linker (another window)';
     cVerbToggle : If M.SessionActive then
                     Result := '&Disable Vulkan Session'
                   else
@@ -245,10 +334,22 @@ begin
         procedure
         begin
           BuildSessionInDesigner(M, D);
+        end,
+        procedure
+        begin
+          AddLinkerInDesigner(M, D);
         end);
 
     cVerbBuild :
       BuildSessionInDesigner(M, D);
+
+    cVerbAddLinker :
+      Try
+        AddLinkerInDesigner(M, D);
+      Except
+        On E: Exception do
+          MessageDlg(E.Message, mtError, [mbOK], 0);
+      End;
 
     cVerbToggle :
       Try

@@ -51,8 +51,17 @@ and connects it to a `TvgWindowVCL` on any form.
 - **Build the session:** right-click the module > *Build Vulkan Session* (adds and wires the components).
 - **Connect the window:** set the module's `Window` property to a `TvgWindowVCL`.
 - **Enable / disable at design time:** right-click > *Enable/Disable Vulkan Session*, or toggle `SessionActive`.
-- **Edit everything:** right-click > *Edit Vulkan Session...* opens an editor for the published
-  properties of every session component (read only while the session runs).
+- **More windows:** right-click > *Add Linker* (or drop a `TvgLinker` and set its `ScreenDevice`), then set
+  the second `TvgWindowVCL`'s `VulkanLink` to it. Every linker connected under the instance is part of the
+  session.
+- **Connect in the Object Inspector:** `PhysicalDevice.Instance`, `ScreenDevice.PhysicalDevice`,
+  `Linker.ScreenDevice` and `VulkanWindow.VulkanLink` drop down the matching components in every open
+  form/module, as a dataset's `Connection` does.
+- **Test like a dataset:** set `Active` to True on any session component (instance, device, linker or
+  window) at design time to start the whole session it belongs to; the reason is shown if it can't start.
+- **Edit everything:** right-click > *Edit Vulkan Session...* opens an editor showing the session as it is
+  connected (Instance > devices > linkers > windows, plus anything not yet connected) and the published
+  properties of each component (read only while the session runs).
 - **At run time:** call `EnableSession` once the window's form is showing (e.g. in `OnShow`),
   `DisableSession` to shut down.
 
