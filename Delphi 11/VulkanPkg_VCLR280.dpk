@@ -34,6 +34,7 @@ requires
   VulkanPkgR280;
 
 contains
-  Vulkan_WindowVCL in '..\RunTime_Src\Vulkan_WindowVCL.pas';
+  Vulkan_WindowVCL in '..\RunTime_Src\Vulkan_WindowVCL.pas',
+  Vulkan_DataModule in '..\Design_Src\Vulkan_DataModule.pas';
 
 end.

@@ -1,6 +1,7 @@
 package VulkanPkgD280;
 
 {$R *.res}
+{$R '..\Design_Src\VulkanPkg_DesignIcons.res' '..\Design_Src\VulkanPkg_DesignIcons.rc'}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
 {$ALIGN 8}
 {$ASSERTIONS ON}

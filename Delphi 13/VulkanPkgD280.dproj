@@ -115,6 +115,9 @@
         <DCCReference Include="xmlrtl.dcp"/>
         <DCCReference Include="VulkanPkgR280.dcp"/>
         <DCCReference Include="..\Design_Src\VulkanPkg_Designers.pas"/>
+        <RcCompile Include="..\Design_Src\VulkanPkg_DesignIcons.rc">
+            <Form>..\Design_Src\VulkanPkg_DesignIcons.res</Form>
+        </RcCompile>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
