@@ -10,6 +10,7 @@ object Form8: TForm8
   Font.Height = -12
   Font.Name = 'Segoe UI'
   Font.Style = []
+  OnDestroy = FormDestroy
   TextHeight = 15
   object Button1: TButton
     Left = 32

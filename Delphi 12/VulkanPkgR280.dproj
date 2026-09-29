@@ -98,19 +98,20 @@
         <DCC_COMPARISON_FALSE>false</DCC_COMPARISON_FALSE>
         <DCC_IMPLICIT_STRING_CAST_LOSS>false</DCC_IMPLICIT_STRING_CAST_LOSS>
         <DCC_IMPLICIT_STRING_CAST>false</DCC_IMPLICIT_STRING_CAST>
-        <DCC_UnitSearchPath>D:\X1\FastMM5;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>D:\Vulkan_Package_PRO\RunTime_Src;D:\Vulkan_Package_PRO\Design_Src;D:\Vulkan_Package\RunTime_Src;D:\Vulkan_Package\Design_Src;D:\Vulkan_Package\Samples\Renderers;D:\Vulkan\src;D:\Vulkan\externals\pasmp\src;D:\Vulkan\externals\pasjson\src;D:\Vulkan\externals\pucu\src;D:\Vulkan\externals\pasdblstrutils\src;D:\Vulkan\externals\pasgltf\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Android)'!=''">
-        <DCC_DcpOutput>.\$(Platform)\$(Config)</DCC_DcpOutput>
+        <DCC_DcpOutput>.\$(ProductVersion)\$(Platform)\$(Config)</DCC_DcpOutput>
         <DCC_UnitSearchPath>D:\X1\Vulkan\src;D:\X1\Vulkan Package;D:\X1\Vulkan\externals\pasmp\src;D:\X1\Vulkan\externals\pucu\src;D:\X1\Vulkan\externals\pasdblstrutils\src;D:\X1\Vulkan Package\Design_Src;D:\X1\Vulkan;D:\X1\Vulkan\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <VerInfo_Build>1</VerInfo_Build>
-        <DCC_BplOutput>.\$(Platform)\$(Config)</DCC_BplOutput>
+        <DCC_BplOutput>.\$(ProductVersion)\$(Platform)\$(Config)</DCC_BplOutput>
         <VerInfo_Keys>package=com.embarcadero.$(MSBuildProjectName);label=$(MSBuildProjectName);versionCode=1;versionName=1.0.0;persistent=False;restoreAnyVersion=False;installLocation=preferExternal;largeHeap=False;theme=TitleBar;hardwareAccelerated=true;apiKey=;minSdkVersion=23;targetSdkVersion=35</VerInfo_Keys>
         <BT_BuildType>Debug</BT_BuildType>
         <EnabledSysJars>android-support-v4.dex.jar;apk-expansion.dex.jar;cloud-messaging.dex.jar;fmx.dex.jar;google-analytics-v2.dex.jar;google-play-billing.dex.jar;google-play-licensing.dex.jar;google-play-services.dex.jar</EnabledSysJars>
         <DCC_CBuilderOutput>None</DCC_CBuilderOutput>
         <Android_LauncherIcon192>$(BDS)\bin\Artwork\Android\FM_LauncherIcon_192x192.png</Android_LauncherIcon192>
         <VerInfo_InstallLocation>preferExternal</VerInfo_InstallLocation>
+        <DCC_DcuOutput>.\$(ProductVersion)\$(Platform)\$(Config)</DCC_DcuOutput>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Android64)'!=''">
         <VerInfo_Keys>package=com.embarcadero.$(MSBuildProjectName);label=$(MSBuildProjectName);versionCode=1;versionName=1.0.0;persistent=False;restoreAnyVersion=False;installLocation=preferExternal;largeHeap=False;theme=TitleBar;hardwareAccelerated=true;apiKey=;minSdkVersion=23;targetSdkVersion=35</VerInfo_Keys>
@@ -147,13 +148,14 @@
         <BT_BuildType>Debug</BT_BuildType>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win32)'!=''">
-        <DCC_BplOutput>.\$(Platform)\$(Config)</DCC_BplOutput>
-        <DCC_DcpOutput>.\$(Platform)\$(Config)</DCC_DcpOutput>
-        <DCC_UnitSearchPath>..\RunTime_Src;..\Design_Src;..\..\Vulkan\src;..\..\Vulkan\externals\pasmp\src;..\..\Vulkan\externals\pasjson\src;..\..\Vulkan\externals\pucu\src;..\..\Vulkan\externals\pasdblstrutils\src;D:\X1\Vulkan_Package\RunTime_Src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_BplOutput>.\$(ProductVersion)\$(Platform)\$(Config)</DCC_BplOutput>
+        <DCC_DcpOutput>.\$(ProductVersion)\$(Platform)\$(Config)</DCC_DcpOutput>
+        <DCC_UnitSearchPath>D:\Vulkan_Package_PRO\RunTime_Src;D:\Vulkan_Package_PRO\Design_Src;D:\Vulkan_Package\RunTime_Src;D:\Vulkan_Package\Design_Src;D:\Vulkan_Package\Samples\Renderers;D:\Vulkan\src;D:\Vulkan\externals\pasmp\src;D:\Vulkan\externals\pasjson\src;D:\Vulkan\externals\pucu\src;D:\Vulkan\externals\pasdblstrutils\src;D:\Vulkan\externals\pasgltf\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <VerInfo_Keys>CompanyName=;FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductVersion=1.0.0.0;Comments=;ProgramID=com.embarcadero.$(MSBuildProjectName);FileDescription=$(MSBuildProjectName);ProductName=$(MSBuildProjectName)</VerInfo_Keys>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;Bde;$(DCC_Namespace)</DCC_Namespace>
         <VerInfo_Locale>1033</VerInfo_Locale>
+        <DCC_DcuOutput>.\$(ProductVersion)\$(Platform)\$(Config)</DCC_DcuOutput>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win64)'!=''">
         <DCC_BplOutput>.\$(Platform)\$(Config)</DCC_BplOutput>
@@ -216,10 +218,10 @@
         <DCCReference Include="..\Vulkan\src\PasVulkan.Utils.pas"/>
         <DCCReference Include="..\Vulkan\src\PasVulkan.VectorPath.pas"/>
         <DCCReference Include="..\Vulkan\src\PasVulkan.Framework.pas"/>
-        <DCCReference Include="..\..\Vulkan\externals\pasdblstrutils\src\PasDblStrUtils.pas"/>
-        <DCCReference Include="..\..\Vulkan\src\PasVulkan.Image.QOI.pas"/>
-        <DCCReference Include="..\..\Vulkan\src\PasVulkan.Image.Utils.pas"/>
-        <DCCReference Include="..\..\Vulkan\src\PasVulkan.NVIDIA.AfterMath.pas"/>
+        <DCCReference Include="D:\Vulkan\externals\pasdblstrutils\src\PasDblStrUtils.pas"/>
+        <DCCReference Include="D:\Vulkan\src\PasVulkan.Image.QOI.pas"/>
+        <DCCReference Include="D:\Vulkan\src\PasVulkan.Image.Utils.pas"/>
+        <DCCReference Include="D:\Vulkan\src\PasVulkan.NVIDIA.AfterMath.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_Descriptors.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Assert.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_WorldAxes.pas"/>

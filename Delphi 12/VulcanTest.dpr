@@ -1,7 +1,7 @@
 program VulcanTest;
 
 uses
-  FastMM5 in '..\FastMM5\FastMM5.pas',
+//  FastMM5 in '..\FastMM5\FastMM5.pas',
   Vcl.Forms,
   VulkanTestMF in 'VulkanTestMF.pas' {Form8},
   Vulkan_Components in 'RunTime_Src\Vulkan_Components.pas',
