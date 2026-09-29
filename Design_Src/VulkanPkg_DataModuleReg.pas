@@ -35,6 +35,7 @@
           Enable / Disable Vulkan Session
           Add Linker (another window)
           Add Scene
+          Add Tool Manager
           Load Scene File...
     * Active property editor on every session component (instance, devices,
       linkers, TvgWindowVCL): setting Active to True at design time starts the
@@ -179,6 +180,9 @@ procedure AddLinkerInDesigner(aModule: TvgVulkanDataModule; const aDesigner: IDe
 { Creates the module's Scene through the designer and connects it. }
 procedure BuildSceneInDesigner(aModule: TvgVulkanDataModule; const aDesigner: IDesigner);
 
+{ Creates the module's ToolManager through the designer and connects it. }
+procedure BuildToolManagerInDesigner(aModule: TvgVulkanDataModule; const aDesigner: IDesigner);
+
 { Asks for a scene file (aAsk, or no SceneFileName yet), enables the session
   when it can and loads the file, so the scene shows in the designer. }
 procedure LoadSceneInDesigner(aModule: TvgVulkanDataModule; const aDesigner: IDesigner; aAsk: Boolean);
@@ -205,9 +209,10 @@ const
   cVerbAddLinker = 2;
   cVerbAddScene  = 3;
   cVerbLoadScene = 4;
-  cVerbToggle    = 5;
-  cVerbAbout     = 6;
-  cVerbCount     = 7;
+  cVerbAddTools  = 5;
+  cVerbToggle    = 6;
+  cVerbAbout     = 7;
+  cVerbCount     = 8;
 
   cUnitSource =
     'unit %0:s;'                                                   + sLineBreak +
@@ -239,7 +244,7 @@ const
 
 procedure Register;
 begin
-  RegisterComponents('Vulkan Graphics', [TvgScreenRenderDevice, TvgScene]);
+  RegisterComponents('Vulkan Graphics', [TvgScreenRenderDevice, TvgScene, TvgToolManager]);
 
   RegisterComponentEditor(TvgScene, TvgSceneEditor);
 
@@ -277,6 +282,9 @@ begin
     begin
       If aIndex = cSceneSlot then
         Result := D.CreateComponent(aClass, aModule, 24, 120, 0, 0)
+      else
+      If aIndex = cToolManagerSlot then
+        Result := D.CreateComponent(aClass, aModule, 24 + 112, 120, 0, 0)
       else
       If aIndex < 3 then
         Result := D.CreateComponent(aClass, aModule, 24 + aIndex * 112, 24, 0, 0)
@@ -324,6 +332,18 @@ begin
     aModule.BuildScene(DesignerFactory(aModule, aDesigner))
   else
     aModule.BuildScene;
+
+  NotifySessionModified(aModule, aDesigner);
+end;
+
+procedure BuildToolManagerInDesigner(aModule: TvgVulkanDataModule; const aDesigner: IDesigner);
+begin
+  If not assigned(aModule) then exit;
+
+  If assigned(aDesigner) then
+    aModule.BuildToolManager(DesignerFactory(aModule, aDesigner))
+  else
+    aModule.BuildToolManager;
 
   NotifySessionModified(aModule, aDesigner);
 end;
@@ -517,6 +537,7 @@ begin
     cVerbAddLinker : Result := 'Add &Linker (another window)';
     cVerbAddScene  : Result := 'Add &Scene';
     cVerbLoadScene : Result := 'Load Scene &File...';
+    cVerbAddTools  : Result := 'Add &Tool Manager';
     cVerbToggle : If M.SessionActive then
                     Result := '&Disable Vulkan Session'
                   else
@@ -575,6 +596,14 @@ begin
       Except
         On E: Exception do
           MessageDlg('Load scene:' + sLineBreak + E.Message, mtError, [mbOK], 0);
+      End;
+
+    cVerbAddTools :
+      Try
+        BuildToolManagerInDesigner(M, D);
+      Except
+        On E: Exception do
+          MessageDlg(E.Message, mtError, [mbOK], 0);
       End;
 
     cVerbToggle :

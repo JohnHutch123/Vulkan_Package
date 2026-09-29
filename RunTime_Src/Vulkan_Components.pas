@@ -24031,18 +24031,31 @@ begin
 end;
 
 procedure TvgLinker.SetToolManager(const Value: TvgBaseToolManager);
+  Var OldManager : TvgBaseToolManager;
 begin
 
   If fToolManager =Value then exit;//        : TvgBaseToolManager;
   SetActiveState(False);
 
-  If assigned(fToolManager) then
-    fToolManager.RemoveFreeNotification(self);
+  OldManager   := fToolManager;
+  fToolManager := Value;
 
-  fToolManager:=Value;
+  //keep both ends in step, so setting either Linker.ToolManager or
+  //ToolManager.Linker (e.g. in the Object Inspector) links the pair.
+  //fToolManager has already moved on, so neither call comes back here.
+  If assigned(OldManager) then
+  Begin
+    OldManager.RemoveFreeNotification(self);
+    If OldManager.Linker = self then
+      OldManager.Linker := nil;
+  End;
 
   If assigned(fToolManager) then
+  Begin
     fToolManager.FreeNotification(self);
+    If fToolManager.Linker <> self then
+      fToolManager.Linker := self;
+  End;
 
 
 

@@ -68,6 +68,13 @@
   every time the session is enabled, at design time too, so the scene can be
   seen in the designer.  Loaders register in Vulkan_SceneLoaders.
 
+  ToolManager (a TvgToolManager, or a descendant such as PRO's
+  TvgEditToolManager) turns the window's mouse and keys into camera moves,
+  picking and selection.  It is connected to the primary Linker, Scene and
+  Renderer; ZoomAllOnLoad frames each loaded scene with it.  A second window
+  wants its own tool manager on its own linker - set that linker's
+  ToolManager (or the tool manager's Linker) in the Object Inspector.
+
   A TvgVulkanDataModule needs a .dfm, as every TDataModule descendant does.
   To build one purely in code use CreateNew:
 
@@ -77,6 +84,7 @@
       DM.AddLinker(VulkanWindow2);
       DM.Renderer := TvgRenderEngine_Single.Create(DM);
       DM.BuildScene;
+      DM.BuildToolManager;
       DM.EnableSession;
       DM.LoadScene('C:\Models\Box.glb');     //loader picked by extension
 }
@@ -104,7 +112,8 @@ type
   TvgSessionComponentFactory = reference to function(aClass: TComponentClass; aIndex: Integer): TComponent;
 
 const
-  cSceneSlot = 100;   //layout slot a factory gets for the scene
+  cSceneSlot       = 100;   //layout slot a factory gets for the scene
+  cToolManagerSlot = 101;   //... and for the tool manager
 
 type
   TvgVulkanDataModule = class(TDataModule)
@@ -121,6 +130,8 @@ type
     fSceneLoaderType   : string;
     fSceneFileName     : string;
     fLoadSceneOnEnable : Boolean;
+    fToolManager       : TvgToolManager;
+    fZoomAllOnLoad     : Boolean;
 
     fOnSessionEnabled  : TNotifyEvent;
     fOnSessionDisabled : TNotifyEvent;
@@ -133,6 +144,7 @@ type
     procedure SetScene(const Value: TvgScene);
     procedure SetRenderer(const Value: TvgRenderEngine);
     procedure SetSceneLoader(const Value: TvgSceneLoaderStorer);
+    procedure SetToolManager(const Value: TvgToolManager);
 
     function  GetSessionActive: Boolean;
     procedure SetSessionActive(const Value: Boolean);
@@ -144,6 +156,7 @@ type
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
 
   public
+    constructor CreateNew(AOwner: TComponent; Dummy: Integer = 0); override;
     destructor Destroy; override;
 
     { Creates whichever of Instance, PhysicalDevice, ScreenDevice and Linker is
@@ -169,8 +182,13 @@ type
     procedure BuildScene; overload;
     procedure BuildScene(const aFactory: TvgSessionComponentFactory); overload;
 
+    { Creates ToolManager if missing (camera orbit mode) and connects it. }
+    procedure BuildToolManager; overload;
+    procedure BuildToolManager(const aFactory: TvgSessionComponentFactory); overload;
+
     { Renderer.Linker, Scene.Linker and Renderer.Scene to the primary Linker,
-      and a default camera for an empty scene.  Called by ConnectSession. }
+      a default camera for an empty scene, and ToolManager to the Linker,
+      Scene and Renderer.  Called by ConnectSession. }
     procedure ConnectScene;
 
     { Loads aFileName (SceneFileName when blank) into Scene with SceneLoader,
@@ -220,6 +238,12 @@ type
 
     { Load SceneFileName each time the session is enabled (design time too). }
     property LoadSceneOnEnable : Boolean read fLoadSceneOnEnable write fLoadSceneOnEnable default False;
+
+    { Mouse/keyboard tools for the primary window: camera, picking, selection. }
+    property ToolManager    : TvgToolManager         read fToolManager    write SetToolManager;
+
+    { After LoadScene, move the camera so the whole scene is in view. }
+    property ZoomAllOnLoad  : Boolean read fZoomAllOnLoad write fZoomAllOnLoad default True;
 
     property OnSessionEnabled  : TNotifyEvent read fOnSessionEnabled  write fOnSessionEnabled;
     property OnSessionDisabled : TNotifyEvent read fOnSessionDisabled write fOnSessionDisabled;
@@ -365,6 +389,7 @@ begin
     Add(L);
     Add(vgLinkerWindow(L));
     Add(L.Renderer);
+    Add(L.ToolManager);
     If L.Renderer is TvgRenderEngine then
       Add(TvgRenderEngine(L.Renderer).Scene);
   End;
@@ -483,6 +508,13 @@ end;
 
 { TvgVulkanDataModule }
 
+constructor TvgVulkanDataModule.CreateNew(AOwner: TComponent; Dummy: Integer = 0);
+begin
+  //Create and the designer both come through here, before the .dfm is read
+  fZoomAllOnLoad := True;
+  inherited;
+end;
+
 destructor TvgVulkanDataModule.Destroy;
 begin
   //every TvgBaseComponent must be inactive when it is freed
@@ -509,6 +541,7 @@ begin
   If AComponent = fScene          then fScene          := nil;
   If AComponent = fRenderer       then fRenderer       := nil;
   If AComponent = fSceneLoader    then fSceneLoader    := nil;
+  If AComponent = fToolManager    then fToolManager    := nil;
 end;
 
 procedure TvgVulkanDataModule.ReferenceChanged(aOld, aNew: TComponent);
@@ -605,6 +638,16 @@ begin
 
   If assigned(fSceneLoader) then
     fSceneLoader.FreeNotification(Self);
+end;
+
+procedure TvgVulkanDataModule.SetToolManager(const Value: TvgToolManager);
+  Var Old : TComponent;
+begin
+  If fToolManager = Value then exit;
+  DisableSession;
+  Old          := fToolManager;
+  fToolManager := Value;
+  ReferenceChanged(Old, Value);
 end;
 
 function TvgVulkanDataModule.MakeUniqueName(const aBase: string): string;
@@ -729,6 +772,51 @@ begin
   //adds one only when the scene has none
   If assigned(fScene) and assigned(fScene.Cameras) then
     fScene.Cameras.AddBaseCamera('Default');
+
+  If assigned(fToolManager) then
+  Begin
+    //setting the tool manager's Linker also sets Linker.ToolManager
+    If assigned(fLinker) and (fToolManager.Linker <> fLinker) then
+      fToolManager.Linker := fLinker;
+
+    If assigned(fScene) and (fToolManager.Scene <> fScene) then
+      fToolManager.Scene := fScene;
+
+    If assigned(fRenderer) and (fToolManager.Renderer <> fRenderer) then
+      fToolManager.Renderer := fRenderer;
+  End;
+end;
+
+procedure TvgVulkanDataModule.BuildToolManager;
+begin
+  BuildToolManager(nil);
+end;
+
+procedure TvgVulkanDataModule.BuildToolManager(const aFactory: TvgSessionComponentFactory);
+  Var C : TComponent;
+begin
+  If assigned(fToolManager) then
+  Begin
+    ConnectScene;
+    exit;
+  End;
+
+  If assigned(aFactory) then
+    C := aFactory(TvgToolManager, cToolManagerSlot)
+  else
+  Begin
+    C      := TvgToolManager.Create(Self);
+    C.Name := MakeUniqueName('vgToolManager');
+  End;
+
+  If not (C is TvgToolManager) then
+    raise EvgVulkanSessionError.Create('Unable to create a TvgToolManager');
+
+  //view the scene: left drag orbits, as in the SimpleTest sample
+  TvgToolManager(C).ToolMode   := TMM_CAMERA;
+  TvgToolManager(C).ActionMode := TAM_CAMERA_ORBIT;
+
+  ToolManager := TvgToolManager(C);   //connects it
 end;
 
 procedure TvgVulkanDataModule.BuildScene;
@@ -765,6 +853,10 @@ begin
     FileName := fSceneFileName;
 
   vgLoadSceneFile(fScene, FileName, fSceneLoader, fSceneLoaderType);
+
+  //False (nothing moved) when the viewport or the data's bounds aren't known yet
+  If fZoomAllOnLoad and assigned(fToolManager) then
+    fToolManager.ZoomAll;
 end;
 
 procedure TvgVulkanDataModule.ClearScene;
@@ -852,6 +944,6 @@ end;
 initialization
   //TvgScreenRenderDevice is not on the run time palette, so register all the
   //session classes for streaming a data module's .dfm at run time.
-  RegisterClasses([TvgInstance, TvgPhysicalDevice, TvgScreenRenderDevice, TvgLinker, TvgScene]);
+  RegisterClasses([TvgInstance, TvgPhysicalDevice, TvgScreenRenderDevice, TvgLinker, TvgScene, TvgToolManager]);
 
 end.

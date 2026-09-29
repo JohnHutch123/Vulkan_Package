@@ -30,6 +30,7 @@
 
       Instance > Physical Device(s) > Screen Device > Linker(s) > Window
                                                               > Renderer > Scene
+                                                              > Tool Manager
 
   so a second window and its linker appear under the same screen device.
   Vulkan components on the module that are not connected to the session
@@ -468,6 +469,8 @@ begin
               RNode := AddComponentNode(LNode, L.Renderer, Shown);
               If assigned(RNode) and (L.Renderer is TvgRenderEngine) then
                 AddComponentNode(RNode, TvgRenderEngine(L.Renderer).Scene, Shown);
+
+              AddComponentNode(LNode, L.ToolManager, Shown);
             End;
       End;
     End;
@@ -480,6 +483,7 @@ begin
     AddOther(fModule.Renderer);
     AddOther(fModule.Scene);
     AddOther(fModule.SceneLoader);
+    AddOther(fModule.ToolManager);
 
     For I := 0 to fModule.ComponentCount - 1 do
     Begin

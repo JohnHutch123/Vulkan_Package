@@ -65,6 +65,10 @@ and connects it to a `TvgWindowVCL` on any form.
   has a file-open button, and `LoadSceneOnEnable` reloads it whenever the session is enabled, at design
   time too. Any `TvgScene` also gets *Load Scene File...* / *Clear Scene* on its menu. In code:
   `DM.LoadScene('model.glb')`.
+- **Tool manager:** right-click > *Add Tool Manager* creates a `TvgToolManager` (camera orbit mode) connected
+  to the primary linker, scene and renderer, so the window can be orbited/picked; `ZoomAllOnLoad` (default on)
+  frames each loaded scene. A PRO `TvgEditToolManager` can be assigned to `ToolManager` instead. Each extra
+  window gets its own tool manager: set its linker's `ToolManager` (or the tool manager's `Linker`).
 - **Scene loaders** register themselves in `Vulkan_SceneLoaders` (core package), e.g. in the PRO glTF unit:
   `RegisterSceneLoader(TvgSceneLoaderStorer_GLTF, 'glTF', 'glTF 2.0 scene', '.gltf;.glb', 'FileName');`
   where the last argument is the loader's published file-name property.
