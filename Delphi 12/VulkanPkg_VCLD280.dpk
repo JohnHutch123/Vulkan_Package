@@ -32,10 +32,14 @@ package VulkanPkg_VCLD280;
 requires
   rtl,
   vcl,
+  vclx,
   DesignIDE,
-  VulkanPkgR280;
+  VulkanPkgR280,
+  VulkanPkg_VCLR280;
 
 contains
-  VulkanPkg_DesignersVCL in '..\Design_Src\VulkanPkg_DesignersVCL.pas';
+  VulkanPkg_DesignersVCL in '..\Design_Src\VulkanPkg_DesignersVCL.pas',
+  VulkanDataModuleEditFM in '..\Design_Src\VulkanDataModuleEditFM.pas' {vgSessionEditorFM},
+  VulkanPkg_DataModuleReg in '..\Design_Src\VulkanPkg_DataModuleReg.pas';
 
 end.

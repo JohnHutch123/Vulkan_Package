@@ -42,6 +42,25 @@ repository is not covered by this licence.
 
 ---
 
+### Vulkan session data module (`TvgVulkanDataModule`)
+A `TDataModule` descendant that holds a whole Vulkan session -
+`TvgInstance` -> `TvgPhysicalDevice` -> `TvgScreenRenderDevice` -> `TvgLinker` -
+and connects it to a `TvgWindowVCL` on any form.
+
+- **Create one:** File > New > Other > Delphi Files > *Vulkan Session Data Module*.
+- **Build the session:** right-click the module > *Build Vulkan Session* (adds and wires the components).
+- **Connect the window:** set the module's `Window` property to a `TvgWindowVCL`.
+- **Enable / disable at design time:** right-click > *Enable/Disable Vulkan Session*, or toggle `SessionActive`.
+- **Edit everything:** right-click > *Edit Vulkan Session...* opens an editor for the published
+  properties of every session component (read only while the session runs).
+- **At run time:** call `EnableSession` once the window's form is showing (e.g. in `OnShow`),
+  `DisableSession` to shut down.
+
+Files (all in `Design_Src`): `Vulkan_DataModule.pas` (runtime base class, in `VulkanPkg_VCLR280`),
+`VulkanPkg_DataModuleReg.pas` and `VulkanDataModuleEditFM.pas/.dfm` (IDE side, in `VulkanPkg_VCLD280`).
+
+---
+
 ### Key technologies
 - **Language:** Object Pascal (Delphi)
 - **Graphics API:** Vulkan (`Vulkan.pas`, `TVk*` types)
