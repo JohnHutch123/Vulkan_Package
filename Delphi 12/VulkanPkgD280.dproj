@@ -183,9 +183,6 @@
         <DCCReference Include="rtl.dcp"/>
         <DCCReference Include="designide.dcp"/>
         <DCCReference Include="vcl.dcp"/>
-        <DCCReference Include="vclactnband.dcp"/>
-        <DCCReference Include="vclx.dcp"/>
-        <DCCReference Include="xmlrtl.dcp"/>
         <DCCReference Include="VulkanPkgR280.dcp"/>
         <DCCReference Include="..\Design_Src\VulkanPkg_Designers.pas"/>
         <RcCompile Include="..\Design_Src\VulkanPkg_DesignIcons.rc">
@@ -226,7 +223,6 @@
                         <Overwrite>true</Overwrite>
                     </Platform>
                 </DeployFile>
-                <DeployFile LocalName="C:\Users\Public\Documents\Embarcadero\Studio\22.0\Bpl\VulkanPkgD280.bpl" Configuration="Debug" Class="ProjectOutput"/>
                 <DeployClass Name="AdditionalDebugSymbols">
                     <Platform Name="OSX32">
                         <Operation>1</Operation>

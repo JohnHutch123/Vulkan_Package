@@ -66,22 +66,11 @@ interface
         Vcl.Dialogs,
         Vulkan,
         Vulkan_Components,
-        Vulkan_Components_Lookups,
-        Vulkan_Components_Descriptors;
-
-Type
-    TVersionInfo = Record
-      iMajor  : Integer;
-      iMinor  : Integer;
-      iBugfix : Integer;
-      iBuild  : Integer;
-    End;
+        Vulkan_Components_Lookups;
 
 Var
     SortedEnumLists  : Boolean = False;
 
-    VersionInfo       : TVersionInfo;
-   // bmSplashScreen    : HBITMAP;
     AboutBoxServices  : IOTAAboutBoxServices = nil;
     AboutBoxIndex     : Integer = 0;
 
@@ -92,14 +81,13 @@ Var
 
 //=== s =============================================
 resourcestring
-  vgENoSplashServices = 'Unable to get Borland Splash Services';
   vgENoAboutServices  = 'Unable to get Borland About Services';
   vgAboutCopyright   = 'Copyright (C) Datavis Pty Ltd 2022..2026';
   vgAboutTitle       = 'Datavis Vulkan API VCL';
   vgAboutDescription = 'Datavis Vulkan API Component Library https://www.datavis.com.au' + sLineBreak +
                        'Built on pasvulkan Open Source Library https://github.com/BeRo1985/pasvulkan' + sLineBreak +
-                       'License available at http://www.mozilla.org/MPL/MPL-1.1.html';
-  vgAboutLicenceStatus = 'MPL 1.1';
+                       'Released under the zlib License';
+  vgAboutLicenceStatus = 'zlib';
     VersionString      = 'By Datavis Pty Ltd (Version 1.00)';
     AboutDialogTitle   = 'Datavis Vulkan API VCL (Build 1.0)';
 
@@ -121,13 +109,6 @@ Type
       procedure Edit; override;
     end;
 
-    TvgShaderFileEditor = class(TStringProperty)
-    public
-      function GetAttributes: TPropertyAttributes; override;
-      procedure GetValues(Proc: TGetStrProc); override;
-      procedure Edit; override;
-    end;
-
     TvgDescriptorTypeEditor = class(TStringProperty)
     Protected
       fList : TStringList;
@@ -137,7 +118,6 @@ Type
 
       function GetAttributes: TPropertyAttributes; override;
       procedure GetValues(Proc: TGetStrProc); override;
-      procedure Edit; override;
     end;
 
     TvgPushConstantTypeEditor = class(TStringProperty)
@@ -149,32 +129,10 @@ Type
 
       function GetAttributes: TPropertyAttributes; override;
       procedure GetValues(Proc: TGetStrProc); override;
-      procedure Edit; override;
-    end;
-
-    TvgShaderTextureFileEditor = class(TStringProperty)
-    public
-      function GetAttributes: TPropertyAttributes; override;
-      procedure GetValues(Proc: TGetStrProc); override;
-      procedure Edit; override;
-    end;
-
-    TvgGraphicPipelineNameEditor = class(TStringProperty)
-    Protected
-      fList : TStringList;
-    public
-      constructor Create(const ADesigner: IDesigner; APropCount: Integer); override;
-      destructor Destroy; override;
-
-      function GetAttributes: TPropertyAttributes; override;
-      procedure GetValues(Proc: TGetStrProc); override;
-      procedure Edit; override;
     end;
 
 
     TvgShaderModuleFileNameEditor = class(TStringProperty)
-    Protected
-      fList : TStringList;
     public
 
       function GetAttributes: TPropertyAttributes; override;
@@ -200,25 +158,7 @@ Type
 
     end;
 
-    TvgSwapChainEditor = class(TComponentEditor)
-     Public
-        function GetVerbCount: Integer; override;
-        function GetVerb(Index: Integer): string; override;
-        procedure ExecuteVerb(Index: Integer); override;
-     //   procedure Edit; override;
-
-    end;
-
     TvgLinkEditor = class(TComponentEditor)
-     Public
-        function GetVerbCount: Integer; override;
-        function GetVerb(Index: Integer): string; override;
-        procedure ExecuteVerb(Index: Integer); override;
-     //   procedure Edit; override;
-
-    end;
-
-    TvgRenderPassEditor = class(TComponentEditor)
      Public
         function GetVerbCount: Integer; override;
         function GetVerb(Index: Integer): string; override;
@@ -261,14 +201,6 @@ Type
     procedure SetValue(const Value: string); override;
   End;
 
-  // Custom property editor that provides a dynamic value list for a string property
-  TFormatPropertyEditor = class(TStringProperty)
-  public
-    function GetAttributes: TPropertyAttributes; override;
-    procedure GetValues(Proc: TGetStrProc); override;
-    // Optionally override SetValue/GetValue for validation or mapping
-  end;
-
 
 (*
   TvgPipesPropEditor = class(TComponentProperty)
@@ -308,47 +240,11 @@ implementation
  End;
  *)
 
-
-Procedure BuildNumber(Var VersionInfo: TVersionInfo);
-
 Var
-  VerInfoSize: DWORD;
-  VerInfo: Pointer;
-  VerValueSize: DWORD;
-  VerValue: PVSFixedFileInfo;
-  Dummy: DWORD;
-  strBuffer: Array [0 .. MAX_PATH] Of Char;
-
-Begin
- Try
-
-  GetModuleFileName(hInstance, strBuffer, MAX_PATH);
-  VerInfoSize := GetFileVersionInfoSize(strBuffer, Dummy);
-  If VerInfoSize <> 0 Then
-    Begin
-      GetMem(VerInfo, VerInfoSize);
-      Try
-        GetFileVersionInfo(strBuffer, 0, VerInfoSize, VerInfo);
-        VerQueryValue(VerInfo, '\', Pointer(VerValue), VerValueSize);
-        With VerValue^ Do
-          Begin
-            VersionInfo.iMajor := dwFileVersionMS Shr 16;
-            VersionInfo.iMinor := dwFileVersionMS And $FFFF;
-            VersionInfo.iBugfix := dwFileVersionLS Shr 16;
-            VersionInfo.iBuild := dwFileVersionLS And $FFFF;
-          End;
-      Finally
-        FreeMem(VerInfo, VerInfoSize);
-      End;
-    End;
-
-//  VersionString    := Format(VersionString, [VersionInfo.iMajor, VersionInfo.iMinor, VersionInfo.iBugfix, VersionInfo.iBuild])  ;
-//  AboutDialogTitle := Format(AboutDialogTitle, [VersionInfo.iMajor, VersionInfo.iMinor])  ;
-
- Except
-
- End;
-End;
+  // Bitmaps handed to the IDE's about box and splash screen. The IDE keeps
+  // using the handles, so they are only freed when the package unloads.
+  AboutBoxImage     : HBITMAP = 0;
+  SplashScreenImage : HBITMAP = 0;
 
 (*
 Function InitialiseWizard : TWizardTemplate;
@@ -394,18 +290,6 @@ begin
    RegisterPropertyEditor(TypeInfo(TvgSubPass), TvgSubPassDependency , 'SrcSubPass', TvgSubPassRefPropEditor);
    RegisterPropertyEditor(TypeInfo(TvgSubPass), TvgSubPassDependency , 'DstSubPass', TvgSubPassRefPropEditor);
 
-   //  TvgResourceTexture
-   RegisterPropertyEditor (TypeInfo(string), TvgDescriptorArray_Texture, 'FileName', TvgShaderTextureFileEditor);
-
-  // Register the component in the palette (optional)
-//  RegisterComponents('Samples', [TvgAttachment]);
-
-  // Register the property editor for the 'Option' property of TMyDynamicComponent.
-  // TypeInfo(string) restricts this editor to string properties; replace with other
-  // typeinfo if your property is different.
-   RegisterPropertyEditor(TypeInfo(string), TvgAttachment, 'Format', TFormatPropertyEditor);
-
-
 
    If SortedEnumLists=False then
    Begin
@@ -434,9 +318,6 @@ begin
 
    //TvgPushConstantItem
      RegisterPropertyEditor (TypeInfo(String), TvgPushConstantItem, 'PushConstantName', TvgPushConstantTypeEditor);
-
-   // TvgGraphicPipeItem
- //    RegisterPropertyEditor (TypeInfo(String), TvgGraphicPipeItem, 'GraphicPipeName', TvgGraphicPipelineNameEditor);
 
 //TvgShaderModule
      RegisterPropertyEditor (TypeInfo(String), TvgShaderModule, 'FileName', TvgShaderModuleFileNameEditor);
@@ -555,18 +436,20 @@ begin
     End else
        B:=False;
 
-    If D.Instance.active then
-    Begin
-      For I:=0 to D.Instance.PhysicalDevices.Count-1 do
+    Try
+      If D.Instance.active then
       Begin
-         S:= TvgPhysDevice(D.Instance.PhysicalDevices.Items[I]).Description;
-         Proc(S);
-      End;
-    end else
-      Proc('Instance not Active');
-
-    If B then
-      D.Instance.Active:=False;
+        For I:=0 to D.Instance.PhysicalDevices.Count-1 do
+        Begin
+           S:= TvgPhysDevice(D.Instance.PhysicalDevices.Items[I]).Description;
+           Proc(S);
+        End;
+      end else
+        Proc('Instance not Active');
+    Finally
+      If B then
+        D.Instance.Active:=False;
+    End;
   End;
 end;
 
@@ -587,7 +470,7 @@ function TvgDeviceEditor.GetVerb(Index: Integer): string;
 begin
   Result:='' ;
   case Index of
-      0: Result := 'Vulkan Graphics Screen Render Device (©Datavis)';
+      0: Result := 'Vulkan Graphics Device (©Datavis)';
       1: Result := '&About this component...';
       2: Result := 'Add &Extensions...';
       3: Result := 'Add &Layers...';
@@ -600,122 +483,6 @@ function TvgDeviceEditor.GetVerbCount: Integer;
 begin
   Result:=5;
 end;
-
-{ TvgSwapChain Editor }
-
-procedure TvgSwapChainEditor.ExecuteVerb(Index: Integer);
-begin
-  case Index of
-      0: ; // nothing to do
-      1: MessageDlg ('This is a Vulkan Graphics Swap Chain component '#13 + 'built by Datavis'#13 , mtInformation, [mbOK], 0);
-      2: (Component as TvgSwapChain).BuildALLImagesColorSpaces;
-      3: (Component as TvgSwapChain).BuildALLPresentationModes;
-   //   4: (Component as TvgSwapChain).BuildDepthBuffer;
-    end;
-end;
-
-function TvgSwapChainEditor.GetVerb(Index: Integer): string;
-begin
-  case Index of
-      0: Result := ' Vulkan Graphics Swap Chain (©Datavis)';
-      1: Result := '&About this component...';
-      2: Result := 'Add All &Images and Color Spaces Modes...';
-      3: Result := 'Add All &Presentation Modes...';
-    //  4: Result := 'Add All &Depth Buffer...';
-    end;
-end;
-
-function TvgSwapChainEditor.GetVerbCount: Integer;
-begin
-  Result := 4;
-end;
-
-{ TvgShaderFileEditor }
-
-procedure TvgShaderFileEditor.Edit;
- var FD : TOpenDialog;
-     SM : TvgShaderModule;
-     S  : String;
-     P  : TPersistent;
-begin
-  P := GetComponent(0) ;
-  Assert(assigned(P));
-  Assert((P is TvgShaderModule));
-
-  SM := TvgShaderModule(P);
-
-  FD := TOpenDialog.Create(SM);
- Try
-  S:= Trim(GetValue);
-
-  If S='' then
-  Begin
-    If ShaderFolderPath='' then
-       FD.InitialDir := GetCurrentDir
-    else
-       FD.InitialDir := ShaderFolderPath;
-
-  end else
-  Begin
-     FD.InitialDir := ExtractFilePath(S);
-     FD.FileName   := ExtractFileName(S);
-  End;
-
-  FD.Options    := [ofFileMustExist];
-  FD.Filter     := 'Shader Compiled SPIR-V Files|*.spv|';
-
-  If FD.Execute then
-  Begin
-    SetValue(FD.FileName)  ;
-    ShaderFolderPath := ExtractFilePath(FD.FileName);
-  End;
-
- Finally
-   FD.Free;
- End;
-
-end;
-
-function TvgShaderFileEditor.GetAttributes: TPropertyAttributes;
-begin
-  result := inherited;
-
-  result := result + [paDialog];
-end;
-
-procedure TvgShaderFileEditor.GetValues(Proc: TGetStrProc);
-begin
-  inherited;
-
-end;
-
-{ TvgRenderPassEditor }
-
-procedure TvgRenderPassEditor.ExecuteVerb(Index: Integer);
-begin
-  case Index of
-      0: ; // nothing to do
-      1: MessageDlg ('This is a Vulkan Graphics Render Pass component '#13 + 'built by Datavis'#13 , mtInformation, [mbOK], 0);
-      2: (Component as TvgRenderPass).BuildStructure;
-    //  3: (Component as TvgSwapChain).BuildALLPresentationModes;
-    end;
-end;
-
-function TvgRenderPassEditor.GetVerb(Index: Integer): string;
-begin
-  case Index of
-      0: Result := ' Vulkan Graphics Render Pass (©Datavis)';
-      1: Result := '&About this component...';
-      2: Result := 'Build Render Pass structure...';
-     // 3: Result := 'Add All &Presentation Modes...';
-    end;
-end;
-
-function TvgRenderPassEditor.GetVerbCount: Integer;
-begin
-  Result := 3;
-end;
-
 
 
 { TVulkanEnumLookUps }
@@ -731,14 +498,13 @@ begin
 end;
 
 procedure RegisterAboutBox;
-  Var ProductImage : HBITMAP;
 begin
   Supports(BorlandIDEServices,IOTAAboutBoxServices, AboutBoxServices);
   Assert(Assigned(AboutBoxServices), vgENoAboutServices);
-  ProductImage   := LoadBitmap(FindResourceHInstance(HInstance), 'Datavis');
+  AboutBoxImage  := LoadBitmap(FindResourceHInstance(HInstance), 'Datavis');
   AboutBoxIndex := AboutBoxServices.AddPluginInfo(AboutDialogTitle,
       vgAboutDescription,
-      ProductImage,
+      AboutBoxImage,
       False,
       '',
       VersionString);
@@ -752,17 +518,22 @@ begin
     AboutBoxIndex := 0;
     AboutBoxServices := nil;
   end;
+  if AboutBoxImage <> 0 then
+  begin
+    DeleteObject(AboutBoxImage);
+    AboutBoxImage := 0;
+  end;
 end;
+
 procedure RegisterSplashScreen;
-  Var ProductImage : HBITMAP;
 begin
   // SplashScreenServices is only valid while the IDE is starting up; it is nil
   // when the package is installed or rebuilt from a running IDE.
   If not Assigned(SplashScreenServices) then
     Exit;
-  ProductImage   := LoadBitmap(FindResourceHInstance(HInstance), 'Datavis');
+  SplashScreenImage := LoadBitmap(FindResourceHInstance(HInstance), 'Datavis');
   SplashScreenServices.AddPluginBitmap(AboutDialogTitle,
-      ProductImage,
+      SplashScreenImage,
       False,
       '',
       VersionString);
@@ -998,16 +769,10 @@ begin
   inherited;
 end;
 
-procedure TvgDescriptorTypeEditor.Edit;
-begin
-  inherited;
-
-end;
-
 function TvgDescriptorTypeEditor.GetAttributes: TPropertyAttributes;
 begin
  // result:=inherited;
-  result := {result +} [paDialog, paValueList, paSortList];
+  result := {result +} [paValueList, paSortList];
 end;
 
 procedure TvgDescriptorTypeEditor.GetValues(Proc: TGetStrProc);
@@ -1019,109 +784,6 @@ begin
      For i:=0 to fList.Count-1 do
         Proc(fList.Strings[I]);
 end;
-
-{ TvgGraphicPipelineTypeEditor }
-
-constructor TvgGraphicPipelineNameEditor.Create(const ADesigner: IDesigner; APropCount: Integer);
-begin
-  inherited;
-  fList := TStringList.Create;
-
-end;
-
-destructor TvgGraphicPipelineNameEditor.Destroy;
-begin
-  If assigned(fList) then
-    FreeAndNil(fList);
-
-  inherited;
-end;
-
-procedure TvgGraphicPipelineNameEditor.Edit;
-begin
-  inherited;
-
-end;
-
-function TvgGraphicPipelineNameEditor.GetAttributes: TPropertyAttributes;
-begin
-  result:=inherited;
-  result := result + [paValueList, paSortList];
-end;
-
-procedure TvgGraphicPipelineNameEditor.GetValues(Proc: TGetStrProc);
-   Var I:Integer;
-begin
- (*
-   FillGraphicTypeNameList(fList);
-   fList.Sort;
-   If fList.Count>0 then
-     For i:=0 to fList.Count-1 do
-        Proc(fList.Strings[I]);
-  *)
-end;
-
-{ TvgShaderTextureFileEditor }
-
-procedure TvgShaderTextureFileEditor.Edit;
- var FD : TOpenDialog;
-     RT : TvgDescriptorArray_Texture;
-     S  : String;
-     P  : TPersistent;
-begin
-  P := GetComponent(0) ;
-  Assert(assigned(P));
-  Assert((P is TvgDescriptorArray_Texture));
-
-  RT := TvgDescriptorArray_Texture(P);
-
-  FD := TOpenDialog.Create(RT);
- Try
-  S:= Trim(GetValue);
-
-  If S='' then
-  Begin
-    If ShaderFolderPath='' then
-       FD.InitialDir := GetCurrentDir
-    else
-       FD.InitialDir := ShaderFolderPath;
-  end else
-  Begin
-     FD.InitialDir := ExtractFilePath(S);
-     FD.FileName   := ExtractFileName(S);
-  End;
-
-  FD.Options    := [ofFileMustExist];
-  FD.Filter     := 'Bitmap Files (*.BMP)|*.BMP|'+
-                   'JPEG Files (*.JPG)|*.JPG|'+
-                   'PNG Files (*.PNG)|*.PNG|'+
-                   'All Files|*.*|';
-
-  If FD.Execute then
-  Begin
-    SetValue(FD.FileName)  ;
-    ShaderFolderPath := ExtractFilePath(FD.FileName);
-  End;
-
- Finally
-   FD.Free;
- End;
-
-end;
-
-function TvgShaderTextureFileEditor.GetAttributes: TPropertyAttributes;
-begin
-  result := inherited;
-
-  result := result + [paDialog];
-end;
-
-procedure TvgShaderTextureFileEditor.GetValues(Proc: TGetStrProc);
-begin
-  inherited;
-
-end;
-
 
 { TvgPushConstantTypeEditor }
 
@@ -1138,15 +800,9 @@ begin
   inherited;
 end;
 
-procedure TvgPushConstantTypeEditor.Edit;
-begin
-  inherited;
-
-end;
-
 function TvgPushConstantTypeEditor.GetAttributes: TPropertyAttributes;
 begin
-  result :=  [paDialog, paValueList, paSortList];
+  result :=  [paValueList, paSortList];
 end;
 
 procedure TvgPushConstantTypeEditor.GetValues(Proc: TGetStrProc);
@@ -1158,51 +814,6 @@ begin
      For i:=0 to fList.Count-1 do
         Proc(fList.Strings[I]);
 end;
-
-{ TFormatPropertyEditor }
-
-function TFormatPropertyEditor.GetAttributes: TPropertyAttributes;
-begin
-  // paValueList => show drop down list
-  // paSortList  => optionally sort
-  // paMultiSelect => allow multi-select in inspector (optional)
-  Result := [paValueList, paSortList];
-end;
-
-procedure TFormatPropertyEditor.GetValues(Proc: TGetStrProc);
-var
-  Comp      : TComponent;
-  Attachment: TvgAttachment;
-  Values    : TStringList;
-  i         : Integer;
-begin
-  // Called when Object Inspector opens the drop-down. We compute the list now.
-  // GetComponent(0) returns the owning component instance for which the property is being edited.
- (*
-  if GetComponent(0) is TComponent then
-  begin
-    Comp := TComponent(GetComponent(0));
-    if Comp is TvgAttachment then
-    begin
-      Attachment := TvgAttachment(Comp);
-
-      // You may either construct the list here, or call a method on the component
-      // that returns the list (like GetOptionValues). We'll call that helper:
-      Values := Attachment.GetOptionValues;
-      try
-        for i := 0 to Values.Count - 1 do
-          Proc(Values[i]);
-      finally
-        Values.Free;
-      end;
-      Exit;
-    end;
-  end;
-  *)
-  // Fallback: no values
-  // You can also add hard-coded defaults here.
-end;
-
 
 
 { TvgShaderModuleFileNameEditor }
@@ -1239,5 +850,7 @@ Initialization
 
 Finalization
   UnregisterAboutBox;
+  if SplashScreenImage <> 0 then
+    DeleteObject(SplashScreenImage);
 
 end.
