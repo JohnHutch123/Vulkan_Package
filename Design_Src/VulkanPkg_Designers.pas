@@ -389,13 +389,10 @@ begin
 
    RegisterPropertyEditor (TypeInfo(string), TvgPhysicalDevice, 'PhysicalDevice',  TvgPhysicalDeviceEditor);
 
-   RegisterPropertyEditor(TypeInfo(TvgSubPassAttachment), TvgSubPassAttachment, 'Attachment', TvgAttachmentRefPropEditor);
+   RegisterPropertyEditor(TypeInfo(TvgAttachment), TvgSubPassAttachment, 'Attachment', TvgAttachmentRefPropEditor);
 
    RegisterPropertyEditor(TypeInfo(TvgSubPass), TvgSubPassDependency , 'SrcSubPass', TvgSubPassRefPropEditor);
    RegisterPropertyEditor(TypeInfo(TvgSubPass), TvgSubPassDependency , 'DstSubPass', TvgSubPassRefPropEditor);
-
-   // TvgShaderModule
-   RegisterPropertyEditor (TypeInfo(string), TvgShaderModule, 'FileName', TvgShaderFileEditor);
 
    //  TvgResourceTexture
    RegisterPropertyEditor (TypeInfo(string), TvgDescriptorArray_Texture, 'FileName', TvgShaderTextureFileEditor);
@@ -443,10 +440,6 @@ begin
 
 //TvgShaderModule
      RegisterPropertyEditor (TypeInfo(String), TvgShaderModule, 'FileName', TvgShaderModuleFileNameEditor);
-   //TvgDescriptorItem
-
-     RegisterPropertyEditor(TypeInfo(TvgDescriptorArrayType), TvgDescriptorItem, 'DescriptorType', TVulkanEnumLookUps);
-     RegisterPropertyEditor(TypeInfo(TvgShaderStageFlagBits), TvgDescriptorItem, 'StageFlags', TVulkanEnumLookUps);
 
    //TvgGraphicsPipeline
 //     RegisterPropertyEditor(TypeInfo(TvgPrimitiveTopology), TvgGraphicPipe, 'Topology', TVulkanEnumLookUps);
@@ -458,10 +451,6 @@ begin
 
      RegisterPropertyEditor(TypeInfo(TvgBlendOp), TvgColorBlendAttachment, 'ColorBlendOp', TVulkanEnumLookUps);
      RegisterPropertyEditor(TypeInfo(TvgBlendOp), TvgColorBlendAttachment, 'AlphaBlendOp', TVulkanEnumLookUps);
-     RegisterPropertyEditor(TypeInfo(TvgBlendFactor), TvgColorBlendAttachment, 'SrcColorBlendFactor', TVulkanEnumLookUps);
-     RegisterPropertyEditor(TypeInfo(TvgBlendFactor), TvgColorBlendAttachment, 'DstColorBlendFactor', TVulkanEnumLookUps);
-     RegisterPropertyEditor(TypeInfo(TvgBlendFactor), TvgColorBlendAttachment, 'SrcAlphaBlendFactor', TVulkanEnumLookUps);
-     RegisterPropertyEditor(TypeInfo(TvgBlendFactor), TvgColorBlendAttachment, 'DstAlphaBlendFactor', TVulkanEnumLookUps);
      RegisterPropertyEditor(TypeInfo(TvgBlendFactor), TvgColorBlendAttachment, 'SrcColorBlendFactor', TVulkanEnumLookUps);
      RegisterPropertyEditor(TypeInfo(TvgBlendFactor), TvgColorBlendAttachment, 'DstColorBlendFactor', TVulkanEnumLookUps);
      RegisterPropertyEditor(TypeInfo(TvgBlendFactor), TvgColorBlendAttachment, 'SrcAlphaBlendFactor', TVulkanEnumLookUps);
@@ -482,7 +471,7 @@ begin
      RegisterPropertyEditor(TypeInfo(TvgImageLayout),         TvgAttachment, 'InitialLayout', TVulkanEnumLookUps);
      RegisterPropertyEditor(TypeInfo(TvgImageLayout),         TvgAttachment, 'FinalLayout', TVulkanEnumLookUps);
 
-     RegisterPropertyEditor(TypeInfo(TvgImageLayout),         TvgSubPassAttachmentCol , 'Layout', TVulkanEnumLookUps);
+     RegisterPropertyEditor(TypeInfo(TvgImageLayout),         TvgSubPassAttachment , 'Layout', TVulkanEnumLookUps);
 
      //TvgSubPass
      RegisterPropertyEditor(TypeInfo(TvgPipelineBindPoint), TvgSubPass, 'PipelineBindPoint', TVulkanEnumLookUps);
@@ -588,9 +577,9 @@ begin
   case Index of
       0: ; // nothing to do
       1: MessageDlg ('Vulkan Graphics Device component '#13 + 'built by Datavis'#13 , mtInformation, [mbOK], 0);
-      2: (Component as TvgScreenRenderDevice).BuildALLExtensions;
-      3: (Component as TvgScreenRenderDevice).BuildALLLayers;
-      4: (Component as TvgScreenRenderDevice).BuildALLFeatures;
+      2: (Component as TvgLogicalDevice).BuildALLExtensions;
+      3: (Component as TvgLogicalDevice).BuildALLLayers;
+      4: (Component as TvgLogicalDevice).BuildALLFeatures;
     end;
 end;
 
@@ -767,7 +756,10 @@ end;
 procedure RegisterSplashScreen;
   Var ProductImage : HBITMAP;
 begin
-  Assert(Assigned(SplashScreenServices), vgENoSplashServices);
+  // SplashScreenServices is only valid while the IDE is starting up; it is nil
+  // when the package is installed or rebuilt from a running IDE.
+  If not Assigned(SplashScreenServices) then
+    Exit;
   ProductImage   := LoadBitmap(FindResourceHInstance(HInstance), 'Datavis');
   SplashScreenServices.AddPluginBitmap(AboutDialogTitle,
       ProductImage,
@@ -785,7 +777,7 @@ end;
 
 function TvgAttachmentRefPropEditor.GetAttachment: TvgAttachment;
 begin
-  If GetOrdValue>0 then
+  If GetOrdValue<>0 then
      Result := TvgAttachment(GetOrdValue)
   else
      Result := Nil;
@@ -859,7 +851,7 @@ begin
          S:= Trim(R.Attachments.Items[I].Name);
          If CompareText(S,Value)=0 then
          Begin
-           SetOrdValue(LongInt(R.Attachments.Items[I]));
+           SetOrdValue(NativeInt(R.Attachments.Items[I]));
            exit;
          End;
        End;
@@ -897,7 +889,7 @@ end;
 
 function TvgSubPassRefPropEditor.GetSubPass: TvgSubPass;
 begin
-  If GetOrdValue>0 then
+  If GetOrdValue<>0 then
      Result := TvgSubPass(GetOrdValue)
   else
      Result:=Nil;
@@ -950,7 +942,7 @@ begin
          S:= Trim(R.SubPasses.Items[I].Name);
          If CompareText(S,Value)=0 then
          Begin
-           SetOrdValue(LongInt(R.SubPasses.Items[I]));
+           SetOrdValue(NativeInt(R.SubPasses.Items[I]));
            exit;
          End;
        End;
@@ -981,13 +973,13 @@ begin
       2: Result := 'Add All &Images and Color Spaces Modes...';
       3: Result := 'Add All &Presentation Modes...';
     //  4: Result := 'Build &Render Pass Structure...';
-      4: Result := 'Update &Features...';
+    //  4: Result := 'Update &Features...';
     end;
 end;
 
 function TvgLinkEditor.GetVerbCount: Integer;
 begin
-  Result := 5;
+  Result := 4;
 end;
 
 
@@ -1101,7 +1093,7 @@ begin
 
   FD.Options    := [ofFileMustExist];
   FD.Filter     := 'Bitmap Files (*.BMP)|*.BMP|'+
-                   'JPEG Files (*.JPG|*.JPG|'+
+                   'JPEG Files (*.JPG)|*.JPG|'+
                    'PNG Files (*.PNG)|*.PNG|'+
                    'All Files|*.*|';
 
@@ -1160,7 +1152,7 @@ end;
 procedure TvgPushConstantTypeEditor.GetValues(Proc: TGetStrProc);
    Var I:Integer;
 begin
-   FillDescriptorNameList(fList);
+   FillPushConstantNameList(fList);
    fList.Sort;
    If fList.Count>0 then
      For i:=0 to fList.Count-1 do
@@ -1222,8 +1214,9 @@ begin
     OpenDialog := TOpenDialog.Create(nil);
   try
     OpenDialog.Title := 'Select Shader File';
-    OpenDialog.Filter := 'All SPV Files (.spv)|.spv';
+    OpenDialog.Filter := 'Shader Compiled SPIR-V Files (*.spv)|*.spv';
     OpenDialog.Options := [ ofFileMustExist, ofHideReadOnly, ofEnableSizing] ;
+    OpenDialog.InitialDir := ShaderFolderPath;
     OpenDialog.FileName := GetValue;
     if OpenDialog.Execute then
       SetValue( ExtractFileName(OpenDialog.FileName));
