@@ -1,9 +1,12 @@
 ﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
-        <ProjectGuid>{FE136DA0-0C05-4F5F-8910-14F2CD2D4243}</ProjectGuid>
+        <ProjectGuid>{0F2344BF-E5BB-4180-A8FC-249C020520FE}</ProjectGuid>
     </PropertyGroup>
     <ItemGroup>
-        <Projects Include="..\Samples\SimpleTest\SimpleTest.dproj">
+        <Projects Include="VulkanPkgR280.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="VulkanPkgD280.dproj">
             <Dependencies/>
         </Projects>
     </ItemGroup>
@@ -14,39 +17,32 @@
             <Default.Personality/>
         </BorlandProject>
     </ProjectExtensions>
-    <Target Name="SimpleTest">
-        <MSBuild Projects="..\Samples\SimpleTest\SimpleTest.dproj"/>
+    <Target Name="VulkanPkgR280">
+        <MSBuild Projects="VulkanPkgR280.dproj"/>
     </Target>
-    <Target Name="SimpleTest:Clean">
-        <MSBuild Projects="..\Samples\SimpleTest\SimpleTest.dproj" Targets="Clean"/>
+    <Target Name="VulkanPkgR280:Clean">
+        <MSBuild Projects="VulkanPkgR280.dproj" Targets="Clean"/>
     </Target>
-    <Target Name="SimpleTest:Make">
-        <MSBuild Projects="..\Samples\SimpleTest\SimpleTest.dproj" Targets="Make"/>
+    <Target Name="VulkanPkgR280:Make">
+        <MSBuild Projects="VulkanPkgR280.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="VulkanPkgD280">
+        <MSBuild Projects="VulkanPkgD280.dproj"/>
+    </Target>
+    <Target Name="VulkanPkgD280:Clean">
+        <MSBuild Projects="VulkanPkgD280.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="VulkanPkgD280:Make">
+        <MSBuild Projects="VulkanPkgD280.dproj" Targets="Make"/>
     </Target>
     <Target Name="Build">
-        <CallTarget Targets="SimpleTest"/>
+        <CallTarget Targets="VulkanPkgR280;VulkanPkgD280"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="SimpleTest:Clean"/>
+        <CallTarget Targets="VulkanPkgR280:Clean;VulkanPkgD280:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="SimpleTest:Make"/>
+        <CallTarget Targets="VulkanPkgR280:Make;VulkanPkgD280:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
-    <ItemGroup Condition="'$(BuildGroup)'=='Vulkan Test Debug Build'">
-        <BuildGroupProject Include="..\Samples\SimpleTest\SimpleTest.dproj">
-            <ProjectGuid>{9547A1FF-1889-4BF6-BFE4-520037EDBDC7}</ProjectGuid>
-            <Configurations>Debug</Configurations>
-            <Platforms>Win32</Platforms>
-            <Enabled>False</Enabled>
-        </BuildGroupProject>
-    </ItemGroup>
-    <ItemGroup Condition="'$(BuildGroup)'=='Vulkan Test Build Group'">
-        <BuildGroupProject Include="..\Samples\SimpleTest\SimpleTest.dproj">
-            <ProjectGuid>{9547A1FF-1889-4BF6-BFE4-520037EDBDC7}</ProjectGuid>
-            <Configurations>Debug</Configurations>
-            <Platforms>Win32</Platforms>
-            <Enabled>False</Enabled>
-        </BuildGroupProject>
-    </ItemGroup>
 </Project>

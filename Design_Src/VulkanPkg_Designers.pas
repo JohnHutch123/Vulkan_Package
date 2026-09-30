@@ -64,8 +64,10 @@ interface
         ToolsAPI,
         Winapi.Windows,
         Vcl.Dialogs,
+        Vulkan,
         Vulkan_Components,
-        Vulkan_Components_Lookups;
+        Vulkan_Components_Lookups,
+        Vulkan_Components_Descriptors;
 
 Type
     TVersionInfo = Record
@@ -92,7 +94,7 @@ Var
 resourcestring
   vgENoSplashServices = 'Unable to get Borland Splash Services';
   vgENoAboutServices  = 'Unable to get Borland About Services';
-  vgAboutCopyright   = 'Copyright (C) Datavis Pty Ltd 2022..2023';
+  vgAboutCopyright   = 'Copyright (C) Datavis Pty Ltd 2022..2026';
   vgAboutTitle       = 'Datavis Vulkan API VCL';
   vgAboutDescription = 'Datavis Vulkan API Component Library https://www.datavis.com.au' + sLineBreak +
                        'Built on pasvulkan Open Source Library https://github.com/BeRo1985/pasvulkan' + sLineBreak +
@@ -285,11 +287,11 @@ Type
   *)
 procedure Register;
 
-Function GetVGFormatAsString(Value:TVkFormat):String;
+//Function GetVGFormatAsString(Value:TVkFormat):String;
 
 implementation
 
-
+(*
  Function GetVGFormatAsString(Value:TVkFormat):String;
  Begin
    Result := '';
@@ -304,7 +306,7 @@ implementation
 
 
  End;
-
+ *)
 
 
 Procedure BuildNumber(Var VersionInfo: TVersionInfo);
@@ -396,7 +398,7 @@ begin
    RegisterPropertyEditor (TypeInfo(string), TvgShaderModule, 'FileName', TvgShaderFileEditor);
 
    //  TvgResourceTexture
-   RegisterPropertyEditor (TypeInfo(string), TvgDescriptor_Texture, 'FileName', TvgShaderTextureFileEditor);
+   RegisterPropertyEditor (TypeInfo(string), TvgDescriptorArray_Texture, 'FileName', TvgShaderTextureFileEditor);
 
   // Register the component in the palette (optional)
 //  RegisterComponents('Samples', [TvgAttachment]);
@@ -437,13 +439,13 @@ begin
      RegisterPropertyEditor (TypeInfo(String), TvgPushConstantItem, 'PushConstantName', TvgPushConstantTypeEditor);
 
    // TvgGraphicPipeItem
-     RegisterPropertyEditor (TypeInfo(String), TvgGraphicPipeItem, 'GraphicPipeName', TvgGraphicPipelineNameEditor);
+ //    RegisterPropertyEditor (TypeInfo(String), TvgGraphicPipeItem, 'GraphicPipeName', TvgGraphicPipelineNameEditor);
 
 //TvgShaderModule
      RegisterPropertyEditor (TypeInfo(String), TvgShaderModule, 'FileName', TvgShaderModuleFileNameEditor);
    //TvgDescriptorItem
 
-     RegisterPropertyEditor(TypeInfo(TvgDescriptorType), TvgDescriptorItem, 'DescriptorType', TVulkanEnumLookUps);
+     RegisterPropertyEditor(TypeInfo(TvgDescriptorArrayType), TvgDescriptorItem, 'DescriptorType', TVulkanEnumLookUps);
      RegisterPropertyEditor(TypeInfo(TvgShaderStageFlagBits), TvgDescriptorItem, 'StageFlags', TVulkanEnumLookUps);
 
    //TvgGraphicsPipeline
@@ -967,7 +969,7 @@ begin
       2: (Component as TvgLinker).BuildSwapChainColorSpaces;
       3: (Component as TvgLinker).BuildSwapChainPresentationModes;
      // 4: {(Component as TvgLinker).BuildRenderPassStructure};
-      4: (Component as TvgLinker).BuildFeaturesStructure;
+   //   4: (Component as TvgLinker).BuildFeaturesStructure;
     end;
 end;
 
@@ -1058,26 +1060,28 @@ end;
 procedure TvgGraphicPipelineNameEditor.GetValues(Proc: TGetStrProc);
    Var I:Integer;
 begin
+ (*
    FillGraphicTypeNameList(fList);
    fList.Sort;
    If fList.Count>0 then
      For i:=0 to fList.Count-1 do
         Proc(fList.Strings[I]);
+  *)
 end;
 
 { TvgShaderTextureFileEditor }
 
 procedure TvgShaderTextureFileEditor.Edit;
  var FD : TOpenDialog;
-     RT : TvgDescriptor_Texture;
+     RT : TvgDescriptorArray_Texture;
      S  : String;
      P  : TPersistent;
 begin
   P := GetComponent(0) ;
   Assert(assigned(P));
-  Assert((P is TvgDescriptor_Texture));
+  Assert((P is TvgDescriptorArray_Texture));
 
-  RT := TvgDescriptor_Texture(P);
+  RT := TvgDescriptorArray_Texture(P);
 
   FD := TOpenDialog.Create(RT);
  Try
@@ -1182,7 +1186,7 @@ var
 begin
   // Called when Object Inspector opens the drop-down. We compute the list now.
   // GetComponent(0) returns the owning component instance for which the property is being edited.
-
+ (*
   if GetComponent(0) is TComponent then
   begin
     Comp := TComponent(GetComponent(0));
@@ -1202,7 +1206,7 @@ begin
       Exit;
     end;
   end;
-
+  *)
   // Fallback: no values
   // You can also add hard-coded defaults here.
 end;

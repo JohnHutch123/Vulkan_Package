@@ -150,7 +150,6 @@
     <PropertyGroup Condition="'$(Base_Win32)'!=''">
         <DCC_BplOutput>.\$(ProductVersion)\$(Platform)\$(Config)</DCC_BplOutput>
         <DCC_DcpOutput>.\$(ProductVersion)\$(Platform)\$(Config)</DCC_DcpOutput>
-        <DCC_UnitSearchPath>D:\Vulkan_Package_PRO\RunTime_Src;D:\Vulkan_Package_PRO\Design_Src;D:\Vulkan_Package\RunTime_Src;D:\Vulkan_Package\Design_Src;D:\Vulkan_Package\Samples\Renderers;D:\Vulkan\src;D:\Vulkan\externals\pasmp\src;D:\Vulkan\externals\pasjson\src;D:\Vulkan\externals\pucu\src;D:\Vulkan\externals\pasdblstrutils\src;D:\Vulkan\externals\pasgltf\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <VerInfo_Keys>CompanyName=;FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductVersion=1.0.0.0;Comments=;ProgramID=com.embarcadero.$(MSBuildProjectName);FileDescription=$(MSBuildProjectName);ProductName=$(MSBuildProjectName)</VerInfo_Keys>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;Bde;$(DCC_Namespace)</DCC_Namespace>
@@ -195,33 +194,9 @@
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
         <DCCReference Include="rtl.dcp"/>
+        <DCCReference Include="D:\Vulkan\src\Vulkan.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Components.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_Lookups.pas"/>
-        <DCCReference Include="..\Vulkan\src\Vulkan.pas"/>
-        <DCCReference Include="..\Vulkan\src\PasVulkan.Types.pas"/>
-        <DCCReference Include="..\Vulkan\src\PasVulkan.Math.pas"/>
-        <DCCReference Include="..\Vulkan\src\PasVulkan.Math.Double.pas"/>
-        <DCCReference Include="..\Vulkan\src\PasVulkan.Image.TGA.pas"/>
-        <DCCReference Include="..\Vulkan\src\PasVulkan.Image.BMP.pas"/>
-        <DCCReference Include="..\Vulkan\src\PasVulkan.SignedDistanceField2D.pas"/>
-        <DCCReference Include="..\Vulkan\src\PasVulkan.Image.PNG.pas"/>
-        <DCCReference Include="..\Vulkan\src\PasVulkan.ConvexHullGenerator2D.pas"/>
-        <DCCReference Include="..\Vulkan\src\PasVulkan.XML.pas"/>
-        <DCCReference Include="..\Vulkan\src\PasVulkan.Compression.Deflate.pas"/>
-        <DCCReference Include="..\Vulkan\src\PasVulkan.CPU.Info.pas"/>
-        <DCCReference Include="..\Vulkan\src\PasVulkan.Image.JPEG.pas"/>
-        <DCCReference Include="..\Vulkan\src\PasVulkan.Archive.ZIP.pas"/>
-        <DCCReference Include="..\Vulkan\src\PasVulkan.Collections.pas"/>
-        <DCCReference Include="..\Vulkan\src\PasVulkan.Sprites.pas"/>
-        <DCCReference Include="..\Vulkan\src\PasVulkan.Streams.pas"/>
-        <DCCReference Include="..\Vulkan\src\PasVulkan.TrueTypeFont.pas"/>
-        <DCCReference Include="..\Vulkan\src\PasVulkan.Utils.pas"/>
-        <DCCReference Include="..\Vulkan\src\PasVulkan.VectorPath.pas"/>
-        <DCCReference Include="..\Vulkan\src\PasVulkan.Framework.pas"/>
-        <DCCReference Include="D:\Vulkan\externals\pasdblstrutils\src\PasDblStrUtils.pas"/>
-        <DCCReference Include="D:\Vulkan\src\PasVulkan.Image.QOI.pas"/>
-        <DCCReference Include="D:\Vulkan\src\PasVulkan.Image.Utils.pas"/>
-        <DCCReference Include="D:\Vulkan\src\PasVulkan.NVIDIA.AfterMath.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_Descriptors.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Assert.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_WorldAxes.pas"/>
@@ -229,13 +204,13 @@
         <DCCReference Include="..\RunTime_Src\Vulkan_PixelInfo.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_Camera.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_HUD.pas"/>
-        <DCCReference Include="..\RunTime_Src\Vulkan_SceneLoaders.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_DataStore.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_Nodes.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_PointerValidation.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_CriticalSection.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_ShaderCompiler.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_Compute.pas"/>
+        <DCCReference Include="..\RunTime_Src\Vulkan_SceneLoaders.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
