@@ -83,7 +83,7 @@
         <GenPackage>true</GenPackage>
         <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell;$(DCC_Namespace)</DCC_Namespace>
         <DCC_CBuilderOutput>All</DCC_CBuilderOutput>
-        <DCC_UnitSearchPath>D:\Vulkan_Package_PRO\RunTime_Src;D:\Vulkan_Package_PRO\Design_Src;D:\Vulkan_Package\RunTime_Src;D:\Vulkan_Package\Design_Src;D:\Vulkan_Package\Samples\Renderers;D:\Vulkan\src;D:\Vulkan\externals\pasmp\src;D:\Vulkan\externals\pasjson\src;D:\Vulkan\externals\pucu\src;D:\Vulkan\externals\pasdblstrutils\src;D:\Vulkan\externals\pasgltf\src;D:\Vulkan_Package\Delphi 12\23.0\Win32\Release;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>.\$(ProductVersion)\$(Platform)\$(Config);$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <AppFileExt>bpl</AppFileExt>
         <SanitizedProjectName>VulkanPkgD280</SanitizedProjectName>
         <VerInfo_Locale>3081</VerInfo_Locale>
@@ -180,7 +180,6 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
-        <DCCReference Include="..\Design_Src\VulkanPkg_DesignIcons.res"/>
         <DCCReference Include="rtl.dcp"/>
         <DCCReference Include="designide.dcp"/>
         <DCCReference Include="vcl.dcp"/>
