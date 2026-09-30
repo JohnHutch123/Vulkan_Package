@@ -33,9 +33,6 @@ requires
   rtl,
   designide,
   vcl,
-  vclactnband,
-  vclx,
-  xmlrtl,
   VulkanPkgR280;
 
 contains
