@@ -119,7 +119,7 @@ Type
 
      Procedure SetDisabled ;
      Procedure SetDesigning;
-     Procedure SetEnabled(aComp:TvgBaseComponent=nil);     //if aComp Set then SetEnabled
+     Procedure SetEnabled(aComp:TvgBaseComponent=nil); reintroduce;    //if aComp Set then SetEnabled
      Procedure DisableParent(ToRoot:Boolean=False); Virtual;  //If ToRoot True then disable will continue up to Root (Instance)
 
 
@@ -449,7 +449,7 @@ end;
 
 function TvgWindowVCL.MouseActivate(Button: TMouseButton; Shift: TShiftState; X, Y, HitTest: Integer): TMouseActivate;
 begin
-
+  Result := inherited MouseActivate(Button, Shift, X, Y, HitTest);
 end;
 
 function TvgWindowVCL.CapturedClientPos: TPoint;

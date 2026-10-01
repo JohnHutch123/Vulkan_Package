@@ -99,6 +99,7 @@ uses
   System.Generics.Collections,
   Vcl.Controls,
   Vulkan_Components,
+  Vulkan_Components_Lookups,
   Vulkan_Components_Scene_Renderer,
   Vulkan_SceneLoaders,
   Vulkan_WindowVCL;

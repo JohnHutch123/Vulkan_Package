@@ -69,6 +69,7 @@ interface
 uses
   System.SysUtils,
   System.Classes,
+  System.TypInfo,
   Vcl.Dialogs,
   Vcl.Forms,
   DesignIntf,
@@ -83,6 +84,14 @@ uses
   VulkanDataModuleEditFM;
 
 type
+  { IOTARepositoryWizard.GetGlyph returns Cardinal up to Delphi 11 and THandle
+    from Delphi 12 on (they differ on Win64). }
+  {$IF CompilerVersion >= 36}
+  TvgWizardGlyph = THandle;
+  {$ELSE}
+  TvgWizardGlyph = Cardinal;
+  {$IFEND}
+
   { Active on a session component: True tests the whole session. }
   TvgSessionActiveProperty = class(TBoolProperty)
   public
@@ -131,7 +140,7 @@ type
     function  GetAuthor: string;
     function  GetComment: string;
     function  GetPage: string;
-    function  GetGlyph: Cardinal;
+    function  GetGlyph: TvgWizardGlyph;
     //IOTARepositoryWizard60
     function  GetDesigner: string;
     //IOTARepositoryWizard80
@@ -557,22 +566,32 @@ begin
 
   Case Index - inherited GetVerbCount of
     cVerbEdit :
-      RunVulkanSessionEditor(M, D,
-        procedure
-        begin
-          BuildSessionInDesigner(M, D);
-        end,
-        procedure
-        begin
-          AddLinkerInDesigner(M, D);
-        end,
-        procedure
-        begin
-          LoadSceneInDesigner(M, D, True);
-        end);
+      Try
+        RunVulkanSessionEditor(M, D,
+          procedure
+          begin
+            BuildSessionInDesigner(M, D);
+          end,
+          procedure
+          begin
+            AddLinkerInDesigner(M, D);
+          end,
+          procedure
+          begin
+            LoadSceneInDesigner(M, D, True);
+          end);
+      Except
+        On E: Exception do
+          MessageDlg(E.Message, mtError, [mbOK], 0);
+      End;
 
     cVerbBuild :
-      BuildSessionInDesigner(M, D);
+      Try
+        BuildSessionInDesigner(M, D);
+      Except
+        On E: Exception do
+          MessageDlg('Unable to build the session:' + sLineBreak + E.Message, mtError, [mbOK], 0);
+      End;
 
     cVerbAddLinker :
       Try
@@ -651,7 +670,7 @@ begin
   Result := (BorlandIDEServices as IOTAGalleryCategoryManager).FindCategory(sCategoryDelphiNewFiles);
 end;
 
-function TvgVulkanDataModuleWizard.GetGlyph: Cardinal;
+function TvgVulkanDataModuleWizard.GetGlyph: TvgWizardGlyph;
 begin
   Result := 0;   //default icon
 end;

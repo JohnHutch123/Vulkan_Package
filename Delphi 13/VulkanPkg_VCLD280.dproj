@@ -41,6 +41,11 @@
         <Base>true</Base>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
+        <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
+        <DCC_DcpOutput>.\$(Platform)\$(Config)</DCC_DcpOutput>
+        <DCC_BplOutput>.\$(Platform)\$(Config)</DCC_BplOutput>
+        <DCC_UnitSearchPath>.\$(Platform)\$(Config);.\$(Platform)\Release;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_Description>Datavis Vulkan VCL design-time package</DCC_Description>
         <VerInfo_Keys>CompanyName=;FileDescription=;FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductName=;ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
         <VerInfo_Locale>3081</VerInfo_Locale>
         <DesignOnlyPackage>true</DesignOnlyPackage>
@@ -49,7 +54,6 @@
         <DCC_CBuilderOutput>All</DCC_CBuilderOutput>
         <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell;$(DCC_Namespace)</DCC_Namespace>
         <SanitizedProjectName>VulkanPkg_VCLD280</SanitizedProjectName>
-        <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
         <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
         <DCC_E>false</DCC_E>
         <DCC_N>false</DCC_N>
@@ -59,8 +63,6 @@
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win32)'!=''">
         <DCC_UsePackage>rtl;vcl;$(DCC_UsePackage)</DCC_UsePackage>
-        <DCC_BplOutput>.\$(Platform)\$(Config)</DCC_BplOutput>
-        <DCC_DcpOutput>.\$(Platform)\$(Config)</DCC_DcpOutput>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_Locale>1033</VerInfo_Locale>
         <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;Bde;$(DCC_Namespace)</DCC_Namespace>
@@ -82,7 +84,6 @@
         <BCC_EnableBatchCompilation>true</BCC_EnableBatchCompilation>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2)'!=''">
-        <DCC_UnitSearchPath>D:\X1\Vulkan_Package\Design_Src;D:\X1\Vulkan_Package\RunTime_Src;D:\X1\Vulkan_Package\Delphi 11\Win32\Release;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_LocalDebugSymbols>false</DCC_LocalDebugSymbols>
         <DCC_Define>RELEASE;$(DCC_Define)</DCC_Define>
         <DCC_SymbolReferenceInfo>0</DCC_SymbolReferenceInfo>
@@ -108,12 +109,8 @@
         </DCCReference>
         <DCCReference Include="..\Design_Src\VulkanPkg_DataModuleReg.pas"/>
         <RcCompile Include="..\Design_Src\VulkanPkg_DesignIconsVCL.rc">
-            <Form>..\Design_Src\VulkanPkg_DesignIconsVCL.res</Form>
+            <Form>VulkanPkg_DesignIconsVCL.res</Form>
         </RcCompile>
-        <RcItem Include="..\Design_Src\TVGWINDOWVCL.bmp">
-            <ResourceType>BITMAP</ResourceType>
-            <ResourceId>TVGWINDOWVCL</ResourceId>
-        </RcItem>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
@@ -138,9 +135,7 @@
             <Deployment Version="5">
                 <DeployFile LocalName="$(BDS)\Redist\iossim32\libcgunwind.1.0.dylib" Class="DependencyModule"/>
                 <DeployFile LocalName="$(BDS)\Redist\osx32\libcgunwind.1.0.dylib" Class="DependencyModule"/>
-                <DeployFile LocalName="Win32\Debug\VulkanPkg_VCLD350.bpl" Configuration="Debug" Class="ProjectOutput"/>
                 <DeployFile LocalName="Win32\Release\VulkanPkg_VCLD280.bpl" Configuration="Release" Class="ProjectOutput"/>
-                <DeployFile LocalName="Win32\Release\VulkanPkg_VCLD350.bpl" Configuration="Release" Class="ProjectOutput"/>
                 <DeployClass Name="AdditionalDebugSymbols">
                     <Platform Name="OSX32">
                         <Operation>1</Operation>
