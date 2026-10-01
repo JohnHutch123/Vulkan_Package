@@ -2297,7 +2297,6 @@ TvgBaseComponent = class(TComponent)
     procedure SetUpdateUnusedWhilePending(const Value: Boolean);
     procedure RebuildBindingFlags;
     procedure RebuildLayoutFlags;
-    procedure SetCurrentDescriptor(const Value: TvkUint32);
     function GetGLSLIndex(aDescriptorArraySlot: TvkUint32): TvkUint32;
 
 
@@ -2617,7 +2616,6 @@ TvgBaseComponent = class(TComponent)
     function GetName: String;
     function GetPushConstant: TvgPushConstant;
     function GetPushConstantName: String;
-    function GetPushConstantType: TvgPushConstantType;
     procedure SetActive(const Value: Boolean);
     procedure SetName(const Value: String);
     procedure SetPushConstantName(const Value: String);
@@ -5347,7 +5345,7 @@ TvgBaseComponent = class(TComponent)
     function GetMaterialRes(aPipe:TvgGraphicPipeline): TvgDescriptorSet;
     function GetModelRes(aPipe:TvgGraphicPipeline): TvgDescriptorSet;
 
-    Property Active : Boolean Read fActive write SetActiveState;
+    Property Active;   //TvgBaseObject's, as declared there
 
 //    Property PushConstant   [Index:Integer] : TvgPushConstantCol Read GetPushConstant ;
   End;
@@ -7973,7 +7971,6 @@ end;
 Function TvgInstance.SetDisabled:Boolean;
   Var I:Integer;
 begin
-  Result := False;
 
   //keep this order
   DisableDevices;     //disable lower devices
@@ -9700,7 +9697,6 @@ end;
 
 Function TvgPhysicalDevice.SetDisabled:Boolean;
 begin
-  Result := False;
 
    If assigned(fScreenRenderDevice) and fScreenRenderDevice.Active then
       fScreenRenderDevice.Active:=False
@@ -10314,7 +10310,6 @@ end;
 
 Function TvgLogicalDevice.SetDisabled : Boolean;
 begin
-  Result := False;
   fRefSurface:=Nil;
   fDynamicRenderingEnabled := False;
 
@@ -11054,7 +11049,6 @@ end;
 
 Function TvgSurface.SetDisabled : Boolean;
 begin
-  Result := False;
 
   If assigned(fWindowIntf) then
      fWindowIntf.SetDisabled; //ok
@@ -12059,7 +12053,6 @@ end;
 Function TvgSwapChain.SetDisabled:Boolean;
 
 begin
-  Result := False;
 
 
  // If assigned(fLinker)  then
@@ -13507,6 +13500,7 @@ begin
   fCurrentPrepareFrame := aFrame;
 
   fImageIndex   := ImageIndex;     //used when NOT rendering to offscreen buffer
+  RenderImage   := VK_NULL_HANDLE; //set below on the render pass path, the only one that reads it
 
   DynamicPath := UseDynamicRendering;
   //TvgFrame.RecordPresentAndHUD below draws the HUD straight after the scene,
@@ -13720,7 +13714,6 @@ end;
 
 Function TvgBaseRenderEngine.SetDisabled:Boolean;
 begin
-  Result := False;
 
   if assigned(fGlobalRes) then
     fGlobalRes.Active := False;
@@ -14405,7 +14398,6 @@ end;
 Function TvgCommandBufferPool.SetDisabled:Boolean;
 
 begin
-  Result := False;
 
 
   ReleaseAllCommands(True);          // clean everything
@@ -19752,7 +19744,6 @@ Function TvgRenderPass.SetDisabled: Boolean;
   End;
 
 begin
-  Result := False;
 
   fBuiltForDynamicRendering := False;
 
@@ -21948,7 +21939,6 @@ end;
 Function TvgResourceImageBuffer.SetDisabled: Boolean;
   Var Device         : TpvVulkanDevice;
 begin
-  Result := False;
 
   If assigned(fPixelSampler) then
   Begin
@@ -22150,7 +22140,6 @@ begin
  Except
     On EpvVulkanResultException do
     Begin
-      Result := False;
       Raise;
     End;
  End;
@@ -23777,7 +23766,6 @@ end;
 Function TvgLinker.SetDisabled:Boolean;
   Var I:Integer;
 begin
-  Result := False;
 
   If (fState <> vgcsInactive) then
      VulkanWaitIdle;
@@ -24870,7 +24858,6 @@ end;
 Function TvgScreenRenderDevice.SetDisabled : Boolean;
   Var I:Integer;
 begin
-  Result := False;
 
   If assigned(fVulkanDevice) then
      fVulkanDevice.WaitIdle;
@@ -25427,7 +25414,6 @@ end;
 
 Function TvgShaderModule.SetDisabled  : Boolean;
 begin
-  Result := False;
 
   SetLength(fSpecMapEntries,0);
   setLength(fSpecMapBuffer,0);
@@ -26807,7 +26793,6 @@ end;
 Function TvgFrame.SetDisabled:Boolean;
   Var  I:Integer;
 begin
-  Result := False;
 
 
   fUseImageBuffer  := False;
@@ -27022,7 +27007,6 @@ end;
 
 Function TvgVertexInputState.SetDisabled : Boolean;
 begin
-  Result := False;
 
 
   SetLength(fBindingDesc,0);
@@ -29023,7 +29007,6 @@ begin
 end;
 
 procedure TvgDescriptorSet.FreeALLDescriptors;
-  Var I:Integer;
 begin
   If fDescriptorCol.count=0 then exit;
   fDescriptorCol.Clear;
@@ -29318,6 +29301,7 @@ begin
   If fDescriptorCol.Count=0 then exit;
 
   FC:=fLinker.FrameCount;
+  Device := nil;
   If assigned(fLinker.Device) then
      Device := fLinker.Device.fLogicalDevice;
 
@@ -29685,7 +29669,6 @@ Function TvgDescriptorSet.SetDisabled:Boolean;
       SD : TvgDescriptorArray;
 
 begin
-  Result := False;
 
   If assigned(fDSGraphicCommandPool) then
   Begin
@@ -29735,7 +29718,6 @@ var
   SD: TvgDescriptorArray;
   PoolFlags: TVkDescriptorPoolCreateFlags;
 begin
-  Result := False;
 
   BuildDescriptorSetLayout;  //will caryy out all checks and fail on exception if not OK
 
@@ -30003,7 +29985,6 @@ begin
 end;
 
 constructor TvgDescriptorArray.Create(AOwner: TComponent);
-var I: Integer;
 begin
   inherited Create(AOwner);
 
@@ -30434,13 +30415,11 @@ begin
 end;
 
 procedure TvgDescriptorArray.SetBindingMode(const Value: TvgDescriptorBindingMode);
-  Var OldState: TvgDescriptorBindingMode;
 begin
   if fBindingMode = Value then
     Exit;
   SetActiveState(False);
 
-  OldState:=  fBindingMode;
   fBindingMode := Value;
 
   case fBindingMode of
@@ -30483,14 +30462,6 @@ begin
   RebuildBindingFlags;
   RebuildLayoutFlags;
 
-end;
-
-procedure TvgDescriptorArray.SetCurrentDescriptor(const Value: TvkUint32);
-begin
-  If  fCurrentDescriptorIndex = Value then exit;
-  If (Value>=GetDescriptorCount) then  exit;
-
-  fCurrentDescriptorIndex := Value;
 end;
 
 procedure TvgDescriptorArray.SetCurrentFrame(const Value: TvkUint32);
@@ -30565,7 +30536,6 @@ begin
 end;
 
 procedure TvgDescriptorArray.SetFrameCount(const Value: TvkUint32);
-  Var I,L:Integer;
 begin
   If fFRameCount = Value then exit;
   SetActiveState(False);
@@ -30634,7 +30604,7 @@ begin
 end;
 
 procedure TvgDescriptorArray.SetUpArraysForFrameCount;
-  Var I,L,J:Integer;
+  Var I,L:Integer;
 begin
 
   L:= Length(fSection) ;
@@ -31919,7 +31889,6 @@ Function TvgSampler.SetDisabled:Boolean;
   Var I,L:Integer;
 begin
 
-  Result := False;
 
 
   L:= Length(fVulkanSampler);
@@ -32269,11 +32238,6 @@ begin
      Result := '<NONE>'
   else
      Result := fPushConstantType.GetPropertyName;
-end;
-
-function TvgPushConstantItem.GetPushConstantType: TvgPushConstantType;
-begin
-  Result := self.fPushConstantType;
 end;
 
 procedure TvgPushConstantItem.SetActive(const Value: Boolean);
@@ -33161,7 +33125,6 @@ end;
 function TvgBaseToolManager.GetViewportSize(out aWidth, aHeight: Integer): Boolean;
   Var W, H : TvkUint32;
 begin
-  Result  := False;
   aWidth  := 0;
   aHeight := 0;
   If Assigned(fLinker) and Assigned(fLinker.Surface) and

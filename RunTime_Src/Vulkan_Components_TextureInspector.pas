@@ -250,14 +250,12 @@ var
   idx, total: Integer;
   entrySize: Cardinal;
   s: string;
-  pv: PByte;
   entryBytes: TBytes;
   posEq: Integer;
 begin
   Result := '';
   total := Length(Data);
   idx := 0;
-  pv := nil;
   while idx + 4 <= total do
   begin
     // read u32 little-endian length
@@ -300,7 +298,6 @@ var
   ktx2: TKTX2Header;
   pvr: TPVRv3Header;
   qhdr: TQOIHeader;
-  pngLenBE: Cardinal;
   chunkType: array[0..3] of AnsiChar;
   chunkLenBE: Cardinal;
   kvBytes: TBytes;

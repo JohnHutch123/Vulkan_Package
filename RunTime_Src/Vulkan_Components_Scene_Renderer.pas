@@ -287,10 +287,6 @@ type
 
     Procedure  ConfigureGraphicPipeline(GP:TvgGraphicPipeline); Override;
 
-    // Size used for gl_PointSize when Topology is POINT_LIST.  Emitted as a
-    // literal into the generated vertex shader.
-    function GetShaderPointSizeExpression: String; Override;
-
     function GetEditable: Boolean;  Override;
     function GetFrozen: Boolean;  Override;
     function GetLocked: Boolean;    Override;
@@ -308,6 +304,10 @@ type
   public
     constructor Create(AOwner: TComponent);  Override;
     destructor Destroy; override;
+
+    // Size used for gl_PointSize when Topology is POINT_LIST.  Emitted as a
+    // literal into the generated vertex shader.  Public, as in TvgVulkanDataStore.
+    function GetShaderPointSizeExpression: String; Override;
 
     // Last word on a pipeline, after the render pass has set its depth test
     // (see DepthTest).
@@ -531,15 +531,16 @@ type
     Procedure ClearGraphicPipelines(aRenderer:TvgBaseRenderEngine; aSubPass:TvgSubpass);Override;
     function GetObjectStore(Index: Integer): TvgBaseObjectStore; Override;
 
+   Function GetToolManager:TvgToolManager  ;
+
+ Public
+   //public, as in TvgBaseScene: the render engine calls these
    Procedure ConnectRenderEngine(aRenderEngine : TvgBaseRenderEngine);    Override;
    //called attaching a RenderEngine to Scene
    Procedure DisConnectRenderEngine(aRenderEngine:TvgBaseRenderEngine);   Override;
    //called attaching a RenderEngine to Scene
    Procedure ReConnectRenderEngines;          Override;
 
-   Function GetToolManager:TvgToolManager  ;
-
- Public
    { Every tool manager working on this scene: the linker's, and each one
      whose Scene is this one.  They are told when objects go (ForgetObject)
      and when the scene is cleared. }
@@ -3626,6 +3627,7 @@ Function TvgScene.SetEnabled:Boolean;
 
 begin
   Result := inherited;
+  If not Result then exit;   //the base could not enable: don't report success
 
   CustomAssert(assigned(fSceneData),'Scene Data List NOT available',self);
   CustomAssert(assigned(fRendererList),'Renderer List NOT available',self);
@@ -3639,8 +3641,6 @@ begin
       If assigned(ObjStr) then
         ObjStr.Active := True;
     End;
-
-  Result := True;
 
 end;
 
@@ -5189,10 +5189,6 @@ procedure TvgRenderEngine.VaildateGlobalResources;
     Procedure SetUpForStorageBuffer;
       Var SB:TvgDescriptorArray_SB_2UI;
           DD:TvgDescriptorData_SB_2UI;
-           I:Integer;
-
-
-          GP : TvgGraphicPipeline;
 
     Begin
 
@@ -5332,7 +5328,6 @@ procedure TvgRenderEngine.ConfigureGraphicPipelineFromRenderPass( GP: TvgGraphic
    Var SHS : TvgShaderSpecialisationItem;
        PCI:TvgPushConstantItem;
        PCUI: TvgPushConstant_2UI;
-       V:   TvgVector2I;
 begin
   // MSAA from RenderPass
   if fRenderPass.MSAAOn then

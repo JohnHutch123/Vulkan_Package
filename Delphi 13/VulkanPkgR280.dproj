@@ -47,6 +47,7 @@
         <Base>true</Base>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
+        <DCC_Description>Datavis Vulkan runtime package</DCC_Description>
         <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
         <DCC_DcpOutput>.\$(Platform)\$(Config)</DCC_DcpOutput>
         <DCC_BplOutput>.\$(Platform)\$(Config)</DCC_BplOutput>
@@ -113,7 +114,29 @@
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
         <DCCReference Include="rtl.dcp"/>
-        <DCCReference Include="D:\Vulkan\src\Vulkan.pas"/>
+        <DCCReference Include="Vulkan.pas"/>
+        <DCCReference Include="PasVulkan.Types.pas"/>
+        <DCCReference Include="PasVulkan.Math.pas"/>
+        <DCCReference Include="PasVulkan.Math.Double.pas"/>
+        <DCCReference Include="PasVulkan.Collections.pas"/>
+        <DCCReference Include="PasVulkan.Utils.pas"/>
+        <DCCReference Include="PasVulkan.Streams.pas"/>
+        <DCCReference Include="PasVulkan.XML.pas"/>
+        <DCCReference Include="PasVulkan.CPU.Info.pas"/>
+        <DCCReference Include="PasVulkan.HighResolutionTimer.pas"/>
+        <DCCReference Include="PasVulkan.Compression.Deflate.pas"/>
+        <DCCReference Include="PasVulkan.Image.BMP.pas"/>
+        <DCCReference Include="PasVulkan.Image.JPEG.pas"/>
+        <DCCReference Include="PasVulkan.Image.PNG.pas"/>
+        <DCCReference Include="PasVulkan.Image.QOI.pas"/>
+        <DCCReference Include="PasVulkan.Image.TGA.pas"/>
+        <DCCReference Include="PasVulkan.Image.Utils.pas"/>
+        <DCCReference Include="PasVulkan.NVIDIA.AfterMath.pas"/>
+        <DCCReference Include="PasVulkan.Framework.pas"/>
+        <DCCReference Include="PasMP.pas"/>
+        <DCCReference Include="PasJSON.pas"/>
+        <DCCReference Include="PUCU.pas"/>
+        <DCCReference Include="PasDblStrUtils.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Components.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_Lookups.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_Descriptors.pas"/>
@@ -130,6 +153,8 @@
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_ShaderCompiler.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_Compute.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_SceneLoaders.pas"/>
+        <DCCReference Include="..\RunTime_Src\Vulkan_Components_Light.pas"/>
+        <DCCReference Include="..\RunTime_Src\Vulkan_Components_TextureInspector.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
@@ -168,9 +193,7 @@
                         <Overwrite>true</Overwrite>
                     </Platform>
                 </DeployFile>
-                <DeployFile LocalName="C:\Users\Public\Documents\Embarcadero\Studio\16.0\Bpl\Win64\VulkanPkgR350.bpl" Configuration="Debug" Class="ProjectOutput"/>
                 <DeployFile LocalName="Win32\Debug\VulkanPkgR280.bpl" Configuration="Debug" Class="ProjectOutput"/>
-                <DeployFile LocalName="Win32\Debug\VulkanPkgR350.bpl" Configuration="Debug" Class="ProjectOutput"/>
                 <DeployFile LocalName="Win32\Release\VulkanPkgR280.bpl" Configuration="Release" Class="ProjectOutput"/>
                 <DeployFile LocalName="Win32\Release\VulkanPkgR280.bpl" Configuration="Release" Class="ProjectOutput">
                     <Platform Name="Win32">
@@ -178,10 +201,8 @@
                         <Overwrite>true</Overwrite>
                     </Platform>
                 </DeployFile>
-                <DeployFile LocalName="Win32\Release\VulkanPkgR350.bpl" Configuration="Release" Class="ProjectOutput"/>
                 <DeployFile LocalName="Win64\Debug\VulkanPkgR280.bpl" Configuration="Debug" Class="ProjectOutput"/>
                 <DeployFile LocalName="Win64\Release\VulkanPkgR280.bpl" Configuration="Release" Class="ProjectOutput"/>
-                <DeployFile LocalName="Win64\Release\VulkanPkgR350.bpl" Configuration="Release" Class="ProjectOutput"/>
                 <DeployClass Name="AdditionalDebugSymbols">
                     <Platform Name="OSX32">
                         <Operation>1</Operation>

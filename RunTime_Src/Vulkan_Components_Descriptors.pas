@@ -1233,9 +1233,7 @@ begin
 end;
 
 Procedure TvgDescriptor_PerFrame_UniformBuffer<T>.SetEnabled;
-  Var SZ,SZ1  : TVkDeviceSize;
-      I,L,J : Integer;
-      DC:Integer;
+  Var SZ  : TVkDeviceSize;
       Device : TvgLogicalDevice;
       DD : TvgDescriptor_Data_UniformBuffer<T>;
 begin
@@ -1291,7 +1289,6 @@ procedure TvgDescriptor_PerFrame_UniformBuffer<T>.UpLoadDescriptorData(aFrameInd
       Data       : Pointer;
       DSize      : TvkUint32;
       StageMode  : TpvVulkanBufferUseTemporaryStagingBufferMode;
-      B          : Boolean;
       Device : TvgLogicalDevice;
       DD : TvgDescriptor_Data_UniformBuffer<T>;
 
@@ -1321,6 +1318,7 @@ begin
     Queue := aTransferPool.Queue[aFrameIndex];
     CustomAssert(Assigned(Queue),'Queue NOT available.');
 
+  aCommand := nil;   //released in Finally: nil until acquired
   Try
 
           Data := fData.GetDataPointer;
@@ -1453,7 +1451,10 @@ end;
 
 function TvgDescriptorArray_Texture.GetDescriptor_Data_Texture( Index: Integer): TvgDescriptor_Data_Texture;
 begin
-
+  If (index>=0) and (index<Length(fDescriptorArray)) and (fDescriptorArray[Index] is TvgDescriptor_Data_Texture) then
+     Result := TvgDescriptor_Data_Texture(fDescriptorArray[Index])
+  else
+     Result := Nil;
 end;
 
 function TvgDescriptorArray_Texture.GetGLSLDeclarationBody: String;
@@ -1468,7 +1469,7 @@ end;
 
 function TvgDescriptorArray_Texture.RemoveTexture( aDataTexture: TvgDescriptor_Data_Texture): Boolean;
 begin
-
+  Result := RemoveAndFreeDescriptor(aDataTexture);
 end;
 
 
@@ -2459,8 +2460,8 @@ var
   Queue    : TpvVulkanQueue;
   Barrier  : TVkBufferMemoryBarrier;
   Size     : TVkDeviceSize;
-  aFrameIndex : Integer;
 begin
+  Queue := nil;   //only used, and set, when no command buffer is passed in
 
   if not Assigned(fVulkanBuffer) then   Exit;
   If aIndex<0 then exit;
@@ -2574,7 +2575,6 @@ function TvgDescriptor_PerFrame_StorageBuffer<T>.GetWriteDescriptorPayload(
   out aBufInfo: TVkDescriptorBufferInfo;
   out aImgInfo: TVkDescriptorImageInfo): Boolean;
 begin
-  Result := False;
   aBufInfo := Default(TVkDescriptorBufferInfo);
   aImgInfo := Default(TVkDescriptorImageInfo);
 
@@ -2600,6 +2600,7 @@ var
 
 
 begin
+   Queue := nil;   //only used, and set, when no command buffer is passed in
    if not Active or
       not Assigned(fStorageImageBuffer) or
       not (DescriptorData is TvgDescriptor_Data_StorageImage) then  Exit;
@@ -2717,8 +2718,7 @@ begin
 end;
 
 Procedure TvgDescriptor_PerFrame_StorageImage.SetEnabled;
-  Var I      : Integer;
-      Linker : TvgLinker;
+  Var Linker : TvgLinker;
 
      CmdPool   : TvgCommandBufferPool;
      Cmd       : TvgCommandBuffer;
@@ -2918,7 +2918,6 @@ end;
 Function TvgPushConstant_Data<T>.SetDisabled:Boolean;
   Var I:Integer;
 begin
-  Result := False;
 
 
   For I:=0 to Length(fDataArray)-1 do
@@ -3162,7 +3161,6 @@ begin
 end;
 
 procedure TvgDescriptor_Data_StorageImage.SetEnabled;
-  Var I,L:Integer;
 begin
   VaildateWindowSize; //stay here
 
@@ -3239,7 +3237,6 @@ end;
 { TvgDescriptorArray_UniformBuffer<T> }
 
 function TvgDescriptorArray_UniformBuffer<T>.AddUniformBuffer(aDescriptorData: TvgDescriptor_Data_UniformBuffer<T>):Integer;
-  Var L:Integer;
 begin
   Result := -1;
 
@@ -3568,8 +3565,7 @@ begin
 end;
 
 procedure TvgDescriptor_PerFrame_Texture.SetEnabled;
-  Var Sampler:TvgSampler;
-      Device :TvgLogicalDevice;
+  Var Device :TvgLogicalDevice;
 
 begin
   inherited;
@@ -3619,6 +3615,8 @@ begin
 
   CustomAssert((Sampler.State = vgcsActive),'Sampler NOT active');
 
+  GV := nil;   //released in Finally: nil until acquired
+  TV := nil;
   Try
    // D := fDescriptorItem.Device.VulkanDevice;
 
@@ -3906,8 +3904,6 @@ end;
 
 procedure TvgDescriptor_Data_StorageBuffer<T>.VaildateWindowSize;
   Var Linker : TvgLinker;
-      I:Integer;
-      DF : TvgDescriptor_PerFrame_StorageBuffer<T>;
 Begin
 
     If fWindowSync and
@@ -3954,7 +3950,6 @@ end;
 { TvgDescriptorArray_StorageBuffer<T> }
 
 function TvgDescriptorArray_StorageBuffer<T>.AddStorageBuffer(  aData_SB: TvgDescriptor_Data_StorageBuffer<T>): Integer;
-  Var L:Integer;
 begin
   Result := -1;
   If not assigned(aData_SB) then
@@ -4174,8 +4169,6 @@ var
   DFM : TvgDescriptor_PerFrame_UniformBuffer <TvgMatrix4x4D>;
   I   : Integer;
 begin
-  Result := -1;
-
   DDM := TvgDescriptor_Data_UniformBuffer<TvgMatrix4x4D>.create;
 
   Result := AddUniformBuffer(DDM);
