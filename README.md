@@ -78,8 +78,8 @@ and connects it to a `TvgWindowVCL` on any form.
 - **At run time:** call `EnableSession` once the window's form is showing (e.g. in `OnShow`),
   `DisableSession` to shut down.
 
-Files (all in `Design_Src`): `Vulkan_DataModule.pas` (runtime base class, in `VulkanPkg_VCLR280`),
-`VulkanPkg_DataModuleReg.pas` and `VulkanDataModuleEditFM.pas/.dfm` (IDE side, in `VulkanPkg_VCLD280`).
+Files: `RunTime_Src/Vulkan_DataModule.pas` (runtime base class, in `VulkanPkg_VCLR280`), and
+`Design_Src/VulkanPkg_DataModuleReg.pas` and `Design_Src/VulkanDataModuleEditFM.pas/.dfm` (IDE side, in `VulkanPkg_VCLD280`).
 
 ---
 

@@ -25,6 +25,7 @@ package VulkanPkg_VCLR280;
 {$IMAGEBASE $400000}
 {$DEFINE RELEASE}
 {$ENDIF IMPLICITBUILDING}
+{$DESCRIPTION 'Datavis Vulkan VCL runtime package'}
 {$RUNONLY}
 {$IMPLICITBUILD OFF}
 
@@ -35,6 +36,6 @@ requires
 
 contains
   Vulkan_WindowVCL in '..\RunTime_Src\Vulkan_WindowVCL.pas',
-  Vulkan_DataModule in '..\Design_Src\Vulkan_DataModule.pas';
+  Vulkan_DataModule in '..\RunTime_Src\Vulkan_DataModule.pas';
 
 end.
