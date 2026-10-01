@@ -83,6 +83,34 @@ Files: `RunTime_Src/Vulkan_DataModule.pas` (runtime base class, in `VulkanPkg_VC
 
 ---
 
+### SDL2 window (`TvgSDL2Window`)
+
+`TvgSDL2Window` presents a session in an SDL2 window instead of a VCL control. It is created in code and
+linked like `TvgWindowVCL`:
+
+```pascal
+Window := TvgSDL2Window.Create(Self);
+Window.Caption    := 'Model';
+Window.VulkanLink := Linker1;
+Instance1.Active  := True;      // creates the SDL window and its surface
+```
+
+- **Events:** call `TvgSDL2Window.ProcessEvents` regularly (`Application.OnIdle`, a timer or your own loop).
+  It forwards mouse, wheel and keys to the linker and its tool manager, rebuilds the swap chain on resize and
+  repaints on expose.
+- **Closing** fires `OnClose`; unless it refuses, that window's linker is disabled and the SDL window
+  destroyed, while other windows keep running. `Active := True` opens it again.
+- **SDL** is started with the first window and stopped with the last, so linking the unit alone does not
+  touch it. Needs SDL 2.0.6 or later.
+- **Package:** `VulkanPkg_SDL2R280` (runtime, requires `VulkanPkgR280`) builds with `PasVulkanUseSDL2`,
+  `PasVulkanUseSDL2WithVulkanSupport` and `PasVulkanUseSDL2WithStaticVulkanSupport`. `PasVulkan.SDL2`
+  links against `sdl2.dll` on Win32 but `sdl264.dll` on Win64, so a Win64 application has to ship SDL2.dll
+  under that name.
+
+File: `RunTime_Src/Vulkan_WindowSDL2.pas`.
+
+---
+
 ### Key technologies
 - **Language:** Object Pascal (Delphi)
 - **Graphics API:** Vulkan (`Vulkan.pas`, `TVk*` types)
