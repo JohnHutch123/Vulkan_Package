@@ -92,4 +92,5 @@ modules/
 projectmanager
 
 # Palette icon resources, compiled from Design_Src/*.rc at build time
-Design_Src/VulkanPkg_*Icons*.res
+# (the IDE/MSBuild writes them next to the .dproj)
+VulkanPkg_*Icons*.res

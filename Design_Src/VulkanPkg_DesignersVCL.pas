@@ -3,11 +3,7 @@ unit VulkanPkg_DesignersVCL;
 interface
 
   Uses
-  System.SysUtils,
   System.Classes,
-  DesignIntf,
-  DesignEditors,
-//  Vcl.Dialogs,
   Vulkan_WindowVCL;
 
 

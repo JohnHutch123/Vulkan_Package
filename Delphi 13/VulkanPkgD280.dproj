@@ -47,6 +47,9 @@
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
         <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
+        <DCC_DcpOutput>.\$(Platform)\$(Config)</DCC_DcpOutput>
+        <DCC_BplOutput>.\$(Platform)\$(Config)</DCC_BplOutput>
+        <DCC_UnitSearchPath>.\$(Platform)\$(Config);.\$(Platform)\Release;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
         <DCC_E>false</DCC_E>
         <DCC_N>false</DCC_N>
@@ -57,7 +60,6 @@
         <GenPackage>true</GenPackage>
         <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell;$(DCC_Namespace)</DCC_Namespace>
         <DCC_CBuilderOutput>All</DCC_CBuilderOutput>
-        <DCC_UnitSearchPath>D:\X1\Vulkan_Package\Delphi 11\Win32\Release;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <AppFileExt>bpl</AppFileExt>
         <SanitizedProjectName>VulkanPkgD280</SanitizedProjectName>
     </PropertyGroup>
@@ -113,7 +115,7 @@
         <DCCReference Include="VulkanPkgR280.dcp"/>
         <DCCReference Include="..\Design_Src\VulkanPkg_Designers.pas"/>
         <RcCompile Include="..\Design_Src\VulkanPkg_DesignIcons.rc">
-            <Form>..\Design_Src\VulkanPkg_DesignIcons.res</Form>
+            <Form>VulkanPkg_DesignIcons.res</Form>
         </RcCompile>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

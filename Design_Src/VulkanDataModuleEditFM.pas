@@ -421,6 +421,7 @@ procedure TvgSessionEditorFM.BuildTree(aSelect: TPersistent = nil);
       L     : TvgLinker;
       Comp  : TComponent;
       I     : Integer;
+      OldProp : PPropInfo;
 
   Procedure AddOther(aComp: TComponent);
   Begin
@@ -434,88 +435,100 @@ procedure TvgSessionEditorFM.BuildTree(aSelect: TPersistent = nil);
   End;
 
 begin
-  Shown := TList<TObject>.Create;
-  tvObjects.Items.BeginUpdate;
+  //the property to select again (matched by name) once the tree is rebuilt
+  OldProp := fProp;
+
+  //no change events while the nodes go: the object behind the selected node
+  //may already have been freed (enable / disable rebuilds run time objects)
+  fUpdating := True;
   Try
-    tvObjects.Items.Clear;
-    fObject := nil;
-    fProp   := nil;
-    Other   := nil;
+    Shown := TList<TObject>.Create;
+    tvObjects.Items.BeginUpdate;
+    Try
+      fObject := nil;
+      fProp   := nil;
+      tvObjects.Items.Clear;
+      Other   := nil;
 
-    AddObjectNode(nil, 'Session: ' + fModule.Name, fModule, cMaxDepth);  //references only, no children
+      AddObjectNode(nil, 'Session: ' + fModule.Name, fModule, cMaxDepth);  //references only, no children
 
-    //the session as it is connected, wherever its components live
-    Inst := fModule.Instance;
-    If assigned(Inst) then
-    Begin
-      InstNode := AddComponentNode(nil, Inst, Shown);
-
-      For I := 0 to Inst.DevicesCount - 1 do
+      //the session as it is connected, wherever its components live
+      Inst := fModule.Instance;
+      If assigned(Inst) then
       Begin
-        PD := Inst.Devices[I];
-        If not assigned(PD) then continue;
-        PDNode := AddComponentNode(InstNode, PD, Shown);
+        InstNode := AddComponentNode(nil, Inst, Shown);
 
-        If not assigned(PD.LogicalDevice) then continue;
-        LDNode := AddComponentNode(PDNode, PD.LogicalDevice, Shown);
+        For I := 0 to Inst.DevicesCount - 1 do
+        Begin
+          PD := Inst.Devices[I];
+          If not assigned(PD) then continue;
+          PDNode := AddComponentNode(InstNode, PD, Shown);
 
-        If PD.LogicalDevice is TvgScreenRenderDevice then
-          For L in vgSessionLinkers(Inst) do
-            If L.ScreenDevice = PD.LogicalDevice then
-            Begin
-              LNode := AddComponentNode(LDNode, L, Shown);
-              AddComponentNode(LNode, vgLinkerWindow(L), Shown);
+          If not assigned(PD.LogicalDevice) then continue;
+          LDNode := AddComponentNode(PDNode, PD.LogicalDevice, Shown);
 
-              RNode := AddComponentNode(LNode, L.Renderer, Shown);
-              If assigned(RNode) and (L.Renderer is TvgRenderEngine) then
-                AddComponentNode(RNode, TvgRenderEngine(L.Renderer).Scene, Shown);
+          If PD.LogicalDevice is TvgScreenRenderDevice then
+            For L in vgSessionLinkers(Inst) do
+              If L.ScreenDevice = PD.LogicalDevice then
+              Begin
+                LNode := AddComponentNode(LDNode, L, Shown);
+                AddComponentNode(LNode, vgLinkerWindow(L), Shown);
 
-              AddComponentNode(LNode, L.ToolManager, Shown);
-            End;
+                RNode := AddComponentNode(LNode, L.Renderer, Shown);
+                If assigned(RNode) and (L.Renderer is TvgRenderEngine) then
+                  AddComponentNode(RNode, TvgRenderEngine(L.Renderer).Scene, Shown);
+
+                AddComponentNode(LNode, L.ToolManager, Shown);
+              End;
+        End;
       End;
+
+      //the rest: dropped but not (yet) connected under the instance
+      AddOther(fModule.PhysicalDevice);
+      AddOther(fModule.ScreenDevice);
+      AddOther(fModule.Linker);
+      AddOther(fModule.Window);
+      AddOther(fModule.Renderer);
+      AddOther(fModule.Scene);
+      AddOther(fModule.SceneLoader);
+      AddOther(fModule.ToolManager);
+
+      For I := 0 to fModule.ComponentCount - 1 do
+      Begin
+        Comp := fModule.Components[I];
+        If (Comp is TvgBaseComponent) or (Comp is TvgWindowVCL) then
+          AddOther(Comp);
+      End;
+
+      tvObjects.FullCollapse;
+      For I := 0 to tvObjects.Items.Count - 1 do
+      Begin
+        //open the session chain, leave sub-objects closed
+        Node := tvObjects.Items[I];
+        If (TObject(Node.Data) is TComponent) and (Shown.IndexOf(TObject(Node.Data)) <> -1) and
+           assigned(Node.Parent) then
+          Node.Parent.Expand(False);
+      End;
+    Finally
+      tvObjects.Items.EndUpdate;
+      Shown.Free;
     End;
 
-    //the rest: dropped but not (yet) connected under the instance
-    AddOther(fModule.PhysicalDevice);
-    AddOther(fModule.ScreenDevice);
-    AddOther(fModule.Linker);
-    AddOther(fModule.Window);
-    AddOther(fModule.Renderer);
-    AddOther(fModule.Scene);
-    AddOther(fModule.SceneLoader);
-    AddOther(fModule.ToolManager);
+    Node := FindNode(aSelect);
+    If not assigned(Node) and (tvObjects.Items.Count > 0) then
+      Node := tvObjects.Items[0];
 
-    For I := 0 to fModule.ComponentCount - 1 do
+    If assigned(Node) then
     Begin
-      Comp := fModule.Components[I];
-      If (Comp is TvgBaseComponent) or (Comp is TvgWindowVCL) then
-        AddOther(Comp);
-    End;
-
-    tvObjects.FullCollapse;
-    For I := 0 to tvObjects.Items.Count - 1 do
-    Begin
-      //open the session chain, leave sub-objects closed
-      Node := tvObjects.Items[I];
-      If (TObject(Node.Data) is TComponent) and (Shown.IndexOf(TObject(Node.Data)) <> -1) and
-         assigned(Node.Parent) then
-        Node.Parent.Expand(False);
+      tvObjects.Selected := Node;
+      Node.MakeVisible;
+      fObject := TPersistent(Node.Data);
     End;
   Finally
-    tvObjects.Items.EndUpdate;
-    Shown.Free;
+    fUpdating := False;
   End;
 
-  Node := FindNode(aSelect);
-  If not assigned(Node) and (tvObjects.Items.Count > 0) then
-    Node := tvObjects.Items[0];
-
-  If assigned(Node) then
-  Begin
-    tvObjects.Selected := Node;
-    Node.MakeVisible;
-  End;
-
+  fProp := OldProp;
   ShowProperties(fObject);
 end;
 
