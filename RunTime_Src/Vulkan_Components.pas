@@ -8077,6 +8077,10 @@ begin
 
     SetAPIVersion(fVulkanInstance.APIVersion);
 
+    //a new TpvVulkanInstance every time: its layers and extensions have to
+    //be set up again, or a re-enabled instance has none (no surface
+    //extension, no validation layer)
+    fSetUpComplete := False;
     CompleteSetUp;
 
     //Chained into VkInstanceCreateInfo by Initialize.  The layers themselves
@@ -10390,6 +10394,9 @@ begin
   Begin
     fVulkanDevice.OnBeforeDeviceCreate := OnDeviceCreateEvent; //setup features during initialization
 
+    //a new TpvVulkanDevice every time: its extensions and layers have to be
+    //set up again, or a re-enabled device has none (no VK_KHR_swapchain)
+    fSetUpComplete := False;
     CompleteSetUp;
 
     If assigned( fFeatures) then
