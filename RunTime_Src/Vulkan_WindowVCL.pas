@@ -746,8 +746,11 @@ begin
      OldLinker.RemoveFreeNotification(self);
 
      //release the old linker too, or two linkers present to this window.
-     //fLinker is already nil, so the linker does not call back.
-     If OldLinker.WindowIntf = IvgVulkanWindow(self) then
+     //fLinker is already nil, so the linker does not call back.  Not while
+     //the linker is being freed: its destructor is what called us, has
+     //freed its surface already, and clears WindowIntf itself.
+     If not (csDestroying in OldLinker.ComponentState) and
+        (OldLinker.WindowIntf = IvgVulkanWindow(self)) then
         OldLinker.WindowIntf := nil;
   End;
 

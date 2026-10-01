@@ -1341,6 +1341,9 @@ TvgBaseComponent = class(TComponent)
     constructor Create(AOwner: TComponent); Override;
     destructor Destroy; override;
 
+    //called by a linker: ToRoot climbs to the instance, else this device goes down
+    Procedure DisableParent(ToRoot:Boolean=False); Override;
+
     Procedure BuildALLLayers;
     Function BuildLayer(aLayer:ppvVulkanAvailableLayer):TvgLayer;
     Function DoesLayerExist(aLayer:ppvVulkanAvailableLayer):Boolean;
@@ -4806,6 +4809,7 @@ TvgBaseComponent = class(TComponent)
     fWindowIntf          : IvgVulkanWindow;
     fWindowReady         : Boolean;  //True if Interface has valid Handle for Surface creation
     fNeedSurfaceRebuild  : Boolean;
+    fSurfaceRebuilding   : Boolean;  //SwapChainRebuild has the surface down itself
 
   //sub components owned by Linker
     fSurface             : TvgSurface;
@@ -6757,7 +6761,12 @@ end;
 
 procedure TvgBaseComponent.DisableParent(ToRoot:Boolean=False);
 begin
-  //climb to the top(Instance) and disable from Top down
+  { Called by a child to take the session down from above it:
+      ToRoot False - this component disables itself (and so its children);
+      ToRoot True  - the call climbs to the root (the instance), which
+                     disables everything top down.
+    Implemented by the session chain: TvgLinker -> TvgLogicalDevice ->
+    TvgPhysicalDevice -> TvgInstance.  Components outside it do nothing. }
 end;
 
 procedure TvgBaseComponent.DoStateChanged(const AFrom, ATo: TvgComponentState);
@@ -7163,6 +7172,10 @@ end;
 
 procedure TvgInstance.DisableParent(ToRoot:Boolean=False);
 begin
+  //the root: whichever way the call came, the session goes down from here
+  If fStateChanging then exit;
+  If Active then
+    SetActiveState(False);
 end;
 
 function TvgInstance.DoesExtensionExist( aExt: PpvVulkanAvailableExtension): Boolean;
@@ -9399,6 +9412,8 @@ end;
 
 procedure TvgPhysicalDevice.DisableParent(ToRoot:Boolean=False);
 begin
+  If fStateChanging then exit;
+
   If ToRoot then
   Begin
      If assigned(fInstance) and fInstance.Active then
@@ -10364,6 +10379,26 @@ begin
   //CopyDataToRecords AND-ed it off for an unsupporting GPU.
   If Result and assigned(fVulkanDevice) and (fVulkanDevice.Handle <> VK_NULL_HANDLE) then
     Result := fDynamicRenderingEnabled;
+end;
+
+procedure TvgLogicalDevice.DisableParent(ToRoot:Boolean=False);
+begin
+  If fStateChanging then exit;
+
+  If ToRoot then
+  Begin
+    //climb: the instance takes the whole session down, top down
+    If assigned(fPhysicalDevice) and fPhysicalDevice.Active then
+       fPhysicalDevice.DisableParent(True)
+    else
+    If assigned(fInstance) and fInstance.Active then
+       fInstance.DisableParent(True)
+    else
+    If Active then
+       SetActiveState(False);
+  End else
+  If Active then
+     SetActiveState(False);   //this device, and the linkers on it
 end;
 
 Function TvgLogicalDevice.SetEnabled : Boolean;
@@ -23514,6 +23549,7 @@ end;
 procedure TvgLinker.DisableParent(ToRoot:Boolean=False);
 begin
   If fStateChanging then exit;
+  If fSurfaceRebuilding then exit;   //our own surface rebuild, not a request to stop
 
   If assigned(fScreenDevice) and fScreenDevice.Active then
      fScreenDevice.DisableParent(ToRoot);
@@ -23841,6 +23877,10 @@ begin
     CustomAssert(assigned(fSurface.VulkanSurface), 'Vulkan Surface not Active.',Self);
     If not assigned(fSurface.VulkanSurface) then Exit(False);   //release-safe guard
 
+    //the surface is new (or still valid): an earlier request for a rebuild,
+    //e.g. a window handle recreated while the linker was down, is met
+    fNeedSurfaceRebuild := False;
+
     CustomAssert(assigned(fSwapChain) , 'Internal Swap Chain not created.',Self);
     If not assigned(fSwapChain) then Exit(False);   //release-safe guard
 
@@ -24161,8 +24201,18 @@ begin
     If assigned(fSwapChain) and (fSwapChain.State <>vgcsInactive) then
        fSwapChain.ApplyState(vgcsInactive);
 
+    //taking the surface down here is this linker's own work: the window it
+    //notifies (SetDisabled) must not take the session down with it
     If self.fNeedSurfaceRebuild and  assigned(fSurface) and (fSurface.State <>vgcsInactive) then
-       fSurface.ApplyState(vgcsInactive);
+    Begin
+      fSurfaceRebuilding := True;
+      Try
+        fSurface.ApplyState(vgcsInactive);
+      Finally
+        fSurfaceRebuilding := False;
+      End;
+    End;
+    fNeedSurfaceRebuild := False;   //rebuilt below
 
     If length(fFrames)>0 then
     Begin
