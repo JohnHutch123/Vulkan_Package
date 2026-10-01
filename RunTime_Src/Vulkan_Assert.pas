@@ -93,7 +93,6 @@ begin
 end;
 
 procedure TvgAssertLogger.SaveLogFile;
-  Var F:TFileStream;
 begin
   If fFileName='' then exit;
   If fSeen.Count=0 then exit;

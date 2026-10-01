@@ -35,7 +35,9 @@ Unit Vulkan_Components_PointerValidation  ;
  {$endif}
 {$endif}
 
- {$define Windows}
+{$ifdef MSWINDOWS}
+ {$define Windows}   //Windows branch below only on Windows; others use the fallbacks
+{$endif}
 
 interface
 

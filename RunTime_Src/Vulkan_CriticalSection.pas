@@ -51,10 +51,10 @@ type
     fDeadlockCheckEnabled: Boolean;    // Enable deadlock detection
     fStopwatch: TStopwatch;            // Performance timing
     fLock: TCriticalSection;           // Protects access to shared resources
-    fOnLockAcquired: TLockAcquiredEvent; // Event triggered when a lock is acquired
 
     // Debug fields - only used when DEBUGCS is defined
     {$IFDEF DEBUGCS}
+    fOnLockAcquired: TLockAcquiredEvent; // Event triggered when a lock is acquired
     fAcquisitionStack: string;         // Stack trace of lock acquisition
     fTotalWaitTime: Int64;             // Total time spent waiting
     fMaxWaitTime: Int64;               // Maximum single wait time

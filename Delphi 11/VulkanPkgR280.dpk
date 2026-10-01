@@ -25,6 +25,7 @@ package VulkanPkgR280;
 {$IMAGEBASE $400000}
 {$DEFINE RELEASE}
 {$ENDIF IMPLICITBUILDING}
+{$DESCRIPTION 'Datavis Vulkan runtime package'}
 {$RUNONLY}
 {$IMPLICITBUILD OFF}
 
@@ -32,33 +33,31 @@ requires
   rtl;
 
 contains
-  Vulkan in 'D:\Vulkan\src\Vulkan.pas',
-  (*
-  PasVulkan.Types in 'D:\Vulkan\src\PasVulkan.Types.pas',
-  PasVulkan.Math in 'D:\Vulkan\src\PasVulkan.Math.pas',
-  PasVulkan.Math.Double in 'D:\Vulkan\src\PasVulkan.Math.Double.pas',
-  PasVulkan.Image.TGA in 'D:\Vulkan\src\PasVulkan.Image.TGA.pas',
-  PasVulkan.Image.BMP in 'D:\Vulkan\src\PasVulkan.Image.BMP.pas',
-  PasVulkan.SignedDistanceField2D in 'D:\Vulkan\src\PasVulkan.SignedDistanceField2D.pas',
-  PasVulkan.Image.PNG in 'D:\Vulkan\src\PasVulkan.Image.PNG.pas',
-  PasVulkan.ConvexHullGenerator2D in 'D:\Vulkan\src\PasVulkan.ConvexHullGenerator2D.pas',
-  PasVulkan.XML in 'D:\Vulkan\src\PasVulkan.XML.pas',
-  PasVulkan.Compression.Deflate in 'D:\Vulkan\src\PasVulkan.Compression.Deflate.pas',
-  PasVulkan.CPU.Info in 'D:\Vulkan\src\PasVulkan.CPU.Info.pas',
-  PasVulkan.Image.JPEG in 'D:\Vulkan\src\PasVulkan.Image.JPEG.pas',
-  PasVulkan.Archive.ZIP in 'D:\Vulkan\src\PasVulkan.Archive.ZIP.pas',
-  PasVulkan.Collections in 'D:\Vulkan\src\PasVulkan.Collections.pas',
-  PasVulkan.Sprites in 'D:\Vulkan\src\PasVulkan.Sprites.pas',
-  PasVulkan.Streams in 'D:\Vulkan\src\PasVulkan.Streams.pas',
-  PasVulkan.TrueTypeFont in 'D:\Vulkan\src\PasVulkan.TrueTypeFont.pas',
-  PasVulkan.Utils in 'D:\Vulkan\src\PasVulkan.Utils.pas',
-  PasVulkan.VectorPath in 'D:\Vulkan\src\PasVulkan.VectorPath.pas',
-  PasVulkan.Framework in 'D:\Vulkan\src\PasVulkan.Framework.pas',
-  PasDblStrUtils in 'D:\Vulkan\externals\pasdblstrutils\src\PasDblStrUtils.pas',
-  PasVulkan.Image.QOI in 'D:\Vulkan\src\PasVulkan.Image.QOI.pas',
-  PasVulkan.Image.Utils in 'D:\Vulkan\src\PasVulkan.Image.Utils.pas',
-  PasVulkan.NVIDIA.AfterMath in 'D:\Vulkan\src\PasVulkan.NVIDIA.AfterMath.pas',
-  *)
+  //pasvulkan and its externals, found on the search path (D:\Vulkan\...).
+  //Every unit the runtime uses is listed, so none is implicitly imported.
+  Vulkan,
+  PasVulkan.Types,
+  PasVulkan.Math,
+  PasVulkan.Math.Double,
+  PasVulkan.Collections,
+  PasVulkan.Utils,
+  PasVulkan.Streams,
+  PasVulkan.XML,
+  PasVulkan.CPU.Info,
+  PasVulkan.HighResolutionTimer,
+  PasVulkan.Compression.Deflate,
+  PasVulkan.Image.BMP,
+  PasVulkan.Image.JPEG,
+  PasVulkan.Image.PNG,
+  PasVulkan.Image.QOI,
+  PasVulkan.Image.TGA,
+  PasVulkan.Image.Utils,
+  PasVulkan.NVIDIA.AfterMath,
+  PasVulkan.Framework,
+  PasMP,
+  PasJSON,
+  PUCU,
+  PasDblStrUtils,
   Vulkan_Components in '..\RunTime_Src\Vulkan_Components.pas',
   Vulkan_Components_Lookups in '..\RunTime_Src\Vulkan_Components_Lookups.pas',
   Vulkan_Components_Descriptors in '..\RunTime_Src\Vulkan_Components_Descriptors.pas',
@@ -74,7 +73,9 @@ contains
   Vulkan_CriticalSection in '..\RunTime_Src\Vulkan_CriticalSection.pas',
   Vulkan_Components_ShaderCompiler in '..\RunTime_Src\Vulkan_Components_ShaderCompiler.pas',
   Vulkan_Components_Compute in '..\RunTime_Src\Vulkan_Components_Compute.pas',
-  Vulkan_SceneLoaders in '..\RunTime_Src\Vulkan_SceneLoaders.pas';
+  Vulkan_SceneLoaders in '..\RunTime_Src\Vulkan_SceneLoaders.pas',
+  Vulkan_Components_Light in '..\RunTime_Src\Vulkan_Components_Light.pas',
+  Vulkan_Components_TextureInspector in '..\RunTime_Src\Vulkan_Components_TextureInspector.pas';
 
 end.
 
