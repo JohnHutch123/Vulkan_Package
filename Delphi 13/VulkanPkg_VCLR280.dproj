@@ -47,6 +47,7 @@
         <Base>true</Base>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
+        <DCC_Description>Datavis Vulkan VCL runtime package</DCC_Description>
         <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
         <DCC_DcpOutput>.\$(Platform)\$(Config)</DCC_DcpOutput>
         <DCC_BplOutput>.\$(Platform)\$(Config)</DCC_BplOutput>
@@ -108,8 +109,7 @@
         <DCCReference Include="vcl.dcp"/>
         <DCCReference Include="VulkanPkgR280.dcp"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_WindowVCL.pas"/>
-        <DCCReference Include="..\RunTime_Src\Vulkan_Components_PointerValidation.pas"/>
-        <DCCReference Include="..\Design_Src\Vulkan_DataModule.pas"/>
+        <DCCReference Include="..\RunTime_Src\Vulkan_DataModule.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
@@ -149,9 +149,7 @@
                     </Platform>
                 </DeployFile>
                 <DeployFile LocalName="Win32\Debug\VulkanPkg_VCLR280.bpl" Configuration="Debug" Class="ProjectOutput"/>
-                <DeployFile LocalName="Win32\Debug\VulkanPkg_VCLR350.bpl" Configuration="Debug" Class="ProjectOutput"/>
                 <DeployFile LocalName="Win32\Release\VulkanPkg_VCLR280.bpl" Configuration="Release" Class="ProjectOutput"/>
-                <DeployFile LocalName="Win32\Release\VulkanPkg_VCLR350.bpl" Configuration="Release" Class="ProjectOutput"/>
                 <DeployFile LocalName="Win64\Release\VulkanPkg_VCLR280.bpl" Configuration="Release" Class="ProjectOutput">
                     <Platform Name="Win64">
                         <RemoteName>VulkanPkg_VCLR280.bpl</RemoteName>

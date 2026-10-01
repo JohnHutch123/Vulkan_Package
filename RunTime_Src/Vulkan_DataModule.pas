@@ -920,12 +920,15 @@ begin
   ConnectSession;
   vgEnableSession(fInstance);
 
-  //the session stays up if the file can't be read: the error says why
-  If fLoadSceneOnEnable and (fSceneFileName <> '') and assigned(fScene) then
-    LoadScene;
-
-  If assigned(fOnSessionEnabled) and not (csDesigning in ComponentState) then
-    fOnSessionEnabled(Self);
+  //the session stays up if the file can't be read: the error says why, and
+  //OnSessionEnabled still fires, as the session is enabled
+  Try
+    If fLoadSceneOnEnable and (fSceneFileName <> '') and assigned(fScene) then
+      LoadScene;
+  Finally
+    If assigned(fOnSessionEnabled) and not (csDesigning in ComponentState) then
+      fOnSessionEnabled(Self);
+  End;
 end;
 
 procedure TvgVulkanDataModule.DisableSession;

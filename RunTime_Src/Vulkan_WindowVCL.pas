@@ -17,6 +17,7 @@ uses
 {$IFDEF DEBUGDESIGN}
   vcl.Dialogs,
 {$ENDIF}
+  VCL.Graphics,
   VCL.Controls,
   WinAPI.Messages,
   Vulkan,
@@ -219,32 +220,7 @@ Type
     Property VulkanLink : TvgLinker read GetLinker write SetLinker ;
   end;
 
-procedure Windows_RunShaderBuildBatchFile(aPathFile:String; WaitForFinish:Boolean = True);
-
 implementation
-
-procedure Windows_RunShaderBuildBatchFile(aPathFile:String; WaitForFinish:Boolean = True);
-//include file name and path
-var
-  sCmd: string;
-  si: TStartupInfo;
-  pi: TProcessInformation;
-begin
-  If aPathFile='' then exit;
-  If NOT fileExists(aPathFile) then exit;
-
-  sCmd := 'cmd.exe /c "' + aPathFile + '"';
-
-  FillChar(si, SizeOf(si), 0);
-  si.cb          := SizeOf(si);
-  si.dwFlags     := STARTF_USESHOWWINDOW;
-  si.wShowWindow := SW_MAXIMIZE;
-
-  CreateProcess(nil, PChar(sCmd), nil, nil, False, 0, nil, nil, si, pi);
-
-  If WaitForFinish then
-     WaitForSingleObject(pi.hProcess, INFINITE);
-end;
 
 
 
@@ -383,13 +359,15 @@ procedure TvgWindowVCL.CreateParams(var Params: TCreateParams);
 begin
   inherited;
 
-   Params.Style  :=WS_CHILD or
+   //added to what VCL sets (visibility, enabled state, bidi ...), not instead of it
+   Params.Style  :=Params.Style or
+                   WS_CHILD or
                    WS_CLIPCHILDREN or
                    WS_CLIPSIBLINGS or
                    WS_GROUP or
                    WS_TABSTOP;
 
-   Params.ExStyle:=WS_EX_APPWINDOW or
+   Params.ExStyle:=Params.ExStyle or
                    WS_EX_WINDOWEDGE;
 
    Params.WindowClass.style:=CS_VREDRAW +
@@ -646,8 +624,13 @@ begin
 
   Case Operation of
      opInsert : Begin
-
-                  If (aComponent is TvgLinker) and Not assigned(fLinker)  then
+                  //designer convenience: a linker dropped on the form joins an
+                  //unlinked window.  Never while a form loads (the stored
+                  //VulkanLink, or none, is what counts) nor at run time.
+                  If (aComponent is TvgLinker) and Not assigned(fLinker) and
+                     (csDesigning in ComponentState) and
+                     not (csLoading in ComponentState) and
+                     not (assigned(Owner) and (csLoading in Owner.ComponentState)) then
                   Begin
                     SetLinker(TvgLinker(aComponent));
                   end;
@@ -786,8 +769,12 @@ begin
      fLinker.FreeNotification(self);
   End;
  Except
-   On E:Exception do
-      fLinker:=nil;
+   //leave nothing half linked, and let the caller see why
+   OldLinker := fLinker;
+   fLinker   := nil;
+   If assigned(OldLinker) and (OldLinker.WindowIntf = IvgVulkanWindow(self)) then
+      OldLinker.WindowIntf := nil;
+   raise;
  End;
 end;
 
@@ -803,17 +790,14 @@ begin
 end;
 
 procedure TvgWindowVCL.vgWindowBackgroundColor(var aColor: TVkClearValue);
-  Var C     : TColor;
-      R,G,B : TVkFloat;
+  Var C : TColorRef;
 begin
-  C:= fClearColor;
-  R:= GetRValue(C);
-  G:= GetGValue(C);
-  B:= GetBValue(C);
+  //system colours (clBtnFace ...) resolve to RGB; Vulkan wants 0..1 per channel
+  C:= ColorToRGB(fClearColor);
 
-  aColor.color.float32[0]:=R;
-  aColor.color.float32[1]:=G;
-  aColor.color.float32[2]:=B;
+  aColor.color.float32[0]:=GetRValue(C) / 255;
+  aColor.color.float32[1]:=GetGValue(C) / 255;
+  aColor.color.float32[2]:=GetBValue(C) / 255;
   aColor.color.float32[3]:=1.0;
 
 end;
@@ -834,19 +818,24 @@ end;
 
 procedure TvgWindowVCL.WMDestroy(var Message: TWMDestroy);
 begin
-
+  //The handle is going - the form is closing, or the window is being
+  //recreated (new parent ...).  The surface made on it is no longer valid,
+  //so the session stops.  The link itself stays: CreateHandle reconnects a
+  //recreated window, and Destroy drops the link when the window is freed.
   If assigned(fLinker) then
   Begin
     If fLinker.Active then
        Self.DisableParent(True);
-    fLinker.WindowIntf:=nil;
-    fLinker           := nil;
+    fLinker.WindowReady := False;
   End;
 
+  inherited;
 end;
 
 procedure TvgWindowVCL.WMMove(var Message: TWMMove);
 begin
+  Inherited;
+
   If (csDesigning in self.ComponentState) then
   Begin
      DisableParent(True);
