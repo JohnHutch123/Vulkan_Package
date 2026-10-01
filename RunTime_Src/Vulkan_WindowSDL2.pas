@@ -322,8 +322,8 @@ begin
 
   { The surface must go before the window it was made on.  Disabling this
     window's linker frees its surface and swap chain; other windows on the
-    same device keep running.  (Not DisableParent: past the linker it does
-    nothing at present.) }
+    same device keep running.  (Not DisableParent, which would take down the
+    whole device - or with ToRoot the session - and every window on it.) }
   if Assigned(fLinker) then
   begin
     if fLinker.Active then
@@ -568,8 +568,10 @@ begin
     OldLinker := fLinker;
     fLinker   := nil;
     OldLinker.RemoveFreeNotification(Self);
-    //fLinker is already nil, so the linker does not call back
-    if OldLinker.WindowIntf = IvgVulkanWindow(Self) then
+    //fLinker is already nil, so the linker does not call back.  Not while
+    //the linker is being freed: its destructor called us and clears it.
+    if not (csDestroying in OldLinker.ComponentState) and
+       (OldLinker.WindowIntf = IvgVulkanWindow(Self)) then
       OldLinker.WindowIntf := nil;
   end;
 
