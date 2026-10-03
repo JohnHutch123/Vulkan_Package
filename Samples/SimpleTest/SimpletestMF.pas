@@ -30,7 +30,6 @@ uses
 
 type
   TForm8 = class(TForm)
-    Button1: TButton;
     procedure Button1Click(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
   private

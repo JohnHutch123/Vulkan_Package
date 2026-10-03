@@ -36,7 +36,7 @@ object vgSessionEditorFM: TvgSessionEditorFM
     object lblStatus: TLabel
       Left = 574
       Top = 12
-      Width = 95
+      Width = 92
       Height = 15
       Caption = 'Session: disabled'
       Font.Charset = DEFAULT_CHARSET
@@ -51,7 +51,9 @@ object vgSessionEditorFM: TvgSessionEditorFM
       Top = 8
       Width = 81
       Height = 25
-      Hint = 'Create any missing Instance, Physical Device, Screen Device and Linker and connect them'
+      Hint = 
+        'Create any missing Instance, Physical Device, Screen Device and ' +
+        'Linker and connect them'
       Caption = '&Build'
       ParentShowHint = False
       ShowHint = True
@@ -75,7 +77,9 @@ object vgSessionEditorFM: TvgSessionEditorFM
       Top = 8
       Width = 105
       Height = 25
-      Hint = 'Pick a scene file and load it into the session'#39's Scene with a registered scene loader'
+      Hint = 
+        'Pick a scene file and load it into the session'#39's Scene with a re' +
+        'gistered scene loader'
       Caption = 'Load &Scene...'
       ParentShowHint = False
       ShowHint = True

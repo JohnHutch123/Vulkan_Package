@@ -114,7 +114,8 @@ File: `RunTime_Src/Vulkan_WindowSDL2.pas`.
 ### Key technologies
 - **Language:** Object Pascal (Delphi)
 - **Graphics API:** Vulkan (`Vulkan.pas`, `TVk*` types)
-- **Core dependency:** **PasVulkan** (`PasVulkan.Math`, `PasVulkan.Framework`, etc.)
+- **Core dependency:** **PasVulkan** (`PasVulkan.Math`, `PasVulkan.Framework`, etc.). See
+  [PASVULKAN.md](PASVULKAN.md) for the tested version, the fixes it needs, and which units the package uses.
 - **UI/frameworks:** VCL (primary), plus optional SDL2 windowing
 - **Shader path:** GLSL → SPIR-V via `glslangValidator` (`VULKAN_SDK`)
 

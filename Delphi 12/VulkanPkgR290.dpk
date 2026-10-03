@@ -1,0 +1,84 @@
+package VulkanPkgR290;
+
+{$R *.res}
+{$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
+{$ALIGN 8}
+{$ASSERTIONS ON}
+{$BOOLEVAL OFF}
+{$DEBUGINFO OFF}
+{$EXTENDEDSYNTAX ON}
+{$IMPORTEDDATA ON}
+{$IOCHECKS ON}
+{$LOCALSYMBOLS OFF}
+{$LONGSTRINGS ON}
+{$OPENSTRINGS ON}
+{$OPTIMIZATION ON}
+{$OVERFLOWCHECKS OFF}
+{$RANGECHECKS OFF}
+{$REFERENCEINFO OFF}
+{$SAFEDIVIDE OFF}
+{$STACKFRAMES OFF}
+{$TYPEDADDRESS OFF}
+{$VARSTRINGCHECKS ON}
+{$WRITEABLECONST OFF}
+{$MINENUMSIZE 1}
+{$IMAGEBASE $400000}
+{$DEFINE RELEASE}
+{$ENDIF IMPLICITBUILDING}
+{$DESCRIPTION 'Datavis Vulkan runtime package'}
+{$RUNONLY}
+{$IMPLICITBUILD OFF}
+
+requires
+  rtl;
+
+contains
+  //pasvulkan and its externals, found on the search path (D:\Vulkan\...).
+  //Every unit the runtime uses is listed, so none is implicitly imported.
+  Vulkan,
+  PasVulkan.Types,
+  PasVulkan.Math,
+  PasVulkan.Math.Double,
+  PasVulkan.Collections,
+  PasVulkan.Utils,
+  PasVulkan.CrashReport,
+  PasVulkan.SymbolTable,
+  PasVulkan.Streams,
+  PasVulkan.CPU.Info,
+  PasVulkan.HighResolutionTimer,
+  PasVulkan.Compression.Deflate,
+  PasVulkan.Image.BMP,
+  PasVulkan.Image.JPEG,
+  PasVulkan.Image.PNG,
+  PasVulkan.Image.QOI,
+  PasVulkan.Image.TGA,
+  PasVulkan.Image.Utils,
+  PasVulkan.NVIDIA.AfterMath,
+  PasVulkan.Framework,
+  PasMP,
+  PasJSON,
+  PUCU,
+  PasDblStrUtils,
+  Vulkan_Components in '..\RunTime_Src\Vulkan_Components.pas',
+  Vulkan_Components_Lookups in '..\RunTime_Src\Vulkan_Components_Lookups.pas',
+  Vulkan_Components_Descriptors in '..\RunTime_Src\Vulkan_Components_Descriptors.pas',
+  Vulkan_Assert in '..\RunTime_Src\Vulkan_Assert.pas',
+  Vulkan_WorldAxes in '..\RunTime_Src\Vulkan_WorldAxes.pas',
+  Vulkan_Components_Scene_Renderer in '..\RunTime_Src\Vulkan_Components_Scene_Renderer.pas',
+  Vulkan_PixelInfo in '..\RunTime_Src\Vulkan_PixelInfo.pas',
+  Vulkan_Components_Camera in '..\RunTime_Src\Vulkan_Components_Camera.pas',
+  Vulkan_HUD in '..\RunTime_Src\Vulkan_HUD.pas',
+  Vulkan_Components_DataStore in '..\RunTime_Src\Vulkan_Components_DataStore.pas',
+  Vulkan_Components_Nodes in '..\RunTime_Src\Vulkan_Components_Nodes.pas',
+  Vulkan_Components_PointerValidation in '..\RunTime_Src\Vulkan_Components_PointerValidation.pas',
+  Vulkan_CriticalSection in '..\RunTime_Src\Vulkan_CriticalSection.pas',
+  Vulkan_Components_ShaderCompiler in '..\RunTime_Src\Vulkan_Components_ShaderCompiler.pas',
+  Vulkan_Components_Compute in '..\RunTime_Src\Vulkan_Components_Compute.pas',
+  Vulkan_SceneLoaders in '..\RunTime_Src\Vulkan_SceneLoaders.pas',
+  Vulkan_Components_Light in '..\RunTime_Src\Vulkan_Components_Light.pas',
+  Vulkan_Components_TextureInspector in '..\RunTime_Src\Vulkan_Components_TextureInspector.pas';
+
+end.
+
+
+
