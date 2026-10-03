@@ -72,9 +72,17 @@ jobs:
 
       # Stands in for actions/upload-artifact: dump the logs into the job
       # output instead, where they are just as readable for a failed build.
+      #
+      # Not plain `shell: powershell`.  Actions runs such a step by invoking
+      # the generated .ps1 as a FILE, and a runner whose PowerShell execution
+      # policy is Restricted - the default when no scope is set, as on the
+      # self-hosted runner here - refuses to load it.  The step then fails
+      # with UnauthorizedAccess and the build logs it exists to print are
+      # never shown, exactly when a failure needs explaining.  Naming the
+      # shell explicitly keeps the policy out of it, on any runner.
       - name: Show build logs on failure
         if: failure()
-        shell: powershell
+        shell: powershell -ExecutionPolicy Bypass -NoProfile -Command ". '{0}'"
         run: |
           $logs = Get-ChildItem Tests\Win32\*.build.log -ErrorAction SilentlyContinue
           if (-not $logs) { Write-Host 'No build logs found.'; return }
