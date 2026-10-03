@@ -1,7 +1,7 @@
 package VulkanPkgD290;
 
 {$R *.res}
-{$R 'VulkanPkg_DesignIcons.res' '..\Design_Src\VulkanPkg_DesignIcons.rc'}
+{$R 'VulkanPkg_DesignIcons.res'}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
 {$ALIGN 8}
 {$ASSERTIONS ON}
@@ -10,23 +10,22 @@ package VulkanPkgD290;
 {$EXTENDEDSYNTAX ON}
 {$IMPORTEDDATA ON}
 {$IOCHECKS ON}
-{$LOCALSYMBOLS ON}
+{$LOCALSYMBOLS OFF}
 {$LONGSTRINGS ON}
 {$OPENSTRINGS ON}
-{$OPTIMIZATION OFF}
-{$OVERFLOWCHECKS ON}
-{$RANGECHECKS ON}
-{$REFERENCEINFO ON}
+{$OPTIMIZATION ON}
+{$OVERFLOWCHECKS OFF}
+{$RANGECHECKS OFF}
+{$REFERENCEINFO OFF}
 {$SAFEDIVIDE OFF}
-{$STACKFRAMES ON}
+{$STACKFRAMES OFF}
 {$TYPEDADDRESS OFF}
 {$VARSTRINGCHECKS ON}
 {$WRITEABLECONST OFF}
 {$MINENUMSIZE 1}
 {$IMAGEBASE $400000}
-{$DEFINE DEBUG}
+{$DEFINE RELEASE}
 {$ENDIF IMPLICITBUILDING}
-{$DESCRIPTION 'testing Vulkan Package'}
 {$IMPLICITBUILD ON}
 
 requires
@@ -36,6 +35,8 @@ requires
   VulkanPkgR290;
 
 contains
-  VulkanPkg_Designers in '..\Design_Src\VulkanPkg_Designers.pas';
+  VulkanPkg_Designers in '..\Design_Src\VulkanPkg_Designers.pas',
+  VulkanPkg_DataModuleReg in '..\Design_Src\VulkanPkg_DataModuleReg.pas',
+  VulkanDataModuleEditFM in '..\Design_Src\VulkanDataModuleEditFM.pas' {vgSessionEditorFM};
 
 end.
