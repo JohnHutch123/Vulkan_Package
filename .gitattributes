@@ -1,2 +1,6 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Patch files must keep their exact bytes - the diffs carry CRLF content lines,
+# so any EOL normalisation corrupts them and git apply then fails.
+/Patches/*.patch -text

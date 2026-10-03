@@ -1,0 +1,42 @@
+package VulkanPkgD290;
+
+{$R *.res}
+{$R 'VulkanPkg_DesignIcons.res'}
+{$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
+{$ALIGN 8}
+{$ASSERTIONS ON}
+{$BOOLEVAL OFF}
+{$DEBUGINFO OFF}
+{$EXTENDEDSYNTAX ON}
+{$IMPORTEDDATA ON}
+{$IOCHECKS ON}
+{$LOCALSYMBOLS OFF}
+{$LONGSTRINGS ON}
+{$OPENSTRINGS ON}
+{$OPTIMIZATION ON}
+{$OVERFLOWCHECKS OFF}
+{$RANGECHECKS OFF}
+{$REFERENCEINFO OFF}
+{$SAFEDIVIDE OFF}
+{$STACKFRAMES OFF}
+{$TYPEDADDRESS OFF}
+{$VARSTRINGCHECKS ON}
+{$WRITEABLECONST OFF}
+{$MINENUMSIZE 1}
+{$IMAGEBASE $400000}
+{$DEFINE RELEASE}
+{$ENDIF IMPLICITBUILDING}
+{$IMPLICITBUILD ON}
+
+requires
+  rtl,
+  designide,
+  vcl,
+  VulkanPkgR290;
+
+contains
+  VulkanPkg_Designers in '..\Design_Src\VulkanPkg_Designers.pas',
+  VulkanPkg_DataModuleReg in '..\Design_Src\VulkanPkg_DataModuleReg.pas',
+  VulkanDataModuleEditFM in '..\Design_Src\VulkanDataModuleEditFM.pas' {vgSessionEditorFM};
+
+end.

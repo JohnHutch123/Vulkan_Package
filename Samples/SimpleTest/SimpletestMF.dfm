@@ -12,13 +12,4 @@ object Form8: TForm8
   Font.Style = []
   OnDestroy = FormDestroy
   TextHeight = 15
-  object Button1: TButton
-    Left = 32
-    Top = 24
-    Width = 105
-    Height = 25
-    Caption = 'Build Instance'
-    TabOrder = 0
-    OnClick = Button1Click
-  end
 end
