@@ -2,32 +2,39 @@
 
 Fixes for upstream defects that block **Win32** builds, or builds on older
 IDE versions, of the Vulkan packages.
-They live here because upstream may not take a pull request, and because
-`externals/pasmp` is an *uninitialised* git submodule in the PasVulkan checkout
-(git ignores its working-tree contents, so the change cannot be committed there).
+They live here because upstream may not take a pull request.
 
 Re-apply these after every `git pull` of PasVulkan.
 
 | Patch | Target file | Problem fixed |
 |-------|-------------|---------------|
-| `0001-pasmp-win32-int64-increment.patch` | `externals/pasmp/src/PasMP.pas` | `E2250 There is no overloaded version of 'Increment' that can be called with these arguments` |
 | `0002-pasvulkan-lzma-win32-symbol.patch` | `src/PasVulkan.Compression.LZMA.pas` | `E2065 Unsatisfied forward or external declaration: 'C_LzmaDecode'` |
 | `0003-pasvulkan-delphi11-changedisplaysettings.patch` | `src/PasVulkan.Application.pas` | `E2033 Types of actual and formal var parameters must be identical` (Delphi 11 and earlier) |
 
-## 0001 — PasMP 64-bit `Increment` on Win32
+Numbering is historical and has a gap; see below.
 
-`TPasMPInterlocked`'s `TPasMPInt64` / `TPasMPUInt64` `Increment` overloads are
-guarded by `{$ifdef CPU64}`, so they vanish on Win32 and any 64-bit call site
-fails to compile. The guard is widened to:
+## 0001 — PasMP 64-bit `Increment` on Win32 (withdrawn, fixed upstream)
 
-```pascal
-{$if defined(CPU64) or defined(cpu386)}
-```
+Win32 builds used to fail with `E2250 There is no overloaded version of
+'Increment' that can be called with these arguments`, because
+`TPasMPInterlocked`'s `TPasMPInt64` / `TPasMPUInt64` overloads were guarded by
+`{$ifdef CPU64}` and so vanished on 32-bit targets.
 
-This is safe: Delphi's Win32 compiler implements `AtomicIncrement` for `Int64`
-via `cmpxchg8b` (verified by compiling a test program). Only the `Increment`
-guard is widened — the ~44 other `{$ifdef CPU64}` guards in that file are left
-alone to minimise risk to the third-party library.
+PasMP fixed this upstream in `d58e2e6` ("Fixed 64-bit atomics for 32-bit
+targets", 2026-10-02) with a more general solution than the local workaround:
+a new `PASMP_HAS_INT64_ATOMICS` symbol, defined for CPU64 and for 32-bit x86 /
+ARM targets that have a double-native-machine-word atomic compare-exchange, now
+guards all 64-bit atomic overloads rather than just `Increment`.
+
+Delphi Win32 defines `CPU386`, which implies that compare-exchange, so the
+symbol is defined and the overloads are present. The local patch was therefore
+withdrawn and the vendored `externals/pasmp` updated to `d58e2e6`. Verified by
+rebuilding every package on Delphi 11, 12 and 13 for Win32 and Win64 with no
+PasMP patch applied.
+
+Note `externals/pasmp` is an *uninitialised* git submodule in the PasVulkan
+checkout, so git ignores its working-tree contents entirely. Any future change
+there cannot be committed and would again have to live here as a patch.
 
 ## 0002 — LZMA external symbol name on Win32
 
