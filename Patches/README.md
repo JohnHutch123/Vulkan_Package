@@ -32,9 +32,28 @@ withdrawn and the vendored `externals/pasmp` updated to `d58e2e6`. Verified by
 rebuilding every package on Delphi 11, 12 and 13 for Win32 and Win64 with no
 PasMP patch applied.
 
-Note `externals/pasmp` is an *uninitialised* git submodule in the PasVulkan
-checkout, so git ignores its working-tree contents entirely. Any future change
-there cannot be committed and would again have to live here as a patch.
+### Caution: PasVulkan pins the *pre-fix* commit
+
+`externals/pasmp` is a git submodule, and PasVulkan's `master` still records
+`f588790` — the commit immediately **before** the fix. A plain
+
+```
+git submodule update --init
+```
+
+therefore checks out `f588790` and reintroduces the `E2250` error on Win32.
+
+After initialising the submodule, advance it and record the new pointer:
+
+```
+git -C externals/pasmp fetch origin
+git -C externals/pasmp checkout d58e2e6
+git add externals/pasmp
+git commit -m "Bump externals/pasmp to d58e2e6"
+```
+
+This is done in the local PasVulkan checkout (commit `4cdbf057`). Re-check it
+after any `git pull` that moves the submodule pointer back.
 
 ## 0002 — LZMA external symbol name on Win32
 
