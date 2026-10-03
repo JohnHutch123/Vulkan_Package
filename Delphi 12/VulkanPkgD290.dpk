@@ -1,4 +1,4 @@
-package VulkanPkgD280;
+package VulkanPkgD290;
 
 {$R *.res}
 {$R 'VulkanPkg_DesignIcons.res' '..\Design_Src\VulkanPkg_DesignIcons.rc'}
@@ -33,9 +33,12 @@ requires
   rtl,
   designide,
   vcl,
-  VulkanPkgR280;
+  VulkanPkgR290,
+  VulkanPkg_VCLR280;
 
 contains
-  VulkanPkg_Designers in '..\Design_Src\VulkanPkg_Designers.pas';
+  VulkanPkg_Designers in '..\Design_Src\VulkanPkg_Designers.pas',
+  VulkanPkg_DataModuleReg in '..\Design_Src\VulkanPkg_DataModuleReg.pas',
+  VulkanDataModuleEditFM in '..\Design_Src\VulkanDataModuleEditFM.pas' {vgSessionEditorFM};
 
 end.

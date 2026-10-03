@@ -107,7 +107,7 @@
         </DelphiCompile>
         <DCCReference Include="rtl.dcp"/>
         <DCCReference Include="vcl.dcp"/>
-        <DCCReference Include="VulkanPkgR280.dcp"/>
+        <DCCReference Include="VulkanPkgR370.dcp"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_WindowVCL.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_DataModule.pas"/>
         <BuildConfiguration Include="Base">

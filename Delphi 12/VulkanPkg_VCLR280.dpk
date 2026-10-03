@@ -32,7 +32,7 @@ package VulkanPkg_VCLR280;
 requires
   rtl,
   vcl,
-  VulkanPkgR280;
+  VulkanPkgR290;
 
 contains
   Vulkan_WindowVCL in '..\RunTime_Src\Vulkan_WindowVCL.pas',

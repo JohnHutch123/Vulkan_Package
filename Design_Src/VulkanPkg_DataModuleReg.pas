@@ -60,7 +60,8 @@
   from the Object Inspector's drop downs, across forms.  The editor and the
   Active test cover every linker connected under the instance.
 
-  Design time only: in the VCL design package (VulkanPkg_VCLD280). }
+  Design time only: include this unit in the IDE design package
+  (VulkanPkgD290 in Delphi 12; the VCL design package in other Delphi folders). }
 
 unit VulkanPkg_DataModuleReg;
 

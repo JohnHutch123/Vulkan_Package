@@ -101,7 +101,7 @@
         <DCCReference Include="vcl.dcp"/>
         <DCCReference Include="vclx.dcp"/>
         <DCCReference Include="DesignIDE.dcp"/>
-        <DCCReference Include="VulkanPkgR280.dcp"/>
+        <DCCReference Include="VulkanPkgR370.dcp"/>
         <DCCReference Include="VulkanPkg_VCLR280.dcp"/>
         <DCCReference Include="..\Design_Src\VulkanPkg_DesignersVCL.pas"/>
         <DCCReference Include="..\Design_Src\VulkanDataModuleEditFM.pas">

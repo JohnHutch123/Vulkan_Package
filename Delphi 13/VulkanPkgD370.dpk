@@ -1,7 +1,7 @@
-package VulkanPkgD290;
+package VulkanPkgD370;
 
 {$R *.res}
-{$R *.dres}
+{$R 'VulkanPkg_DesignIcons.res' '..\Design_Src\VulkanPkg_DesignIcons.rc'}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
 {$ALIGN 8}
 {$ASSERTIONS ON}
@@ -10,34 +10,32 @@ package VulkanPkgD290;
 {$EXTENDEDSYNTAX ON}
 {$IMPORTEDDATA ON}
 {$IOCHECKS ON}
-{$LOCALSYMBOLS OFF}
+{$LOCALSYMBOLS ON}
 {$LONGSTRINGS ON}
 {$OPENSTRINGS ON}
-{$OPTIMIZATION ON}
-{$OVERFLOWCHECKS OFF}
-{$RANGECHECKS OFF}
-{$REFERENCEINFO OFF}
+{$OPTIMIZATION OFF}
+{$OVERFLOWCHECKS ON}
+{$RANGECHECKS ON}
+{$REFERENCEINFO ON}
 {$SAFEDIVIDE OFF}
-{$STACKFRAMES OFF}
+{$STACKFRAMES ON}
 {$TYPEDADDRESS OFF}
 {$VARSTRINGCHECKS ON}
 {$WRITEABLECONST OFF}
 {$MINENUMSIZE 1}
 {$IMAGEBASE $400000}
-{$DEFINE RELEASE}
+{$DEFINE DEBUG}
 {$ENDIF IMPLICITBUILDING}
-{$DESCRIPTION 'Datavis - Vulkan API Components'}
-{$DESIGNONLY}
+{$DESCRIPTION 'testing Vulkan Package'}
 {$IMPLICITBUILD ON}
 
 requires
   rtl,
-  vcl,
   designide,
-  VulkanPkgR290;
+  vcl,
+  VulkanPkgR370;
 
 contains
   VulkanPkg_Designers in '..\Design_Src\VulkanPkg_Designers.pas';
 
 end.
-

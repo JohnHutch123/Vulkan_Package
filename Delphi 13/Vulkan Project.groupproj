@@ -6,10 +6,10 @@
         <Projects Include="..\Samples\TestVulkan\VulcanTest.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="VulkanPkgR280.dproj">
+        <Projects Include="VulkanPkgR370.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="VulkanPkgD280.dproj">
+        <Projects Include="VulkanPkgD370.dproj">
             <Dependencies/>
         </Projects>
         <Projects Include="VulkanPkg_VCLR280.dproj">
@@ -53,23 +53,23 @@
     <Target Name="VulcanTest:Make">
         <MSBuild Projects="..\Samples\TestVulkan\VulcanTest.dproj" Targets="Make"/>
     </Target>
-    <Target Name="VulkanPkgR280">
-        <MSBuild Projects="VulkanPkgR280.dproj"/>
+    <Target Name="VulkanPkgR370">
+        <MSBuild Projects="VulkanPkgR370.dproj"/>
     </Target>
-    <Target Name="VulkanPkgR280:Clean">
-        <MSBuild Projects="VulkanPkgR280.dproj" Targets="Clean"/>
+    <Target Name="VulkanPkgR370:Clean">
+        <MSBuild Projects="VulkanPkgR370.dproj" Targets="Clean"/>
     </Target>
-    <Target Name="VulkanPkgR280:Make">
-        <MSBuild Projects="VulkanPkgR280.dproj" Targets="Make"/>
+    <Target Name="VulkanPkgR370:Make">
+        <MSBuild Projects="VulkanPkgR370.dproj" Targets="Make"/>
     </Target>
-    <Target Name="VulkanPkgD280">
-        <MSBuild Projects="VulkanPkgD280.dproj"/>
+    <Target Name="VulkanPkgD370">
+        <MSBuild Projects="VulkanPkgD370.dproj"/>
     </Target>
-    <Target Name="VulkanPkgD280:Clean">
-        <MSBuild Projects="VulkanPkgD280.dproj" Targets="Clean"/>
+    <Target Name="VulkanPkgD370:Clean">
+        <MSBuild Projects="VulkanPkgD370.dproj" Targets="Clean"/>
     </Target>
-    <Target Name="VulkanPkgD280:Make">
-        <MSBuild Projects="VulkanPkgD280.dproj" Targets="Make"/>
+    <Target Name="VulkanPkgD370:Make">
+        <MSBuild Projects="VulkanPkgD370.dproj" Targets="Make"/>
     </Target>
     <Target Name="VulkanPkg_VCLR280">
         <MSBuild Projects="VulkanPkg_VCLR280.dproj"/>
@@ -144,13 +144,13 @@
         <MSBuild Projects="..\ShaderBuilder\ShaderBuilder.dproj" Targets="Make"/>
     </Target>
     <Target Name="Build">
-        <CallTarget Targets="VulcanTest;VulkanPkgR280;VulkanPkgD280;VulkanPkg_VCLR280;VulkanPkg_VCLD280;VulkanPkg_SingleR280;VulcanPkg_ComThreadR280;VulcanPkg_ComThreadD280;VulkanPkg_FMXR350;VulcanTest_Components;ShaderBuilder"/>
+        <CallTarget Targets="VulcanTest;VulkanPkgR370;VulkanPkgD370;VulkanPkg_VCLR280;VulkanPkg_VCLD280;VulkanPkg_SingleR280;VulcanPkg_ComThreadR280;VulcanPkg_ComThreadD280;VulkanPkg_FMXR350;VulcanTest_Components;ShaderBuilder"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="VulcanTest:Clean;VulkanPkgR280:Clean;VulkanPkgD280:Clean;VulkanPkg_VCLR280:Clean;VulkanPkg_VCLD280:Clean;VulkanPkg_SingleR280:Clean;VulcanPkg_ComThreadR280:Clean;VulcanPkg_ComThreadD280:Clean;VulkanPkg_FMXR350:Clean;VulcanTest_Components:Clean;ShaderBuilder:Clean"/>
+        <CallTarget Targets="VulcanTest:Clean;VulkanPkgR370:Clean;VulkanPkgD370:Clean;VulkanPkg_VCLR280:Clean;VulkanPkg_VCLD280:Clean;VulkanPkg_SingleR280:Clean;VulcanPkg_ComThreadR280:Clean;VulcanPkg_ComThreadD280:Clean;VulkanPkg_FMXR350:Clean;VulcanTest_Components:Clean;ShaderBuilder:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="VulcanTest:Make;VulkanPkgR280:Make;VulkanPkgD280:Make;VulkanPkg_VCLR280:Make;VulkanPkg_VCLD280:Make;VulkanPkg_SingleR280:Make;VulcanPkg_ComThreadR280:Make;VulcanPkg_ComThreadD280:Make;VulkanPkg_FMXR350:Make;VulcanTest_Components:Make;ShaderBuilder:Make"/>
+        <CallTarget Targets="VulcanTest:Make;VulkanPkgR370:Make;VulkanPkgD370:Make;VulkanPkg_VCLR280:Make;VulkanPkg_VCLD280:Make;VulkanPkg_SingleR280:Make;VulcanPkg_ComThreadR280:Make;VulcanPkg_ComThreadD280:Make;VulkanPkg_FMXR350:Make;VulcanTest_Components:Make;ShaderBuilder:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
     <ItemGroup Condition="'$(BuildGroup)'=='Vulkan Test Debug Build'">
@@ -172,7 +172,7 @@
             <Platforms>Win32;Win64</Platforms>
             <Enabled>True</Enabled>
         </BuildGroupProject>
-        <BuildGroupProject Include="VulkanPkgR280.dproj">
+        <BuildGroupProject Include="VulkanPkgR370.dproj">
             <ProjectGuid>{413EE3C7-D5AD-406F-A0F1-572F3176852E}</ProjectGuid>
             <Configurations>Release</Configurations>
             <Platforms>Win64</Platforms>
@@ -190,7 +190,7 @@
             <Platforms>Win32</Platforms>
             <Enabled>True</Enabled>
         </BuildGroupProject>
-        <BuildGroupProject Include="VulkanPkgD280.dproj">
+        <BuildGroupProject Include="VulkanPkgD370.dproj">
             <ProjectGuid>{A9AF7B1C-5BA6-4894-9D17-DB28C6D8D675}</ProjectGuid>
             <Configurations>Release</Configurations>
             <Platforms>Win32</Platforms>
@@ -240,7 +240,7 @@
             <Platforms>Win32;Win64</Platforms>
             <Enabled>True</Enabled>
         </BuildGroupProject>
-        <BuildGroupProject Include="VulkanPkgR280.dproj">
+        <BuildGroupProject Include="VulkanPkgR370.dproj">
             <ProjectGuid>{413EE3C7-D5AD-406F-A0F1-572F3176852E}</ProjectGuid>
             <Configurations>Release</Configurations>
             <Platforms>Win64</Platforms>
@@ -258,7 +258,7 @@
             <Platforms>Win32</Platforms>
             <Enabled>False</Enabled>
         </BuildGroupProject>
-        <BuildGroupProject Include="VulkanPkgD280.dproj">
+        <BuildGroupProject Include="VulkanPkgD370.dproj">
             <ProjectGuid>{A9AF7B1C-5BA6-4894-9D17-DB28C6D8D675}</ProjectGuid>
             <Configurations/>
             <Platforms>Win32</Platforms>

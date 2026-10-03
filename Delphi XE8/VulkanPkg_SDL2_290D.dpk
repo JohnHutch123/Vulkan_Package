@@ -32,7 +32,7 @@ package VulkanPkg_SDL2_290D;
 
 requires
   rtl,
-  VulkanPkgR290;
+  VulkanPkgR220;
 
 contains
   Vulkan_WindowSDL2 in '..\RunTime_Src\Vulkan_WindowSDL2.pas',

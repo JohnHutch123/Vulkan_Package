@@ -1,7 +1,7 @@
 ﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
         <ProjectGuid>{413EE3C7-D5AD-406F-A0F1-572F3176852E}</ProjectGuid>
-        <MainSource>VulkanPkgR280.dpk</MainSource>
+        <MainSource>VulkanPkgR370.dpk</MainSource>
         <ProjectVersion>20.4</ProjectVersion>
         <FrameworkType>None</FrameworkType>
         <Base>True</Base>
@@ -9,7 +9,7 @@
         <Platform Condition="'$(Platform)'==''">Win32</Platform>
         <TargetedPlatforms>3</TargetedPlatforms>
         <AppType>Package</AppType>
-        <ProjectName Condition="'$(ProjectName)'==''">VulkanPkgR280</ProjectName>
+        <ProjectName Condition="'$(ProjectName)'==''">VulkanPkgR370</ProjectName>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Base' or '$(Base)'!=''">
         <Base>true</Base>
@@ -57,7 +57,7 @@
         <GenPackage>true</GenPackage>
         <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;$(DCC_Namespace)</DCC_Namespace>
         <GenDll>true</GenDll>
-        <SanitizedProjectName>VulkanPkgR280</SanitizedProjectName>
+        <SanitizedProjectName>VulkanPkgR370</SanitizedProjectName>
         <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
         <DCC_E>false</DCC_E>
         <DCC_N>false</DCC_N>
@@ -169,7 +169,7 @@
         <BorlandProject>
             <Delphi.Personality>
                 <Source>
-                    <Source Name="MainSource">VulkanPkgR280.dpk</Source>
+                    <Source Name="MainSource">VulkanPkgR370.dpk</Source>
                 </Source>
                 <Excluded_Packages>
                     <Excluded_Packages Name="$(BDSBIN)\dcloffice2k280.bpl">Microsoft Office 2000 Sample Automation Server Wrapper Components</Excluded_Packages>
@@ -193,16 +193,16 @@
                         <Overwrite>true</Overwrite>
                     </Platform>
                 </DeployFile>
-                <DeployFile LocalName="Win32\Debug\VulkanPkgR280.bpl" Configuration="Debug" Class="ProjectOutput"/>
-                <DeployFile LocalName="Win32\Release\VulkanPkgR280.bpl" Configuration="Release" Class="ProjectOutput"/>
-                <DeployFile LocalName="Win32\Release\VulkanPkgR280.bpl" Configuration="Release" Class="ProjectOutput">
+                <DeployFile LocalName="Win32\Debug\VulkanPkgR370.bpl" Configuration="Debug" Class="ProjectOutput"/>
+                <DeployFile LocalName="Win32\Release\VulkanPkgR370.bpl" Configuration="Release" Class="ProjectOutput"/>
+                <DeployFile LocalName="Win32\Release\VulkanPkgR370.bpl" Configuration="Release" Class="ProjectOutput">
                     <Platform Name="Win32">
-                        <RemoteName>VulkanPkgR280.bpl</RemoteName>
+                        <RemoteName>VulkanPkgR370.bpl</RemoteName>
                         <Overwrite>true</Overwrite>
                     </Platform>
                 </DeployFile>
-                <DeployFile LocalName="Win64\Debug\VulkanPkgR280.bpl" Configuration="Debug" Class="ProjectOutput"/>
-                <DeployFile LocalName="Win64\Release\VulkanPkgR280.bpl" Configuration="Release" Class="ProjectOutput"/>
+                <DeployFile LocalName="Win64\Debug\VulkanPkgR370.bpl" Configuration="Debug" Class="ProjectOutput"/>
+                <DeployFile LocalName="Win64\Release\VulkanPkgR370.bpl" Configuration="Release" Class="ProjectOutput"/>
                 <DeployClass Name="AdditionalDebugSymbols">
                     <Platform Name="OSX32">
                         <Operation>1</Operation>

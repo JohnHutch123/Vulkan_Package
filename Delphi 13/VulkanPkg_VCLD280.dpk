@@ -35,7 +35,7 @@ requires
   vcl,
   vclx,
   DesignIDE,
-  VulkanPkgR280,
+  VulkanPkgR370,
   VulkanPkg_VCLR280;
 
 contains

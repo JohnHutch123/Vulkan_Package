@@ -31,7 +31,7 @@ package VulkanPkg_SDL2R280;
 
 requires
   rtl,
-  VulkanPkgR280;
+  VulkanPkgR370;
 
 contains
   PasVulkan.SDL2,

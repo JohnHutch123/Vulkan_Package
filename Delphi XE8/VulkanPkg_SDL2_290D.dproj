@@ -148,7 +148,7 @@
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
         <DCCReference Include="rtl.dcp"/>
-        <DCCReference Include="VulkanPkgR290.dcp"/>
+        <DCCReference Include="VulkanPkgR220.dcp"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_WindowSDL2.pas"/>
         <DCCReference Include="..\..\Vulkan\src\PasVulkan.SDL2.pas"/>
         <BuildConfiguration Include="Release">

@@ -34,7 +34,7 @@ requires
   rtl,
   vcl,
   DesignIDE,
-  VulkanPkgR290;
+  VulkanPkgR220;
 
 contains
   VulkanPkg_DesignersVCL in '..\Design_Src\VulkanPkg_DesignersVCL.pas';
