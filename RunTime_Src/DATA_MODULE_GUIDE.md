@@ -15,8 +15,9 @@ TvgInstance
                  +- TvgToolManager
 ```
 
-Runtime code is in `VulkanPkg_VCLR280`. The IDE support (wizard, menu verbs and
-the session editor) is in `VulkanPkg_VCLD280`.
+Runtime code is in the VCL runtime package (`VulkanPkg_VCLRxxx`, e.g. `VulkanPkg_VCLR290` for
+Delphi 12). The IDE support (wizard, menu verbs and the session editor) is in the VCL design
+package (`VulkanPkg_VCLDxxx`).
 
 ---
 

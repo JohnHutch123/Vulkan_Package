@@ -22,14 +22,14 @@ Datavis (johnh@datavis.com.au); the link works once you have been given access.
 `SceneCleared`) so a descendant can add interactive tools without the scene
 knowing about them.
 
-The base runtime/design package suffix follows the Delphi release:
+Every package name ends with the version of the Delphi release it is built with:
 
-| Delphi | Runtime package | Design package |
-|---|---|---|
-| XE8 | `VulkanPkgR220` | `VulkanPkgD220` |
-| 11 | `VulkanPkgR280` | `VulkanPkgD280` |
-| 12 | `VulkanPkgR290` | `VulkanPkgD290` |
-| 13 | `VulkanPkgR370` | `VulkanPkgD370` |
+| Delphi | Core runtime | Core design | VCL runtime | VCL design | SDL2 | FMX |
+|---|---|---|---|---|---|---|
+| XE8 | `VulkanPkgR220` | `VulkanPkgD220` | `VulkanPkg_VCLR220` | `VulkanPkg_VCLD220` | `VulkanPkg_SDL2_220D` | `VulkanPkg_FMXR220` |
+| 11 | `VulkanPkgR280` | `VulkanPkgD280` | `VulkanPkg_VCLR280` | `VulkanPkg_VCLD280` | `VulkanPkg_SDL2R280` | `VulkanPkg_FMXR280` |
+| 12 | `VulkanPkgR290` | `VulkanPkgD290` | `VulkanPkg_VCLR290` | `VulkanPkg_VCLD290` | `VulkanPkg_SDL2R290` | `VulkanPkg_FMXR290` |
+| 13 | `VulkanPkgR370` | `VulkanPkgD370` | `VulkanPkg_VCLR370` | `VulkanPkg_VCLD370` | `VulkanPkg_SDL2R370` | `VulkanPkg_FMXR370` |
 
 To use PRO, clone both repositories side by side and build the public
 packages first:
@@ -89,9 +89,9 @@ and connects it to a `TvgWindowVCL` on any form.
 
 See [`RunTime_Src/DATA_MODULE_GUIDE.md`](RunTime_Src/DATA_MODULE_GUIDE.md) for a step-by-step guide.
 
-Files: `RunTime_Src/Vulkan_DataModule.pas` (runtime base class, in `VulkanPkg_VCLR280`). The IDE registration and
-editor (`Design_Src/VulkanPkg_DataModuleReg.pas`, `Design_Src/VulkanDataModuleEditFM.pas/.dfm`) are in
-`VulkanPkgD290` for Delphi 12; other Delphi folders keep them in their `VulkanPkg_VCLD...` design package.
+Files: `RunTime_Src/Vulkan_DataModule.pas` (runtime base class, in the VCL runtime package, e.g.
+`VulkanPkg_VCLR290`), and `Design_Src/VulkanPkg_DataModuleReg.pas` and `Design_Src/VulkanDataModuleEditFM.pas/.dfm`
+(IDE side, in the VCL design package, e.g. `VulkanPkg_VCLD290`).
 
 ---
 
@@ -114,7 +114,7 @@ Instance1.Active  := True;      // creates the SDL window and its surface
   destroyed, while other windows keep running. `Active := True` opens it again.
 - **SDL** is started with the first window and stopped with the last, so linking the unit alone does not
   touch it. Needs SDL 2.0.6 or later.
-- **Package:** `VulkanPkg_SDL2R280` (runtime, requires the matching `VulkanPkgRxxx`) builds with `PasVulkanUseSDL2`,
+- **Package:** `VulkanPkg_SDL2Rxxx` (runtime, requires the matching `VulkanPkgRxxx`; `VulkanPkg_SDL2_220D` for XE8) builds with `PasVulkanUseSDL2`,
   `PasVulkanUseSDL2WithVulkanSupport` and `PasVulkanUseSDL2WithStaticVulkanSupport`. `PasVulkan.SDL2`
   links against `sdl2.dll` on Win32 but `sdl264.dll` on Win64, so a Win64 application has to ship SDL2.dll
   under that name.
@@ -126,7 +126,8 @@ File: `RunTime_Src/Vulkan_WindowSDL2.pas`.
 ### Key technologies
 - **Language:** Object Pascal (Delphi)
 - **Graphics API:** Vulkan (`Vulkan.pas`, `TVk*` types)
-- **Core dependency:** **PasVulkan** (`PasVulkan.Math`, `PasVulkan.Framework`, etc.)
+- **Core dependency:** **PasVulkan** (`PasVulkan.Math`, `PasVulkan.Framework`, etc.). See
+  [PASVULKAN.md](PASVULKAN.md) for the tested version, the fixes it needs, and which units the package uses.
 - **UI/frameworks:** VCL (primary), plus optional SDL2 windowing
 - **Shader path:** GLSL → SPIR-V via `glslangValidator` (`VULKAN_SDK`)
 

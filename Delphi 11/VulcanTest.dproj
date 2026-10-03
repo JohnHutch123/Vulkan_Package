@@ -59,7 +59,7 @@
         <DCC_K>false</DCC_K>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win32)'!=''">
-        <DCC_UsePackage>dxBarRS22;dxSpreadSheetConditionalFormattingDialogsRS22;HistoryFilesR;dxRibbonCustomizationFormRS22;FireDACPgDriver;dxFlowChartAdvancedCustomizeFormRS22;dxGaugeControlRS22;dxFireDACEMFRS22;dxPScxVGridLnkRS22;Hydra_FMX_D22;DBXInterBaseDriver;DataSnapServer;DataSnapCommon;TSSCoreDXE8;dxWizardControlRS22;DbxCommonDriver;vclimg;dbxcds;dxServerModeRS22;DatasnapConnectorsFreePascal;appanalytics;dxEMFRS22;dxADOEMFRS22;dxHttpIndyRequestRS22;vcldb;dxSpreadSheetCoreRS22;dxGDIPlusRS22;CustomIPTransport;Hydra_VCL_D22;dsnap;IndyIPServer;dacfmx220;IndyCore;CloudService;FmxTeeUI;FireDACIBDriver;BetterADO22;ECLPackd22;JvRuntimeDesign;dxPScxPivotGridLnkRS22;vclSvComV8D22;dxComnRS22;OmniThreadLibraryRuntime;cxPivotGridChartRS22;dsnapxml;dxSpellCheckerRS22;dxPScxPCProdRS22;FireDACDb2Driver;dxPScxGridLnkRS22;dxorgcRS22;dxBarExtItemsRS22;dxRibbonRS22;TSSUIDXE8;dxCoreRS22;dxPSdxGaugeControlLnkRS22;cxVerticalGridRS22;frx22;bindcompfmx;dxSkinsCoreRS22;dxSpreadSheetRS22;FireDACODBCDriver;RESTBackendComponents;cxSchedulerRS22;dbrtl;odacvcl220;FireDACCommon;bindcomp;inetdb;cxExportRS22;dxPSDBTeeChartRS22;sdac220;dxPSdxMapControlLnkRS22;DBXOdbcDriver;vclFireDAC;madDisAsm_;sdacvcl220;xmlrtl;dxPSdxDBOCLnkRS22;FireDACCommonDriver;soaprtl;bindengine;vclactnband;FMXTee;dxCloudServiceLibraryRS22;dxOrgChartAdvancedCustomizeFormRS22;bindcompvcl;dxBarExtDBItemsRS22;dxSpreadSheetCoreConditionalFormattingDialogsRS22;Jcl;vclie;dxPSdxDBTVLnkRS22;madExcept_;dxRichEditControlCoreRS22;dxPsPrVwAdvRS22;FireDACMSSQLDriver;DBXInformixDriver;Intraweb;dxPScxExtCommonRS22;DataSnapServerMidas;dsnapcon;DBXFirebirdDriver;dxMapControlRS22;inet;dxPSPrVwRibbonRS22;dxmdsRS22;FireDACMySQLDriver;soapmidas;vclx;dxSpreadSheetReportDesignerRS22;DBXSybaseASADriver;DVPrintSuite22R;dxDockingRS22;RESTComponents;dxTabbedMDIRS22;dxdborRS22;dbexpress;dxPScxTLLnkRS22;IndyIPClient;dxRichEditCoreRS22;FireDACTDataDriver;RemObjects_WebBroker_D22;FireDACSqliteDriver;FireDACDSDriver;DBXSqliteDriver;fmx;dxPSdxFCLnkRS22;IndySystem;TeeDB;tethering;cxSchedulerGridRS22;dxPDFViewerRS22;DataSnapClient;S3D200StdD22;dxNavBarRS22;DataSnapProviderClient;DBXSybaseASEDriver;frxe22;sdacfmx220;DUnitXRuntime;crcontrols220;vcldsnap;dxBarDBNavRS22;dxPSCoreRS22;dxPSRichEditControlLnkRS22;fmxFireDAC;RemObjects_Server_Indy_D22;DBXDb2Driver;S3D200ProD22;DBXOracleDriver;cxGridRS22;JvCore;oraprov220;vclribbon;odacfmx220;odac220;fmxase;vcl;DBXMSSQLDriver;IndyIPCommon;CodeSiteExpressPkg;DataSnapFireDAC;FireDACDBXDriver;cxPivotGridRS22;dxtrmdRS22;RemObjects_Server_Synapse_D22;soapserver;dxPScxSchedulerLnkRS22;dxPSdxPDFViewerLnkRS22;inetdbxpress;FireDACInfxDriver;dxRichEditDocumentModelRS22;dxFireDACServerModeRS22;adortl;cxLibraryRS22;dxPSdxSpreadSheetLnkRS22;dxPSdxLCLnkRS22;madBasic_;FireDACASADriver;dxPScxCommonRS22;emsclientfiredac;rtl;DbxClientDriver;cxGridEMFRS22;Tee;dxFlowChartRS22;dxDBXServerModeRS22;dxPSLnksRS22;dxRichEditControlRS22;Hydra_Core_D22;DataSnapNativeClient;svnui;dac220;dxFlowChartLayoutsRS22;cxTreeListdxBarPopupMenuRS22;IndyProtocols;DBXMySQLDriver;dxPSdxOCLnkRS22;bindcompdbx;TeeUI;PrintSuitePro22R;tdstream220;cxTreeListRS22;frxDB22;FireDACADSDriver;vcltouch;dxADOServerModeRS22;emsclient;dxdbtrRS22;VclSmp;FireDAC;VCLRESTComponents;RemObjects_Synapse_D22;dxTileControlRS22;cxSchedulerRibbonStyleEventEditorRS22;DataSnapConnectors;RemObjects_Indy_D22;fmxobj;JclVcl;dxPSTeeChartRS22;cxPivotGridOLAPRS22;svn;cxSchedulerTreeBrowserRS22;FireDACOracleDriver;fmxdae;cxSchedulerWebServiceStorageRS22;FireDACMSAccDriver;DataSnapIndy10ServerTransport;dxFlowChartDesignerRS22;VulkanPkgR220;$(DCC_UsePackage)</DCC_UsePackage>
+        <DCC_UsePackage>dxBarRS22;dxSpreadSheetConditionalFormattingDialogsRS22;HistoryFilesR;dxRibbonCustomizationFormRS22;FireDACPgDriver;dxFlowChartAdvancedCustomizeFormRS22;dxGaugeControlRS22;dxFireDACEMFRS22;dxPScxVGridLnkRS22;Hydra_FMX_D22;DBXInterBaseDriver;DataSnapServer;DataSnapCommon;TSSCoreDXE8;dxWizardControlRS22;DbxCommonDriver;vclimg;dbxcds;dxServerModeRS22;DatasnapConnectorsFreePascal;appanalytics;dxEMFRS22;dxADOEMFRS22;dxHttpIndyRequestRS22;vcldb;dxSpreadSheetCoreRS22;dxGDIPlusRS22;CustomIPTransport;Hydra_VCL_D22;dsnap;IndyIPServer;dacfmx220;IndyCore;CloudService;FmxTeeUI;FireDACIBDriver;BetterADO22;ECLPackd22;JvRuntimeDesign;dxPScxPivotGridLnkRS22;vclSvComV8D22;dxComnRS22;OmniThreadLibraryRuntime;cxPivotGridChartRS22;dsnapxml;dxSpellCheckerRS22;dxPScxPCProdRS22;FireDACDb2Driver;dxPScxGridLnkRS22;dxorgcRS22;dxBarExtItemsRS22;dxRibbonRS22;TSSUIDXE8;dxCoreRS22;dxPSdxGaugeControlLnkRS22;cxVerticalGridRS22;frx22;bindcompfmx;dxSkinsCoreRS22;dxSpreadSheetRS22;FireDACODBCDriver;RESTBackendComponents;cxSchedulerRS22;dbrtl;odacvcl220;FireDACCommon;bindcomp;inetdb;cxExportRS22;dxPSDBTeeChartRS22;sdac220;dxPSdxMapControlLnkRS22;DBXOdbcDriver;vclFireDAC;madDisAsm_;sdacvcl220;xmlrtl;dxPSdxDBOCLnkRS22;FireDACCommonDriver;soaprtl;bindengine;vclactnband;FMXTee;dxCloudServiceLibraryRS22;dxOrgChartAdvancedCustomizeFormRS22;bindcompvcl;dxBarExtDBItemsRS22;dxSpreadSheetCoreConditionalFormattingDialogsRS22;Jcl;vclie;dxPSdxDBTVLnkRS22;madExcept_;dxRichEditControlCoreRS22;dxPsPrVwAdvRS22;FireDACMSSQLDriver;DBXInformixDriver;Intraweb;dxPScxExtCommonRS22;DataSnapServerMidas;dsnapcon;DBXFirebirdDriver;dxMapControlRS22;inet;dxPSPrVwRibbonRS22;dxmdsRS22;FireDACMySQLDriver;soapmidas;vclx;dxSpreadSheetReportDesignerRS22;DBXSybaseASADriver;DVPrintSuite22R;dxDockingRS22;RESTComponents;dxTabbedMDIRS22;dxdborRS22;dbexpress;dxPScxTLLnkRS22;IndyIPClient;dxRichEditCoreRS22;FireDACTDataDriver;RemObjects_WebBroker_D22;FireDACSqliteDriver;FireDACDSDriver;DBXSqliteDriver;fmx;dxPSdxFCLnkRS22;IndySystem;TeeDB;tethering;cxSchedulerGridRS22;dxPDFViewerRS22;DataSnapClient;S3D200StdD22;dxNavBarRS22;DataSnapProviderClient;DBXSybaseASEDriver;frxe22;sdacfmx220;DUnitXRuntime;crcontrols220;vcldsnap;dxBarDBNavRS22;dxPSCoreRS22;dxPSRichEditControlLnkRS22;fmxFireDAC;RemObjects_Server_Indy_D22;DBXDb2Driver;S3D200ProD22;DBXOracleDriver;cxGridRS22;JvCore;oraprov220;vclribbon;odacfmx220;odac220;fmxase;vcl;DBXMSSQLDriver;IndyIPCommon;CodeSiteExpressPkg;DataSnapFireDAC;FireDACDBXDriver;cxPivotGridRS22;dxtrmdRS22;RemObjects_Server_Synapse_D22;soapserver;dxPScxSchedulerLnkRS22;dxPSdxPDFViewerLnkRS22;inetdbxpress;FireDACInfxDriver;dxRichEditDocumentModelRS22;dxFireDACServerModeRS22;adortl;cxLibraryRS22;dxPSdxSpreadSheetLnkRS22;dxPSdxLCLnkRS22;madBasic_;FireDACASADriver;dxPScxCommonRS22;emsclientfiredac;rtl;DbxClientDriver;cxGridEMFRS22;Tee;dxFlowChartRS22;dxDBXServerModeRS22;dxPSLnksRS22;dxRichEditControlRS22;Hydra_Core_D22;DataSnapNativeClient;svnui;dac220;dxFlowChartLayoutsRS22;cxTreeListdxBarPopupMenuRS22;IndyProtocols;DBXMySQLDriver;dxPSdxOCLnkRS22;bindcompdbx;TeeUI;PrintSuitePro22R;tdstream220;cxTreeListRS22;frxDB22;FireDACADSDriver;vcltouch;dxADOServerModeRS22;emsclient;dxdbtrRS22;VclSmp;FireDAC;VCLRESTComponents;RemObjects_Synapse_D22;dxTileControlRS22;cxSchedulerRibbonStyleEventEditorRS22;DataSnapConnectors;RemObjects_Indy_D22;fmxobj;JclVcl;dxPSTeeChartRS22;cxPivotGridOLAPRS22;svn;cxSchedulerTreeBrowserRS22;FireDACOracleDriver;fmxdae;cxSchedulerWebServiceStorageRS22;FireDACMSAccDriver;DataSnapIndy10ServerTransport;dxFlowChartDesignerRS22;VulkanPkgR280;$(DCC_UsePackage)</DCC_UsePackage>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;Bde;$(DCC_Namespace)</DCC_Namespace>
         <Manifest_File>$(BDS)\bin\default_app.manifest</Manifest_File>
@@ -90,7 +90,7 @@
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_1_Win32)'!=''">
         <DCC_AdditionalSwitches>-LUDesignIDE</DCC_AdditionalSwitches>
-        <DCC_UnitSearchPath>D:\X1\Vulkan\src;D:\X1\Vulkan Package;D:\X1\Vulkan\externals\pasmp\src;D:\X1\Vulkan\externals\pucu\src;D:\X1\Vulkan\externals\pasdblstrutils\src;D:\X1\Add_On\betterADO;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>D:\X1\Add_On\betterADO;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_Locale>1033</VerInfo_Locale>
         <DCC_RemoteDebug>false</DCC_RemoteDebug>
@@ -99,7 +99,7 @@
     <PropertyGroup Condition="'$(Cfg_1_Win64)'!=''">
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_Locale>1033</VerInfo_Locale>
-        <DCC_UnitSearchPath>D:\X1\Vulkan\src;D:\X1\Vulkan Package;D:\X1\Vulkan\externals\pasmp\src;D:\X1\Vulkan\externals\pucu\src;D:\X1\Vulkan\externals\pasdblstrutils\src;D:\X1\Add_On\betterADO;D:\X1\Vulkan_Package\RunTime_Src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>D:\X1\Add_On\betterADO;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <BT_BuildType>Debug</BT_BuildType>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2)'!=''">
@@ -112,12 +112,12 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
-        <DCCReference Include="..\FastMM5\FastMM5.pas"/>
+        <DCCReference Include="..\FastMM5\FastMM5.pas" />
         <DCCReference Include="VulkanTestMF.pas">
             <Form>Form8</Form>
         </DCCReference>
-        <DCCReference Include="RunTime_Src\Vulkan_Components.pas"/>
-        <DCCReference Include="RunTime_Src\Vulkan_WindowVCL.pas"/>
+        <DCCReference Include="RunTime_Src\Vulkan_Components.pas" />
+        <DCCReference Include="RunTime_Src\Vulkan_WindowVCL.pas" />
         <DCCReference Include="VulkanTestDM.pas">
             <Form>DataModule2</Form>
             <FormType>dfm</FormType>
@@ -155,7 +155,7 @@
                 </Excluded_Packages>
             </Delphi.Personality>
             <Deployment Version="3">
-                <DeployFile LocalName="Win32\Debug\VulcanTest.exe" Configuration="Debug" Class="ProjectOutput"/>
+                <DeployFile LocalName="Win32\Debug\VulcanTest.exe" Configuration="Debug" Class="ProjectOutput" />
                 <DeployClass Name="AdditionalDebugSymbols">
                     <Platform Name="iOSSimulator">
                         <Operation>1</Operation>
@@ -955,29 +955,29 @@
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
-                <ProjectRoot Platform="OSX32" Name="$(PROJECTNAME).app"/>
-                <ProjectRoot Platform="OSX64" Name="$(PROJECTNAME).app"/>
-                <ProjectRoot Platform="Win32" Name="$(PROJECTNAME)"/>
-                <ProjectRoot Platform="Android64" Name="$(PROJECTNAME)"/>
-                <ProjectRoot Platform="Android" Name="$(PROJECTNAME)"/>
-                <ProjectRoot Platform="Win64" Name="$(PROJECTNAME)"/>
-                <ProjectRoot Platform="OSXARM64" Name="$(PROJECTNAME).app"/>
-                <ProjectRoot Platform="iOSDevice32" Name="$(PROJECTNAME).app"/>
-                <ProjectRoot Platform="iOSDevice64" Name="$(PROJECTNAME).app"/>
-                <ProjectRoot Platform="Linux64" Name="$(PROJECTNAME)"/>
-                <ProjectRoot Platform="iOSSimulator" Name="$(PROJECTNAME).app"/>
+                <ProjectRoot Platform="OSX32" Name="$(PROJECTNAME).app" />
+                <ProjectRoot Platform="OSX64" Name="$(PROJECTNAME).app" />
+                <ProjectRoot Platform="Win32" Name="$(PROJECTNAME)" />
+                <ProjectRoot Platform="Android64" Name="$(PROJECTNAME)" />
+                <ProjectRoot Platform="Android" Name="$(PROJECTNAME)" />
+                <ProjectRoot Platform="Win64" Name="$(PROJECTNAME)" />
+                <ProjectRoot Platform="OSXARM64" Name="$(PROJECTNAME).app" />
+                <ProjectRoot Platform="iOSDevice32" Name="$(PROJECTNAME).app" />
+                <ProjectRoot Platform="iOSDevice64" Name="$(PROJECTNAME).app" />
+                <ProjectRoot Platform="Linux64" Name="$(PROJECTNAME)" />
+                <ProjectRoot Platform="iOSSimulator" Name="$(PROJECTNAME).app" />
             </Deployment>
             <Platforms>
                 <Platform value="Win32">True</Platform>
                 <Platform value="Win64">True</Platform>
             </Platforms>
             <UnitTesting>
-                <TestProjectName>D:\X1\Vulkan_Package\Test\VulcanTestTests.dproj</TestProjectName>
+                
             </UnitTesting>
         </BorlandProject>
         <ProjectFileVersion>12</ProjectFileVersion>
     </ProjectExtensions>
-    <Import Project="$(BDS)\Bin\CodeGear.Delphi.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Delphi.Targets')"/>
-    <Import Project="$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj" Condition="Exists('$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj')"/>
-    <Import Project="$(MSBuildProjectName).deployproj" Condition="Exists('$(MSBuildProjectName).deployproj')"/>
+    <Import Project="$(BDS)\Bin\CodeGear.Delphi.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Delphi.Targets')" />
+    <Import Project="$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj" Condition="Exists('$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj')" />
+    <Import Project="$(MSBuildProjectName).deployproj" Condition="Exists('$(MSBuildProjectName).deployproj')" />
 </Project>

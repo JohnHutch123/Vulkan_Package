@@ -3,6 +3,6 @@ TO DO
 	Design time module registered/installed and tested
 	add extra missing components to registration
 	Check the VulkanDataModule  How to use
-	Introduction document
+	
 	Delaunay display as Z or W as option done
 	

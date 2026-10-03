@@ -68,8 +68,8 @@
     <PropertyGroup Condition="'$(Base)'!=''">
         <DCC_Description>Datavis Vulkan runtime package</DCC_Description>
         <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
-        <DCC_DcpOutput>.\$(Platform)\$(Config)</DCC_DcpOutput>
-        <DCC_BplOutput>.\$(Platform)\$(Config)</DCC_BplOutput>
+        <DCC_DcpOutput>$(BDSCOMMONDIR)\Dcp</DCC_DcpOutput>
+        <DCC_BplOutput>$(BDSCOMMONDIR)\Bpl</DCC_BplOutput>
         <RuntimeOnlyPackage>true</RuntimeOnlyPackage>
         <DCC_CBuilderOutput>All</DCC_CBuilderOutput>
         <DCC_OutputNeverBuildDcps>true</DCC_OutputNeverBuildDcps>
@@ -99,7 +99,9 @@
         <EnabledSysJars>android-support-v4.dex.jar;apk-expansion.dex.jar;cloud-messaging.dex.jar;fmx.dex.jar;google-analytics-v2.dex.jar;google-play-billing.dex.jar;google-play-licensing.dex.jar;google-play-services.dex.jar</EnabledSysJars>
         <DCC_CBuilderOutput>None</DCC_CBuilderOutput>
         <Android_LauncherIcon192>$(BDS)\bin\Artwork\Android\FM_LauncherIcon_192x192.png</Android_LauncherIcon192>
-    </PropertyGroup>
+    
+        <DCC_DcpOutput>$(BDSCOMMONDIR)\Dcp\$(Platform)</DCC_DcpOutput>
+        <DCC_BplOutput>$(BDSCOMMONDIR)\Bpl\$(Platform)</DCC_BplOutput></PropertyGroup>
     <PropertyGroup Condition="'$(Base_Android64)'!=''">
         <VerInfo_Keys>package=com.embarcadero.$(MSBuildProjectName);label=$(MSBuildProjectName);versionCode=1;versionName=1.0.0;persistent=False;restoreAnyVersion=False;installLocation=preferExternal;largeHeap=False;theme=TitleBar;hardwareAccelerated=true;apiKey=</VerInfo_Keys>
         <BT_BuildType>Debug</BT_BuildType>
@@ -110,19 +112,27 @@
         <EnabledSysJars>android-support-v4.dex.jar;apk-expansion.dex.jar;cloud-messaging.dex.jar;fmx.dex.jar;google-analytics-v2.dex.jar;google-play-billing.dex.jar;google-play-licensing.dex.jar;google-play-services.dex.jar</EnabledSysJars>
         <DCC_CBuilderOutput>None</DCC_CBuilderOutput>
         <Android_LauncherIcon192>$(BDS)\bin\Artwork\Android\FM_LauncherIcon_192x192.png</Android_LauncherIcon192>
-    </PropertyGroup>
+    
+        <DCC_DcpOutput>$(BDSCOMMONDIR)\Dcp\$(Platform)</DCC_DcpOutput>
+        <DCC_BplOutput>$(BDSCOMMONDIR)\Bpl\$(Platform)</DCC_BplOutput></PropertyGroup>
     <PropertyGroup Condition="'$(Base_iOSDevice64)'!=''">
         <DCC_CBuilderOutput>None</DCC_CBuilderOutput>
         <iOS_AppStore1024>$(BDS)\bin\Artwork\iOS\iPhone\FM_ApplicationIcon_1024x1024.png</iOS_AppStore1024>
-    </PropertyGroup>
+    
+        <DCC_DcpOutput>$(BDSCOMMONDIR)\Dcp\$(Platform)</DCC_DcpOutput>
+        <DCC_BplOutput>$(BDSCOMMONDIR)\Bpl\$(Platform)</DCC_BplOutput></PropertyGroup>
     <PropertyGroup Condition="'$(Base_OSX64)'!=''">
-        <VerInfo_Keys>CFBundleName=$(MSBuildProjectName);CFBundleDisplayName=$(MSBuildProjectName);CFBundleIdentifier=$(MSBuildProjectName);CFBundleVersion=1.0.0;CFBundleShortVersionString=1.0.0;CFBundlePackageType=APPL;CFBundleSignature=????;CFBundleAllowMixedLocalizations=YES;CFBundleExecutable=$(MSBuildProjectName);NSHighResolutionCapable=true;LSApplicationCategoryType=public.app-category.utilities;NSLocationUsageDescription=The reason for accessing the location information of the user;NSContactsUsageDescription=The reason for accessing the contacts;NSCalendarsUsageDescription=The reason for accessing the calendar data;NSRemindersUsageDescription=The reason for accessing the reminders;NSCameraUsageDescription=The reason for accessing the camera;NSMicrophoneUsageDescription=The reason for accessing the microphone;NSMotionUsageDescription=The reason for accessing the accelerometer;NSDesktopFolderUsageDescription=The reason for accessing the Desktop folder;NSDocumentsFolderUsageDescription=The reason for accessing the Documents folder;NSDownloadsFolderUsageDescription=The reason for accessing the Downloads folder;NSNetworkVolumesUsageDescription=The reason for accessing files on a network volume;NSRemovableVolumesUsageDescription=The reason for accessing files on a removable volume;NSSpeechRecognitionUsageDescription=The reason for requesting to send user data to Apple&apos;s speech recognition servers</VerInfo_Keys>
+        <VerInfo_Keys>CFBundleName=$(MSBuildProjectName);CFBundleDisplayName=$(MSBuildProjectName);CFBundleIdentifier=$(MSBuildProjectName);CFBundleVersion=1.0.0;CFBundleShortVersionString=1.0.0;CFBundlePackageType=APPL;CFBundleSignature=????;CFBundleAllowMixedLocalizations=YES;CFBundleExecutable=$(MSBuildProjectName);NSHighResolutionCapable=true;LSApplicationCategoryType=public.app-category.utilities;NSLocationUsageDescription=The reason for accessing the location information of the user;NSContactsUsageDescription=The reason for accessing the contacts;NSCalendarsUsageDescription=The reason for accessing the calendar data;NSRemindersUsageDescription=The reason for accessing the reminders;NSCameraUsageDescription=The reason for accessing the camera;NSMicrophoneUsageDescription=The reason for accessing the microphone;NSMotionUsageDescription=The reason for accessing the accelerometer;NSDesktopFolderUsageDescription=The reason for accessing the Desktop folder;NSDocumentsFolderUsageDescription=The reason for accessing the Documents folder;NSDownloadsFolderUsageDescription=The reason for accessing the Downloads folder;NSNetworkVolumesUsageDescription=The reason for accessing files on a network volume;NSRemovableVolumesUsageDescription=The reason for accessing files on a removable volume;NSSpeechRecognitionUsageDescription=The reason for requesting to send user data to Apple's speech recognition servers</VerInfo_Keys>
         <BT_BuildType>Debug</BT_BuildType>
-    </PropertyGroup>
+    
+        <DCC_DcpOutput>$(BDSCOMMONDIR)\Dcp\$(Platform)</DCC_DcpOutput>
+        <DCC_BplOutput>$(BDSCOMMONDIR)\Bpl\$(Platform)</DCC_BplOutput></PropertyGroup>
     <PropertyGroup Condition="'$(Base_OSXARM64)'!=''">
-        <VerInfo_Keys>CFBundleName=$(MSBuildProjectName);CFBundleDisplayName=$(MSBuildProjectName);CFBundleIdentifier=$(MSBuildProjectName);CFBundleVersion=1.0.0;CFBundleShortVersionString=1.0.0;CFBundlePackageType=APPL;CFBundleSignature=????;CFBundleAllowMixedLocalizations=YES;CFBundleExecutable=$(MSBuildProjectName);NSHighResolutionCapable=true;LSApplicationCategoryType=public.app-category.utilities;NSLocationUsageDescription=The reason for accessing the location information of the user;NSContactsUsageDescription=The reason for accessing the contacts;NSCalendarsUsageDescription=The reason for accessing the calendar data;NSRemindersUsageDescription=The reason for accessing the reminders;NSCameraUsageDescription=The reason for accessing the camera;NSMicrophoneUsageDescription=The reason for accessing the microphone;NSMotionUsageDescription=The reason for accessing the accelerometer;NSDesktopFolderUsageDescription=The reason for accessing the Desktop folder;NSDocumentsFolderUsageDescription=The reason for accessing the Documents folder;NSDownloadsFolderUsageDescription=The reason for accessing the Downloads folder;NSNetworkVolumesUsageDescription=The reason for accessing files on a network volume;NSRemovableVolumesUsageDescription=The reason for accessing files on a removable volume;NSSpeechRecognitionUsageDescription=The reason for requesting to send user data to Apple&apos;s speech recognition servers</VerInfo_Keys>
+        <VerInfo_Keys>CFBundleName=$(MSBuildProjectName);CFBundleDisplayName=$(MSBuildProjectName);CFBundleIdentifier=$(MSBuildProjectName);CFBundleVersion=1.0.0;CFBundleShortVersionString=1.0.0;CFBundlePackageType=APPL;CFBundleSignature=????;CFBundleAllowMixedLocalizations=YES;CFBundleExecutable=$(MSBuildProjectName);NSHighResolutionCapable=true;LSApplicationCategoryType=public.app-category.utilities;NSLocationUsageDescription=The reason for accessing the location information of the user;NSContactsUsageDescription=The reason for accessing the contacts;NSCalendarsUsageDescription=The reason for accessing the calendar data;NSRemindersUsageDescription=The reason for accessing the reminders;NSCameraUsageDescription=The reason for accessing the camera;NSMicrophoneUsageDescription=The reason for accessing the microphone;NSMotionUsageDescription=The reason for accessing the accelerometer;NSDesktopFolderUsageDescription=The reason for accessing the Desktop folder;NSDocumentsFolderUsageDescription=The reason for accessing the Documents folder;NSDownloadsFolderUsageDescription=The reason for accessing the Downloads folder;NSNetworkVolumesUsageDescription=The reason for accessing files on a network volume;NSRemovableVolumesUsageDescription=The reason for accessing files on a removable volume;NSSpeechRecognitionUsageDescription=The reason for requesting to send user data to Apple's speech recognition servers</VerInfo_Keys>
         <BT_BuildType>Debug</BT_BuildType>
-    </PropertyGroup>
+    
+        <DCC_DcpOutput>$(BDSCOMMONDIR)\Dcp\$(Platform)</DCC_DcpOutput>
+        <DCC_BplOutput>$(BDSCOMMONDIR)\Bpl\$(Platform)</DCC_BplOutput></PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win32)'!=''">
         <VerInfo_Keys>CompanyName=;FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductVersion=1.0.0.0;Comments=;ProgramID=com.embarcadero.$(MSBuildProjectName);FileDescription=$(MSBuildProjectName);ProductName=$(MSBuildProjectName)</VerInfo_Keys>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
@@ -134,7 +144,9 @@
         <VerInfo_Locale>1033</VerInfo_Locale>
         <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;$(DCC_Namespace)</DCC_Namespace>
         <VerInfo_Keys>CompanyName=;FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductVersion=1.0.0.0;Comments=;ProgramID=com.embarcadero.$(MSBuildProjectName);FileDescription=$(MSBuildProjectName);ProductName=$(MSBuildProjectName)</VerInfo_Keys>
-    </PropertyGroup>
+    
+        <DCC_DcpOutput>$(BDSCOMMONDIR)\Dcp\$(Platform)</DCC_DcpOutput>
+        <DCC_BplOutput>$(BDSCOMMONDIR)\Bpl\$(Platform)</DCC_BplOutput></PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2)'!=''">
         <DCC_LocalDebugSymbols>false</DCC_LocalDebugSymbols>
         <DCC_Define>RELEASE;$(DCC_Define)</DCC_Define>
@@ -154,48 +166,49 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
-        <DCCReference Include="rtl.dcp"/>
-        <DCCReference Include="Vulkan.pas"/>
-        <DCCReference Include="PasVulkan.Types.pas"/>
-        <DCCReference Include="PasVulkan.Math.pas"/>
-        <DCCReference Include="PasVulkan.Math.Double.pas"/>
-        <DCCReference Include="PasVulkan.Collections.pas"/>
-        <DCCReference Include="PasVulkan.Utils.pas"/>
-        <DCCReference Include="PasVulkan.Streams.pas"/>
-        <DCCReference Include="PasVulkan.XML.pas"/>
-        <DCCReference Include="PasVulkan.CPU.Info.pas"/>
-        <DCCReference Include="PasVulkan.HighResolutionTimer.pas"/>
-        <DCCReference Include="PasVulkan.Compression.Deflate.pas"/>
-        <DCCReference Include="PasVulkan.Image.BMP.pas"/>
-        <DCCReference Include="PasVulkan.Image.JPEG.pas"/>
-        <DCCReference Include="PasVulkan.Image.PNG.pas"/>
-        <DCCReference Include="PasVulkan.Image.QOI.pas"/>
-        <DCCReference Include="PasVulkan.Image.TGA.pas"/>
-        <DCCReference Include="PasVulkan.Image.Utils.pas"/>
-        <DCCReference Include="PasVulkan.NVIDIA.AfterMath.pas"/>
-        <DCCReference Include="PasVulkan.Framework.pas"/>
-        <DCCReference Include="PasMP.pas"/>
-        <DCCReference Include="PasJSON.pas"/>
-        <DCCReference Include="PUCU.pas"/>
-        <DCCReference Include="PasDblStrUtils.pas"/>
-        <DCCReference Include="..\RunTime_Src\Vulkan_Components.pas"/>
-        <DCCReference Include="..\RunTime_Src\Vulkan_Components_Lookups.pas"/>
-        <DCCReference Include="..\RunTime_Src\Vulkan_Components_Descriptors.pas"/>
-        <DCCReference Include="..\RunTime_Src\Vulkan_Assert.pas"/>
-        <DCCReference Include="..\RunTime_Src\Vulkan_WorldAxes.pas"/>
-        <DCCReference Include="..\RunTime_Src\Vulkan_Components_Scene_Renderer.pas"/>
-        <DCCReference Include="..\RunTime_Src\Vulkan_PixelInfo.pas"/>
-        <DCCReference Include="..\RunTime_Src\Vulkan_Components_Camera.pas"/>
-        <DCCReference Include="..\RunTime_Src\Vulkan_HUD.pas"/>
-        <DCCReference Include="..\RunTime_Src\Vulkan_Components_DataStore.pas"/>
-        <DCCReference Include="..\RunTime_Src\Vulkan_Components_Nodes.pas"/>
-        <DCCReference Include="..\RunTime_Src\Vulkan_Components_PointerValidation.pas"/>
-        <DCCReference Include="..\RunTime_Src\Vulkan_CriticalSection.pas"/>
-        <DCCReference Include="..\RunTime_Src\Vulkan_Components_ShaderCompiler.pas"/>
-        <DCCReference Include="..\RunTime_Src\Vulkan_Components_Compute.pas"/>
-        <DCCReference Include="..\RunTime_Src\Vulkan_SceneLoaders.pas"/>
-        <DCCReference Include="..\RunTime_Src\Vulkan_Components_Light.pas"/>
-        <DCCReference Include="..\RunTime_Src\Vulkan_Components_TextureInspector.pas"/>
+        <DCCReference Include="rtl.dcp" />
+        <DCCReference Include="Vulkan.pas" />
+        <DCCReference Include="PasVulkan.Types.pas" />
+        <DCCReference Include="PasVulkan.Math.pas" />
+        <DCCReference Include="PasVulkan.Math.Double.pas" />
+        <DCCReference Include="PasVulkan.Collections.pas" />
+        <DCCReference Include="PasVulkan.Utils.pas" />
+        <DCCReference Include="PasVulkan.CrashReport.pas" />
+        <DCCReference Include="PasVulkan.SymbolTable.pas" />
+        <DCCReference Include="PasVulkan.Streams.pas" />
+        <DCCReference Include="PasVulkan.CPU.Info.pas" />
+        <DCCReference Include="PasVulkan.HighResolutionTimer.pas" />
+        <DCCReference Include="PasVulkan.Compression.Deflate.pas" />
+        <DCCReference Include="PasVulkan.Image.BMP.pas" />
+        <DCCReference Include="PasVulkan.Image.JPEG.pas" />
+        <DCCReference Include="PasVulkan.Image.PNG.pas" />
+        <DCCReference Include="PasVulkan.Image.QOI.pas" />
+        <DCCReference Include="PasVulkan.Image.TGA.pas" />
+        <DCCReference Include="PasVulkan.Image.Utils.pas" />
+        <DCCReference Include="PasVulkan.NVIDIA.AfterMath.pas" />
+        <DCCReference Include="PasVulkan.Framework.pas" />
+        <DCCReference Include="PasMP.pas" />
+        <DCCReference Include="PasJSON.pas" />
+        <DCCReference Include="PUCU.pas" />
+        <DCCReference Include="PasDblStrUtils.pas" />
+        <DCCReference Include="..\RunTime_Src\Vulkan_Components.pas" />
+        <DCCReference Include="..\RunTime_Src\Vulkan_Components_Lookups.pas" />
+        <DCCReference Include="..\RunTime_Src\Vulkan_Components_Descriptors.pas" />
+        <DCCReference Include="..\RunTime_Src\Vulkan_Assert.pas" />
+        <DCCReference Include="..\RunTime_Src\Vulkan_WorldAxes.pas" />
+        <DCCReference Include="..\RunTime_Src\Vulkan_Components_Scene_Renderer.pas" />
+        <DCCReference Include="..\RunTime_Src\Vulkan_PixelInfo.pas" />
+        <DCCReference Include="..\RunTime_Src\Vulkan_Components_Camera.pas" />
+        <DCCReference Include="..\RunTime_Src\Vulkan_HUD.pas" />
+        <DCCReference Include="..\RunTime_Src\Vulkan_Components_DataStore.pas" />
+        <DCCReference Include="..\RunTime_Src\Vulkan_Components_Nodes.pas" />
+        <DCCReference Include="..\RunTime_Src\Vulkan_Components_PointerValidation.pas" />
+        <DCCReference Include="..\RunTime_Src\Vulkan_CriticalSection.pas" />
+        <DCCReference Include="..\RunTime_Src\Vulkan_Components_ShaderCompiler.pas" />
+        <DCCReference Include="..\RunTime_Src\Vulkan_Components_Compute.pas" />
+        <DCCReference Include="..\RunTime_Src\Vulkan_SceneLoaders.pas" />
+        <DCCReference Include="..\RunTime_Src\Vulkan_Components_Light.pas" />
+        <DCCReference Include="..\RunTime_Src\Vulkan_Components_TextureInspector.pas" />
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
@@ -257,7 +270,7 @@
                         <Overwrite>true</Overwrite>
                     </Platform>
                 </DeployFile>
-                <DeployFile LocalName="$(BDS)\Redist\iossim32\libcgunwind.1.0.dylib" Class="DependencyModule"/>
+                <DeployFile LocalName="$(BDS)\Redist\iossim32\libcgunwind.1.0.dylib" Class="DependencyModule" />
                 <DeployClass Name="AdditionalDebugSymbols">
                     <Platform Name="OSX32">
                         <Operation>1</Operation>
@@ -863,9 +876,9 @@
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
-                <DeployClass Name="ProjectiOSEntitlements"/>
-                <DeployClass Name="ProjectiOSInfoPList"/>
-                <DeployClass Name="ProjectiOSLaunchScreen"/>
+                <DeployClass Name="ProjectiOSEntitlements" />
+                <DeployClass Name="ProjectiOSInfoPList" />
+                <DeployClass Name="ProjectiOSLaunchScreen" />
                 <DeployClass Name="ProjectiOSResource">
                     <Platform Name="iOSDevice32">
                         <Operation>1</Operation>
@@ -877,9 +890,9 @@
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
-                <DeployClass Name="ProjectOSXDebug"/>
-                <DeployClass Name="ProjectOSXEntitlements"/>
-                <DeployClass Name="ProjectOSXInfoPList"/>
+                <DeployClass Name="ProjectOSXDebug" />
+                <DeployClass Name="ProjectOSXEntitlements" />
+                <DeployClass Name="ProjectOSXInfoPList" />
                 <DeployClass Name="ProjectOSXResource">
                     <Platform Name="OSX32">
                         <RemoteDir>Contents\Resources</RemoteDir>
@@ -962,17 +975,17 @@
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
-                <ProjectRoot Platform="OSX32" Name="$(PROJECTNAME)"/>
-                <ProjectRoot Platform="OSX64" Name="$(PROJECTNAME)"/>
-                <ProjectRoot Platform="Win32" Name="$(PROJECTNAME)"/>
-                <ProjectRoot Platform="Android64" Name="$(PROJECTNAME)"/>
-                <ProjectRoot Platform="Android" Name="$(PROJECTNAME)"/>
-                <ProjectRoot Platform="Win64" Name="$(PROJECTNAME)"/>
-                <ProjectRoot Platform="OSXARM64" Name="$(PROJECTNAME)"/>
-                <ProjectRoot Platform="iOSDevice32" Name="$(PROJECTNAME).app"/>
-                <ProjectRoot Platform="iOSDevice64" Name="$(PROJECTNAME).app"/>
-                <ProjectRoot Platform="Linux64" Name="$(PROJECTNAME)"/>
-                <ProjectRoot Platform="iOSSimulator" Name="$(PROJECTNAME).app"/>
+                <ProjectRoot Platform="OSX32" Name="$(PROJECTNAME)" />
+                <ProjectRoot Platform="OSX64" Name="$(PROJECTNAME)" />
+                <ProjectRoot Platform="Win32" Name="$(PROJECTNAME)" />
+                <ProjectRoot Platform="Android64" Name="$(PROJECTNAME)" />
+                <ProjectRoot Platform="Android" Name="$(PROJECTNAME)" />
+                <ProjectRoot Platform="Win64" Name="$(PROJECTNAME)" />
+                <ProjectRoot Platform="OSXARM64" Name="$(PROJECTNAME)" />
+                <ProjectRoot Platform="iOSDevice32" Name="$(PROJECTNAME).app" />
+                <ProjectRoot Platform="iOSDevice64" Name="$(PROJECTNAME).app" />
+                <ProjectRoot Platform="Linux64" Name="$(PROJECTNAME)" />
+                <ProjectRoot Platform="iOSSimulator" Name="$(PROJECTNAME).app" />
             </Deployment>
             <Platforms>
                 <Platform value="Android">False</Platform>
@@ -986,7 +999,7 @@
         </BorlandProject>
         <ProjectFileVersion>12</ProjectFileVersion>
     </ProjectExtensions>
-    <Import Project="$(BDS)\Bin\CodeGear.Delphi.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Delphi.Targets')"/>
-    <Import Project="$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj" Condition="Exists('$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj')"/>
-    <Import Project="$(MSBuildProjectName).deployproj" Condition="Exists('$(MSBuildProjectName).deployproj')"/>
+    <Import Project="$(BDS)\Bin\CodeGear.Delphi.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Delphi.Targets')" />
+    <Import Project="$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj" Condition="Exists('$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj')" />
+    <Import Project="$(MSBuildProjectName).deployproj" Condition="Exists('$(MSBuildProjectName).deployproj')" />
 </Project>
