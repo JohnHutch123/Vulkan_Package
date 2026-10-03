@@ -1,0 +1,35 @@
+diff --git a/externals/pasmp/src/PasMP.pas b/externals/pasmp/src/PasMP.pas
+index 7b60467d4..96cd929ba 100644
+--- a/externals/pasmp/src/PasMP.pas
++++ b/externals/pasmp/src/PasMP.pas
+@@ -767,10 +767,10 @@ type TPasMPAvailableCPUCores=array of TPasMPInt32;
+        class function Increment(var Destination:TPasMPUInt16):TPasMPUInt16; overload; {$ifdef HAS_STATIC}static;{$endif}{$if defined(cpu386) or defined(cpux86_64)}register;{$else}{$if defined(HAS_ATOMICS) or defined(fpc)}inline;{$ifend}{$ifend}
+        class function Increment(var Destination:TPasMPInt32):TPasMPInt32; overload; {$ifdef HAS_STATIC}static;{$endif}{$if defined(HAS_ATOMICS) or defined(fpc)}inline;{$ifend}
+        class function Increment(var Destination:TPasMPUInt32):TPasMPUInt32; overload; {$ifdef HAS_STATIC}static;{$endif}{$if defined(HAS_ATOMICS) or defined(fpc)}inline;{$ifend}
+-{$ifdef CPU64}
++{$if defined(CPU64) or defined(cpu386)} // 64-bit atomics are available on x86-32 too (cmpxchg8b)
+        class function Increment(var Destination:TPasMPInt64):TPasMPInt64; overload; {$ifdef HAS_STATIC}static;{$endif}{$if defined(HAS_ATOMICS) or defined(fpc)}inline;{$ifend}
+        class function Increment(var Destination:TPasMPUInt64):TPasMPUInt64; overload; {$ifdef HAS_STATIC}static;{$endif}{$if defined(HAS_ATOMICS) or defined(fpc)}inline;{$ifend}
+-{$endif}
++{$ifend}
+        class function Decrement(var Destination:TPasMPInt8):TPasMPInt8; overload; {$ifdef HAS_STATIC}static;{$endif}{$if defined(cpu386) or defined(cpux86_64)}register;{$else}{$if defined(HAS_ATOMICS) or defined(fpc)}inline;{$ifend}{$ifend}
+        class function Decrement(var Destination:TPasMPUInt8):TPasMPUInt8; overload; {$ifdef HAS_STATIC}static;{$endif}{$if defined(cpu386) or defined(cpux86_64)}register;{$else}{$if defined(HAS_ATOMICS) or defined(fpc)}inline;{$ifend}{$ifend}
+        class function Decrement(var Destination:TPasMPInt16):TPasMPInt16; overload; {$ifdef HAS_STATIC}static;{$endif}{$if defined(cpu386) or defined(cpux86_64)}register;{$else}{$if defined(HAS_ATOMICS) or defined(fpc)}inline;{$ifend}{$ifend}
+@@ -4983,7 +4983,7 @@ begin
+ {$endif}
+ end;
+ 
+-{$ifdef CPU64}
++{$if defined(CPU64) or defined(cpu386)} // 64-bit atomics are available on x86-32 too (cmpxchg8b)
+ class function TPasMPInterlocked.Increment(var Destination:TPasMPInt64):TPasMPInt64;
+ begin
+ {$ifdef HAS_ATOMICS}
+@@ -5001,7 +5001,7 @@ begin
+  result:=TPasMPUInt64(TPasMPInt64(InterlockedIncrement64(TPasMPInt64(Destination))));
+ {$endif}
+ end;
+-{$endif}
++{$ifend}
+ 
+ class function TPasMPInterlocked.Decrement(var Destination:TPasMPInt8):TPasMPInt8;
+ {$if defined(cpu386)}

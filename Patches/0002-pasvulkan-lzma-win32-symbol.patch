@@ -1,0 +1,13 @@
+diff --git a/src/PasVulkan.Compression.LZMA.pas b/src/PasVulkan.Compression.LZMA.pas
+index c68f3d98d..7b0e2e5fe 100644
+--- a/src/PasVulkan.Compression.LZMA.pas
++++ b/src/PasVulkan.Compression.LZMA.pas
+@@ -3683,7 +3683,7 @@ const LZMA_FINISH_ANY=0;
+ 
+       SZ_OK=0;
+ 
+-function C_LzmaDecode(dest:pointer;destLen:PpvSizeUInt;src:pointer;srcLen:PpvSizeUInt;propData:pointer;propSize:TpvSizeUInt;finishMode:TpvInt32;status:PpvInt32;alloc:PISzAlloc):TPvInt32; cdecl; external name 'LzmaDecode';
++function C_LzmaDecode(dest:pointer;destLen:PpvSizeUInt;src:pointer;srcLen:PpvSizeUInt;propData:pointer;propSize:TpvSizeUInt;finishMode:TpvInt32;status:PpvInt32;alloc:PISzAlloc):TPvInt32; cdecl; external name {$if defined(Windows) and defined(cpu386)}'_LzmaDecode'{$else}'LzmaDecode'{$ifend}; // Win32 COFF decorates cdecl symbols with a leading underscore
+ {$endif}
+ 
+ function LZMADecompress(const aInData:TpvPointer;aInLen:TpvUInt64;var aDestData:TpvPointer;out aDestLen:TpvUInt64;const aOutputSize:TpvInt64;const aWithSize:boolean):boolean;

@@ -3,46 +3,46 @@
         <ProjectGuid>{0F2344BF-E5BB-4180-A8FC-249C020520FE}</ProjectGuid>
     </PropertyGroup>
     <ItemGroup>
-        <Projects Include="VulkanPkgR280.dproj">
-            <Dependencies/>
+        <Projects Include="VulkanPkgR290.dproj">
+            <Dependencies />
         </Projects>
-        <Projects Include="VulkanPkgD280.dproj">
-            <Dependencies/>
+        <Projects Include="VulkanPkgD290.dproj">
+            <Dependencies />
         </Projects>
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Default.Personality.12</Borland.Personality>
-        <Borland.ProjectType/>
+        <Borland.ProjectType />
         <BorlandProject>
-            <Default.Personality/>
+            <Default.Personality />
         </BorlandProject>
     </ProjectExtensions>
-    <Target Name="VulkanPkgR280">
-        <MSBuild Projects="VulkanPkgR280.dproj"/>
+    <Target Name="VulkanPkgR290">
+        <MSBuild Projects="VulkanPkgR290.dproj" />
     </Target>
-    <Target Name="VulkanPkgR280:Clean">
-        <MSBuild Projects="VulkanPkgR280.dproj" Targets="Clean"/>
+    <Target Name="VulkanPkgR290:Clean">
+        <MSBuild Projects="VulkanPkgR290.dproj" Targets="Clean" />
     </Target>
-    <Target Name="VulkanPkgR280:Make">
-        <MSBuild Projects="VulkanPkgR280.dproj" Targets="Make"/>
+    <Target Name="VulkanPkgR290:Make">
+        <MSBuild Projects="VulkanPkgR290.dproj" Targets="Make" />
     </Target>
-    <Target Name="VulkanPkgD280">
-        <MSBuild Projects="VulkanPkgD280.dproj"/>
+    <Target Name="VulkanPkgD290">
+        <MSBuild Projects="VulkanPkgD290.dproj" />
     </Target>
-    <Target Name="VulkanPkgD280:Clean">
-        <MSBuild Projects="VulkanPkgD280.dproj" Targets="Clean"/>
+    <Target Name="VulkanPkgD290:Clean">
+        <MSBuild Projects="VulkanPkgD290.dproj" Targets="Clean" />
     </Target>
-    <Target Name="VulkanPkgD280:Make">
-        <MSBuild Projects="VulkanPkgD280.dproj" Targets="Make"/>
+    <Target Name="VulkanPkgD290:Make">
+        <MSBuild Projects="VulkanPkgD290.dproj" Targets="Make" />
     </Target>
     <Target Name="Build">
-        <CallTarget Targets="VulkanPkgR280;VulkanPkgD280"/>
+        <CallTarget Targets="VulkanPkgR290;VulkanPkgD290" />
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="VulkanPkgR280:Clean;VulkanPkgD280:Clean"/>
+        <CallTarget Targets="VulkanPkgR290:Clean;VulkanPkgD290:Clean" />
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="VulkanPkgR280:Make;VulkanPkgD280:Make"/>
+        <CallTarget Targets="VulkanPkgR290:Make;VulkanPkgD290:Make" />
     </Target>
-    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')" />
 </Project>
