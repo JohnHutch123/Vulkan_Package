@@ -41,6 +41,8 @@ contains
   PasVulkan.Math.Double,
   PasVulkan.Collections,
   PasVulkan.Utils,
+  PasVulkan.CrashReport,
+  PasVulkan.SymbolTable,
   PasVulkan.Streams,
   PasVulkan.XML,
   PasVulkan.CPU.Info,

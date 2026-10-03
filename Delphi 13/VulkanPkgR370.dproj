@@ -120,6 +120,8 @@
         <DCCReference Include="PasVulkan.Math.Double.pas"/>
         <DCCReference Include="PasVulkan.Collections.pas"/>
         <DCCReference Include="PasVulkan.Utils.pas"/>
+        <DCCReference Include="PasVulkan.CrashReport.pas"/>
+        <DCCReference Include="PasVulkan.SymbolTable.pas"/>
         <DCCReference Include="PasVulkan.Streams.pas"/>
         <DCCReference Include="PasVulkan.XML.pas"/>
         <DCCReference Include="PasVulkan.CPU.Info.pas"/>
