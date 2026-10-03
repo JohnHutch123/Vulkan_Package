@@ -109,7 +109,8 @@ rebuild to change it, and one test exe couldn't cover both conventions.
 ## 3. Implementation steps
 
 1. **Add `Vulkan_WorldAxes.pas`** as above. Add to the `contains` lists of
-   `Delphi 11/12/13/VulkanPkgR280.dpk`, the `Delphi 12/13` `.dproj` files, and
+   `Delphi 11/VulkanPkgR280.dpk`, `Delphi 12/VulkanPkgR290.dpk`, and
+   `Delphi 13/VulkanPkgR370.dpk`, their matching `.dproj` files, and
    `Samples/TestVulkan/VulcanTest.dpr/.dproj`. Add the `.inc` define (commented).
 2. **Camera.** The constructor and `InitializeAsDefault` use `vgFromYUp(...)` for position
    and `vgWorldUp` for up. Register/unregister the live-instance count.

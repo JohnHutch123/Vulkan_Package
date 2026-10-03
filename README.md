@@ -22,12 +22,21 @@ Datavis (johnh@datavis.com.au); the link works once you have been given access.
 `SceneCleared`) so a descendant can add interactive tools without the scene
 knowing about them.
 
+Every package name ends with the version of the Delphi release it is built with:
+
+| Delphi | Core runtime | Core design | VCL runtime | VCL design | SDL2 | FMX |
+|---|---|---|---|---|---|---|
+| XE8 | `VulkanPkgR220` | `VulkanPkgD220` | `VulkanPkg_VCLR220` | `VulkanPkg_VCLD220` | `VulkanPkg_SDL2_220D` | `VulkanPkg_FMXR220` |
+| 11 | `VulkanPkgR280` | `VulkanPkgD280` | `VulkanPkg_VCLR280` | `VulkanPkg_VCLD280` | `VulkanPkg_SDL2R280` | `VulkanPkg_FMXR280` |
+| 12 | `VulkanPkgR290` | `VulkanPkgD290` | `VulkanPkg_VCLR290` | `VulkanPkg_VCLD290` | `VulkanPkg_SDL2R290` | `VulkanPkg_FMXR290` |
+| 13 | `VulkanPkgR370` | `VulkanPkgD370` | `VulkanPkg_VCLR370` | `VulkanPkg_VCLD370` | `VulkanPkg_SDL2R370` | `VulkanPkg_FMXR370` |
+
 To use PRO, clone both repositories side by side and build the public
 packages first:
 
 ```
 <parent>\Vulkan_Package        (public)
-<parent>\Vulkan_Package_PRO    (PRO: its packages require VulkanPkgR280)
+<parent>\Vulkan_Package_PRO    (PRO packages require the matching VulkanPkgRxxx)
 ```
 
 ```
@@ -78,8 +87,11 @@ and connects it to a `TvgWindowVCL` on any form.
 - **At run time:** call `EnableSession` once the window's form is showing (e.g. in `OnShow`),
   `DisableSession` to shut down.
 
-Files: `RunTime_Src/Vulkan_DataModule.pas` (runtime base class, in `VulkanPkg_VCLR280`), and
-`Design_Src/VulkanPkg_DataModuleReg.pas` and `Design_Src/VulkanDataModuleEditFM.pas/.dfm` (IDE side, in `VulkanPkg_VCLD280`).
+See [`RunTime_Src/DATA_MODULE_GUIDE.md`](RunTime_Src/DATA_MODULE_GUIDE.md) for a step-by-step guide.
+
+Files: `RunTime_Src/Vulkan_DataModule.pas` (runtime base class, in the VCL runtime package, e.g.
+`VulkanPkg_VCLR290`), and `Design_Src/VulkanPkg_DataModuleReg.pas` and `Design_Src/VulkanDataModuleEditFM.pas/.dfm`
+(IDE side, in the VCL design package, e.g. `VulkanPkg_VCLD290`).
 
 ---
 
@@ -102,7 +114,7 @@ Instance1.Active  := True;      // creates the SDL window and its surface
   destroyed, while other windows keep running. `Active := True` opens it again.
 - **SDL** is started with the first window and stopped with the last, so linking the unit alone does not
   touch it. Needs SDL 2.0.6 or later.
-- **Package:** `VulkanPkg_SDL2R280` (runtime, requires `VulkanPkgR280`) builds with `PasVulkanUseSDL2`,
+- **Package:** `VulkanPkg_SDL2Rxxx` (runtime, requires the matching `VulkanPkgRxxx`; `VulkanPkg_SDL2_220D` for XE8) builds with `PasVulkanUseSDL2`,
   `PasVulkanUseSDL2WithVulkanSupport` and `PasVulkanUseSDL2WithStaticVulkanSupport`. `PasVulkan.SDL2`
   links against `sdl2.dll` on Win32 but `sdl264.dll` on Win64, so a Win64 application has to ship SDL2.dll
   under that name.
