@@ -101,8 +101,8 @@ uses
   Vulkan_Components,
   Vulkan_Components_Lookups,
   Vulkan_Components_Scene_Renderer,
-  Vulkan_SceneLoaders,
-  Vulkan_WindowVCL;
+  Vulkan_SceneLoaders;//,
+ // Vulkan_WindowVCL;
 
 type
   EvgVulkanSessionError = class(Exception);
@@ -123,7 +123,8 @@ type
     fPhysicalDevice    : TvgPhysicalDevice;
     fScreenDevice      : TvgScreenRenderDevice;
     fLinker            : TvgLinker;
-    fWindow            : TvgWindowVCL;
+
+    fWindowIntf        : IvgVulkanWindow;
 
     fScene             : TvgScene;
     fRenderer          : TvgRenderEngine;
@@ -141,7 +142,7 @@ type
     procedure SetPhysicalDevice(const Value: TvgPhysicalDevice);
     procedure SetScreenDevice(const Value: TvgScreenRenderDevice);
     procedure SetLinker(const Value: TvgLinker);
-    procedure SetWindow(const Value: TvgWindowVCL);
+    procedure SetWindow(const Value: IvgVulkanWindow);
     procedure SetScene(const Value: TvgScene);
     procedure SetRenderer(const Value: TvgRenderEngine);
     procedure SetSceneLoader(const Value: TvgSceneLoaderStorer);
@@ -538,7 +539,7 @@ begin
   If AComponent = fPhysicalDevice then fPhysicalDevice := nil;
   If AComponent = fScreenDevice   then fScreenDevice   := nil;
   If AComponent = fLinker         then fLinker         := nil;
-  If AComponent = fWindow         then fWindow         := nil;
+//  If AComponent = fWindowIntf         then fWindow         := nil;
   If AComponent = fScene          then fScene          := nil;
   If AComponent = fRenderer       then fRenderer       := nil;
   If AComponent = fSceneLoader    then fSceneLoader    := nil;
@@ -598,13 +599,13 @@ begin
   ReferenceChanged(Old, Value);
 end;
 
-procedure TvgVulkanDataModule.SetWindow(const Value: TvgWindowVCL);
-  Var Old : TComponent;
+procedure TvgVulkanDataModule.SetWindow(const Value: IvgVulkanWindow);
+  Var Old : IvgVulkanWindow;
 begin
-  If fWindow = Value then exit;
+  If fWindowIntf = Value then exit;
   DisableSession;
-  Old     := fWindow;
-  fWindow := Value;
+  Old     := fWindowIntf;
+  fWindowIntf := Value;
   ReferenceChanged(Old, Value);
 end;
 
