@@ -163,6 +163,13 @@ type
     constructor CreateNew(AOwner: TComponent; Dummy: Integer = 0); override;
     destructor Destroy; override;
 
+    { Design time: gives each unassigned reference (Scene, ToolManager,
+      Renderer, SceneLoader, Instance, devices, Linker) the first component of
+      that kind this module owns, then links them.  The designer calls it after
+      a component is dropped on the module: Notification runs inside the new
+      component's constructor, too early to link it. }
+    procedure AdoptComponents;
+
     { Creates whichever of Instance, PhysicalDevice, ScreenDevice and Linker is
       missing, then wires the primary chain.  Without a factory the components
       are created in code, owned by this module. }
@@ -536,9 +543,43 @@ begin
   inherited;
 end;
 
+procedure TvgVulkanDataModule.AdoptComponents;
+  Var I : Integer;
+      C : TComponent;
+begin
+  If (csLoading in ComponentState) or (csDestroying in ComponentState) then exit;
+
+  //each setter rewires the session (ConnectSession), so a slot is only filled
+  //when empty, and the module's own parts are never replaced
+  For I := 0 to ComponentCount - 1 do
+  Begin
+    C := Components[I];
+
+    If (C is TvgInstance)           and not assigned(fInstance)       then Instance       := TvgInstance(C)
+    else
+    If (C is TvgPhysicalDevice)     and not assigned(fPhysicalDevice) then PhysicalDevice := TvgPhysicalDevice(C)
+    else
+    If (C is TvgScreenRenderDevice) and not assigned(fScreenDevice)   then ScreenDevice   := TvgScreenRenderDevice(C)
+    else
+    If (C is TvgLinker)             and not assigned(fLinker)         then Linker         := TvgLinker(C)
+    else
+    If (C is TvgScene)              and not assigned(fScene)          then Scene          := TvgScene(C)
+    else
+    If (C is TvgRenderEngine)       and not assigned(fRenderer)       then Renderer       := TvgRenderEngine(C)
+    else
+    If (C is TvgSceneLoaderStorer)  and not assigned(fSceneLoader)    then SceneLoader    := TvgSceneLoaderStorer(C)
+    else
+    If (C is TvgToolManager)        and not assigned(fToolManager)    then ToolManager    := TvgToolManager(C);
+  End;
+
+  //a slot that was already filled still needs the new part linked to it
+  ConnectSession;
+end;
+
 procedure TvgVulkanDataModule.Notification(AComponent: TComponent; Operation: TOperation);
 begin
   inherited;
+
 
   If Operation <> opRemove then exit;
 
