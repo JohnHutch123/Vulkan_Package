@@ -93,6 +93,20 @@ type
   TvgWizardGlyph = Cardinal;
   {$IFEND}
 
+  { A component dropped on a TvgVulkanDataModule is linked into its session
+    (Scene.Linker, ToolManager.Scene ...).  Done here, once the designer has
+    finished creating it: the module's Notification runs inside the new
+    component's constructor, when nothing can be linked to it yet. }
+  TvgModuleDropNotification = class(TInterfacedObject, IDesignNotification)
+  public
+    procedure ItemDeleted(const ADesigner: IDesigner; AItem: TPersistent);
+    procedure ItemInserted(const ADesigner: IDesigner; AItem: TPersistent);
+    procedure ItemsModified(const ADesigner: IDesigner);
+    procedure SelectionChanged(const ADesigner: IDesigner; const ASelection: IDesignerSelections);
+    procedure DesignerOpened(const ADesigner: IDesigner; AResurrecting: Boolean);
+    procedure DesignerClosed(const ADesigner: IDesigner; ADestroying: Boolean);
+  end;
+
   { Active on a session component: True tests the whole session. }
   TvgSessionActiveProperty = class(TBoolProperty)
   public
@@ -252,8 +266,40 @@ const
                                                                      sLineBreak +
     'end.'                                                         + sLineBreak;
 
+var
+  DropNotification : IDesignNotification;
+
+procedure TvgModuleDropNotification.ItemInserted(const ADesigner: IDesigner; AItem: TPersistent);
+begin
+  If (AItem is TComponent) and (TComponent(AItem).Owner is TvgVulkanDataModule) then
+    TvgVulkanDataModule(TComponent(AItem).Owner).AdoptComponents;
+end;
+
+procedure TvgModuleDropNotification.ItemDeleted(const ADesigner: IDesigner; AItem: TPersistent);
+begin
+end;
+
+procedure TvgModuleDropNotification.ItemsModified(const ADesigner: IDesigner);
+begin
+end;
+
+procedure TvgModuleDropNotification.SelectionChanged(const ADesigner: IDesigner; const ASelection: IDesignerSelections);
+begin
+end;
+
+procedure TvgModuleDropNotification.DesignerOpened(const ADesigner: IDesigner; AResurrecting: Boolean);
+begin
+end;
+
+procedure TvgModuleDropNotification.DesignerClosed(const ADesigner: IDesigner; ADestroying: Boolean);
+begin
+end;
+
 procedure Register;
 begin
+  DropNotification := TvgModuleDropNotification.Create;
+  RegisterDesignNotification(DropNotification);
+
   RegisterComponents('Vulkan Graphics', [TvgScreenRenderDevice, TvgScene, TvgToolManager]);
 
   RegisterComponentEditor(TvgScene, TvgSceneEditor);
@@ -808,5 +854,14 @@ function TvgSourceFile.GetSource: string;
 begin
   Result := fSource;
 end;
+
+initialization
+
+finalization
+  If assigned(DropNotification) then
+  Begin
+    UnregisterDesignNotification(DropNotification);
+    DropNotification := nil;
+  End;
 
 end.

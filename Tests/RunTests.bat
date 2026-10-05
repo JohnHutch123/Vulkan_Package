@@ -65,7 +65,7 @@ set "UNITS=-U"%BDS%\lib\win32\release" -U"%PASVULKAN%\src" -U"%PASVULKAN%" -U"%P
 
 set FAILED=0
 
-for %%T in (FrustumTest AABBTest BoundsTest DataStoreEditTest SceneEditTest CullTest AxisConventionTest CameraTest ZoomAllTest DynamicRenderingTest SceneLinkTest) do (
+for %%T in (FrustumTest AABBTest BoundsTest DataStoreEditTest SceneEditTest CullTest AxisConventionTest CameraTest ZoomAllTest DynamicRenderingTest SceneLinkTest DataModuleWindowTest) do (
   echo === %%T ===
 
   "%DCC%" -Q -B --no-config -NSSystem;System.Win;Winapi;Vcl;Vcl.Imaging;Data;Xml ^

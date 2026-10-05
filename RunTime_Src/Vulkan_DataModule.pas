@@ -101,8 +101,7 @@ uses
   Vulkan_Components,
   Vulkan_Components_Lookups,
   Vulkan_Components_Scene_Renderer,
-  Vulkan_SceneLoaders;//,
- // Vulkan_WindowVCL;
+  Vulkan_SceneLoaders;
 
 type
   EvgVulkanSessionError = class(Exception);
@@ -124,6 +123,7 @@ type
     fScreenDevice      : TvgScreenRenderDevice;
     fLinker            : TvgLinker;
 
+    fWindow            : TComponent;   //primary window; always supports IvgVulkanWindow
     fWindowIntf        : IvgVulkanWindow;
 
     fScene             : TvgScene;
@@ -142,7 +142,7 @@ type
     procedure SetPhysicalDevice(const Value: TvgPhysicalDevice);
     procedure SetScreenDevice(const Value: TvgScreenRenderDevice);
     procedure SetLinker(const Value: TvgLinker);
-    procedure SetWindow(const Value: IvgVulkanWindow);
+    procedure SetWindow(const Value: TComponent);
     procedure SetScene(const Value: TvgScene);
     procedure SetRenderer(const Value: TvgRenderEngine);
     procedure SetSceneLoader(const Value: TvgSceneLoaderStorer);
@@ -158,8 +158,17 @@ type
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
 
   public
+    property  WindowIntf    : IvgVulkanWindow read fWindowIntf;
+
     constructor CreateNew(AOwner: TComponent; Dummy: Integer = 0); override;
     destructor Destroy; override;
+
+    { Design time: gives each unassigned reference (Scene, ToolManager,
+      Renderer, SceneLoader, Instance, devices, Linker) the first component of
+      that kind this module owns, then links them.  The designer calls it after
+      a component is dropped on the module: Notification runs inside the new
+      component's constructor, too early to link it. }
+    procedure AdoptComponents;
 
     { Creates whichever of Instance, PhysicalDevice, ScreenDevice and Linker is
       missing, then wires the primary chain.  Without a factory the components
@@ -169,8 +178,8 @@ type
 
     { Adds another linker on ScreenDevice, optionally presenting to aWindow -
       one linker per window.  The first one added also becomes Linker. }
-    function  AddLinker(aWindow: TvgWindowVCL = nil): TvgLinker; overload;
-    function  AddLinker(aWindow: TvgWindowVCL; const aFactory: TvgSessionComponentFactory): TvgLinker; overload;
+    function  AddLinker(const aWindow: IvgVulkanWindow = nil): TvgLinker; overload;
+    function  AddLinker(const aWindow: IvgVulkanWindow; const aFactory: TvgSessionComponentFactory): TvgLinker; overload;
 
     { Links the primary chain together:
         PhysicalDevice.Instance, ScreenDevice.PhysicalDevice,
@@ -219,8 +228,11 @@ type
     property ScreenDevice   : TvgScreenRenderDevice  read fScreenDevice   write SetScreenDevice;
     property Linker         : TvgLinker              read fLinker         write SetLinker;
 
-    { The primary linker's VCL window.  Usually on another form. }
-    property Window         : TvgWindowVCL           read fWindow         write SetWindow;
+    { The primary linker's window: any component implementing IvgVulkanWindow
+      (TvgWindowVCL, TvgSDL2Window...), usually on another form.  A TComponent
+      because interface properties are not streamed; SetWindow rejects a
+      component that is not a window.  WindowIntf is the interface view. }
+    property Window         : TComponent             read fWindow         write SetWindow;
 
     { Switches the whole session on/off.  Never stored: a session always
       starts disabled and is enabled in code (or from the designer). }
@@ -259,7 +271,7 @@ type
   aComp is not connected to one. }
 function  vgSessionInstance(aComp: TComponent): TvgInstance;
 
-{ The component a linker presents to (normally a TvgWindowVCL), or nil. }
+{ The component a linker presents to (a VCL or SDL2 window), or nil. }
 function  vgLinkerWindow(aLinker: TvgLinker): TComponent;
 
 function  vgSessionLinkers(aInstance: TvgInstance): TArray<TvgLinker>;
@@ -274,7 +286,8 @@ resourcestring
   vgSesNoInstance       = 'No Vulkan Instance assigned to the session.';
   vgSesNoPhysicalDevice = 'No Physical Device is connected to the Instance.';
   vgSesNoScreenDevice   = 'No Screen Render Device assigned to the session.';
-  vgSesLinkerNoWindow   = 'Linker %s has no window.  Set a TvgWindowVCL''s VulkanLink to it.';
+  vgSesLinkerNoWindow   = 'Linker %s has no window.  Set the window''s Linker to it.';
+  vgSesNotAWindow       = '%s is not a Vulkan window (it does not implement IvgVulkanWindow).';
   vgSesNoWindowHandle   = 'Window %s has no window handle yet.  Enable the session once its form is showing.';
   vgSesFailed           = 'The Vulkan session failed to start.' + sLineBreak +
                           'Check the Vulkan error log for the reason.';
@@ -289,6 +302,7 @@ const
 { Session helpers }
 
 function vgSessionInstance(aComp: TComponent): TvgInstance;
+  Var Intf : IvgVulkanWindow;
 begin
   Result := nil;
 
@@ -308,8 +322,8 @@ begin
   If aComp is TvgLinker then
     Result := vgSessionInstance(TvgLinker(aComp).ScreenDevice)
   else
-  If aComp is TvgWindowVCL then
-    Result := vgSessionInstance(TvgWindowVCL(aComp).VulkanLink);
+  If Supports(aComp, IvgVulkanWindow, Intf) then
+    Result := vgSessionInstance(Intf.GetLinker);
 end;
 
 function vgLinkerWindow(aLinker: TvgLinker): TComponent;
@@ -529,9 +543,43 @@ begin
   inherited;
 end;
 
+procedure TvgVulkanDataModule.AdoptComponents;
+  Var I : Integer;
+      C : TComponent;
+begin
+  If (csLoading in ComponentState) or (csDestroying in ComponentState) then exit;
+
+  //each setter rewires the session (ConnectSession), so a slot is only filled
+  //when empty, and the module's own parts are never replaced
+  For I := 0 to ComponentCount - 1 do
+  Begin
+    C := Components[I];
+
+    If (C is TvgInstance)           and not assigned(fInstance)       then Instance       := TvgInstance(C)
+    else
+    If (C is TvgPhysicalDevice)     and not assigned(fPhysicalDevice) then PhysicalDevice := TvgPhysicalDevice(C)
+    else
+    If (C is TvgScreenRenderDevice) and not assigned(fScreenDevice)   then ScreenDevice   := TvgScreenRenderDevice(C)
+    else
+    If (C is TvgLinker)             and not assigned(fLinker)         then Linker         := TvgLinker(C)
+    else
+    If (C is TvgScene)              and not assigned(fScene)          then Scene          := TvgScene(C)
+    else
+    If (C is TvgRenderEngine)       and not assigned(fRenderer)       then Renderer       := TvgRenderEngine(C)
+    else
+    If (C is TvgSceneLoaderStorer)  and not assigned(fSceneLoader)    then SceneLoader    := TvgSceneLoaderStorer(C)
+    else
+    If (C is TvgToolManager)        and not assigned(fToolManager)    then ToolManager    := TvgToolManager(C);
+  End;
+
+  //a slot that was already filled still needs the new part linked to it
+  ConnectSession;
+end;
+
 procedure TvgVulkanDataModule.Notification(AComponent: TComponent; Operation: TOperation);
 begin
   inherited;
+
 
   If Operation <> opRemove then exit;
 
@@ -539,7 +587,7 @@ begin
   If AComponent = fPhysicalDevice then fPhysicalDevice := nil;
   If AComponent = fScreenDevice   then fScreenDevice   := nil;
   If AComponent = fLinker         then fLinker         := nil;
-//  If AComponent = fWindowIntf         then fWindow         := nil;
+  If AComponent = fWindow         then Begin fWindow := nil; fWindowIntf := nil; End;
   If AComponent = fScene          then fScene          := nil;
   If AComponent = fRenderer       then fRenderer       := nil;
   If AComponent = fSceneLoader    then fSceneLoader    := nil;
@@ -599,13 +647,20 @@ begin
   ReferenceChanged(Old, Value);
 end;
 
-procedure TvgVulkanDataModule.SetWindow(const Value: IvgVulkanWindow);
-  Var Old : IvgVulkanWindow;
+procedure TvgVulkanDataModule.SetWindow(const Value: TComponent);
+  Var Old  : TComponent;
+      Intf : IvgVulkanWindow;
 begin
-  If fWindowIntf = Value then exit;
+  If fWindow = Value then exit;
+
+  Intf := nil;
+  If assigned(Value) and not Supports(Value, IvgVulkanWindow, Intf) then
+    raise EvgVulkanSessionError.CreateFmt(vgSesNotAWindow, [Value.Name]);
+
   DisableSession;
-  Old     := fWindowIntf;
-  fWindowIntf := Value;
+  Old         := fWindow;
+  fWindow     := Value;
+  fWindowIntf := Intf;
   ReferenceChanged(Old, Value);
 end;
 
@@ -701,12 +756,12 @@ begin
   ConnectSession;
 end;
 
-function TvgVulkanDataModule.AddLinker(aWindow: TvgWindowVCL = nil): TvgLinker;
+function TvgVulkanDataModule.AddLinker(const aWindow: IvgVulkanWindow): TvgLinker;
 begin
   Result := AddLinker(aWindow, nil);
 end;
 
-function TvgVulkanDataModule.AddLinker(aWindow: TvgWindowVCL; const aFactory: TvgSessionComponentFactory): TvgLinker;
+function TvgVulkanDataModule.AddLinker(const aWindow: IvgVulkanWindow; const aFactory: TvgSessionComponentFactory): TvgLinker;
 begin
   If not assigned(fScreenDevice) then
     raise EvgVulkanSessionError.Create(vgSesNoScreenDevice);
@@ -727,8 +782,8 @@ begin
   If Result.ScreenDevice <> fScreenDevice then
     Result.ScreenDevice := fScreenDevice;
 
-  If assigned(aWindow) and (aWindow.VulkanLink <> Result) then
-    aWindow.VulkanLink := Result;
+  If assigned(aWindow) and (aWindow.GetLinker <> Result) then
+    aWindow.SetLinker(Result);
 
   If not assigned(fLinker) then
     Linker := Result;
@@ -751,9 +806,9 @@ begin
      (fLinker.ScreenDevice <> fScreenDevice) then
     fLinker.ScreenDevice := fScreenDevice;
 
-  If assigned(fWindow) and assigned(fLinker) and
-     (fWindow.VulkanLink <> fLinker) then
-    fWindow.VulkanLink := fLinker;
+  If assigned(fWindowIntf) and assigned(fLinker) and
+     (fWindowIntf.GetLinker <> fLinker) then
+    fWindowIntf.SetLinker(fLinker);
 
   ConnectScene;
 end;
