@@ -3,8 +3,10 @@ object vgVulkanDataModule1: TvgVulkanDataModule1
   PhysicalDevice = vgPhysicalDevice1
   ScreenDevice = vgScreenRenderDevice1
   Linker = vgLinker1
+  Scene = vgScene1
+  ToolManager = vgToolManager1
   Height = 480
-  Width = 640
+  Width = 370
   object vgInstance1: TvgInstance
     ApplicationName = 'Vulkan Graphics'
     APIVersion = VG_API_VERSION_1_3
@@ -148,7 +150,7 @@ object vgVulkanDataModule1: TvgVulkanDataModule1
     RenderToScreen = True
     DescriptorIndexing = False
     DynamicRendering = True
-    Left = 56
+    Left = 72
     Top = 32
   end
   object vgPhysicalDevice1: TvgPhysicalDevice
@@ -156,8 +158,8 @@ object vgVulkanDataModule1: TvgVulkanDataModule1
     DeviceIndex = 0
     Instance = vgInstance1
     LogicalDevice = vgScreenRenderDevice1
-    Left = 56
-    Top = 104
+    Left = 64
+    Top = 112
   end
   object vgScreenRenderDevice1: TvgScreenRenderDevice
     PhysicalDevice = vgPhysicalDevice1
@@ -165,8 +167,8 @@ object vgVulkanDataModule1: TvgVulkanDataModule1
     DynamicRenderingON = True
     ShaderObjectsON = False
     Scene = vgScene1
-    Left = 64
-    Top = 184
+    Left = 56
+    Top = 176
   end
   object vgLinker1: TvgLinker
     ScreenDevice = vgScreenRenderDevice1
@@ -187,19 +189,20 @@ object vgVulkanDataModule1: TvgVulkanDataModule1
     SwapChain.ImageAspectFlags = [IA_COLOR_BIT]
     ToolManager = vgToolManager1
     RenderTarget = RT_SCREEN
-    Left = 72
-    Top = 264
+    Left = 104
+    Top = 256
   end
   object vgScene1: TvgScene
     SceneState = SS_READY
     Linker = vgLinker1
-    Left = 272
-    Top = 72
+    Left = 72
+    Top = 336
   end
   object vgToolManager1: TvgToolManager
     Linker = vgLinker1
     MouseSensitivity = 0.400000005960464500
-    Left = 272
-    Top = 160
+    Scene = vgScene1
+    Left = 112
+    Top = 408
   end
 end

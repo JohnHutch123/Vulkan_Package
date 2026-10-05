@@ -1,7 +1,7 @@
 package VulkanPkg_VCLD290;
 
 {$R *.res}
-{$R 'VulkanPkg_DesignIconsVCL.res' '..\Design_Src\VulkanPkg_DesignIconsVCL.rc'}
+{$R 'VulkanPkg_DesignIconsVCL.res'}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
 {$ALIGN 8}
 {$ASSERTIONS ON}
@@ -39,8 +39,6 @@ requires
   VulkanPkg_VCLR290;
 
 contains
-  VulkanPkg_DesignersVCL in '..\Design_Src\VulkanPkg_DesignersVCL.pas',
-  VulkanDataModuleEditFM in '..\Design_Src\VulkanDataModuleEditFM.pas' {vgSessionEditorFM},
-  VulkanPkg_DataModuleReg in '..\Design_Src\VulkanPkg_DataModuleReg.pas';
+  VulkanPkg_DesignersVCL in '..\Design_Src\VulkanPkg_DesignersVCL.pas';
 
 end.
