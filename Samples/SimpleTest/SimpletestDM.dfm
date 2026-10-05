@@ -156,17 +156,16 @@ object vgVulkanDataModule1: TvgVulkanDataModule1
     DeviceIndex = 0
     Instance = vgInstance1
     LogicalDevice = vgScreenRenderDevice1
-    Left = 56
-    Top = 104
+    Left = 136
+    Top = 152
   end
   object vgScreenRenderDevice1: TvgScreenRenderDevice
     PhysicalDevice = vgPhysicalDevice1
     DescriptorIndexingON = True
     DynamicRenderingON = True
     ShaderObjectsON = False
-    Scene = vgScene1
-    Left = 64
-    Top = 184
+    Left = 160
+    Top = 304
   end
   object vgLinker1: TvgLinker
     ScreenDevice = vgScreenRenderDevice1
@@ -185,21 +184,8 @@ object vgVulkanDataModule1: TvgVulkanDataModule1
     SwapChain.ComponentBlue = CS_IDENTITY
     SwapChain.ComponentAlpha = CS_IDENTITY
     SwapChain.ImageAspectFlags = [IA_COLOR_BIT]
-    ToolManager = vgToolManager1
     RenderTarget = RT_SCREEN
-    Left = 72
-    Top = 264
-  end
-  object vgScene1: TvgScene
-    SceneState = SS_READY
-    Linker = vgLinker1
-    Left = 272
-    Top = 72
-  end
-  object vgToolManager1: TvgToolManager
-    Linker = vgLinker1
-    MouseSensitivity = 0.400000005960464500
-    Left = 272
-    Top = 160
+    Left = 328
+    Top = 128
   end
 end
