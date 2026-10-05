@@ -140,6 +140,11 @@
         <DCCReference Include="..\..\RunTime_Src\Vulkan_Components_Compute.pas"/>
         <DCCReference Include="..\..\RunTime_Src\Vulkan_Components_Camera.pas"/>
         <DCCReference Include="..\..\RunTime_Src\Vulkan_Components.pas"/>
+        <DCCReference Include="SimpletestDM.pas">
+            <Form>vgVulkanDataModule1</Form>
+            <FormType>dfm</FormType>
+            <DesignClass>TvgVulkanDataModule</DesignClass>
+        </DCCReference>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
@@ -166,7 +171,7 @@
                 </Excluded_Packages>
             </Delphi.Personality>
             <Deployment Version="5">
-                <DeployFile LocalName="Win32\Debug\SimpleTest.exe" Configuration="Debug" Class="ProjectOutput">
+                <DeployFile LocalName="23.0\Win32\Debug\SimpleTest.exe" Configuration="Debug" Class="ProjectOutput">
                     <Platform Name="Win32">
                         <RemoteName>SimpleTest.exe</RemoteName>
                         <Overwrite>true</Overwrite>
