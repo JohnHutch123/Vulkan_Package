@@ -13,8 +13,6 @@ type
     vgPhysicalDevice1: TvgPhysicalDevice;
     vgScreenRenderDevice1: TvgScreenRenderDevice;
     vgLinker1: TvgLinker;
-    vgScene1: TvgScene;
-    vgToolManager1: TvgToolManager;
   private
     { Private declarations }
   public
