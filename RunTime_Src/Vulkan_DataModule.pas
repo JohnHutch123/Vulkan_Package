@@ -158,8 +158,6 @@ type
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
 
   public
-    property  WindowIntf    : IvgVulkanWindow read fWindowIntf;
-
     constructor CreateNew(AOwner: TComponent; Dummy: Integer = 0); override;
     destructor Destroy; override;
 
@@ -221,6 +219,9 @@ type
       is left half enabled. }
     procedure EnableSession;
     procedure DisableSession;
+
+    property  WindowIntf    : IvgVulkanWindow read fWindowIntf;
+
 
   published
     property Instance       : TvgInstance            read fInstance       write SetInstance;
@@ -592,6 +593,8 @@ begin
   If AComponent = fRenderer       then fRenderer       := nil;
   If AComponent = fSceneLoader    then fSceneLoader    := nil;
   If AComponent = fToolManager    then fToolManager    := nil;
+
+
 end;
 
 procedure TvgVulkanDataModule.ReferenceChanged(aOld, aNew: TComponent);

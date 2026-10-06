@@ -80,7 +80,7 @@ uses
   Vulkan_Components,
   Vulkan_Components_Scene_Renderer,
   Vulkan_SceneLoaders,
-  Vulkan_WindowVCL,
+//  Vulkan_WindowVCL,
   Vulkan_DataModule,
   VulkanDataModuleEditFM;
 
@@ -310,7 +310,7 @@ begin
   RegisterCustomModule(TvgVulkanDataModule, TvgVulkanDataModuleCustomModule);
 
   RegisterPropertyEditor(TypeInfo(Boolean), TvgBaseComponent, 'Active', TvgSessionActiveProperty);
-  RegisterPropertyEditor(TypeInfo(Boolean), TvgWindowVCL,     'Active', TvgSessionActiveProperty);
+//  RegisterPropertyEditor(TypeInfo(Boolean), TvgWindowVCL,     'Active', TvgSessionActiveProperty);
 
   RegisterPackageWizard(TvgVulkanDataModuleWizard.Create);
 end;

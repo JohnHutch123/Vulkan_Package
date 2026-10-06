@@ -66,7 +66,8 @@ interface
         Vcl.Dialogs,
         Vulkan,
         Vulkan_Components,
-        Vulkan_Components_Lookups;
+        Vulkan_Components_Lookups,
+        Vulkan_Components_Scene_Renderer;
 
 Var
     SortedEnumLists  : Boolean = False;
@@ -277,11 +278,14 @@ begin
 
    RegisterComponents('Vulkan Graphics', [TvgInstance,
                                             TvgPhysicalDevice,
-                                            TvgLinker]);
+                                            TvgScreenRenderDevice,
+                                            TvgLinker,
+                                            TvgScene,
+                                            TvgToolManager]);
 
    RegisterComponentEditor (TvgInstance,      TvgInstanceEditor);
    RegisterComponentEditor (TvgLogicalDevice, TvgDeviceEditor);
-   RegisterComponentEditor (TvgLinker,    TvgLinkEditor);
+   RegisterComponentEditor (TvgLinker,        TvgLinkEditor);
 
    RegisterPropertyEditor (TypeInfo(string), TvgPhysicalDevice, 'PhysicalDevice',  TvgPhysicalDeviceEditor);
 

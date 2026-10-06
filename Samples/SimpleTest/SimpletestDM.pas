@@ -9,10 +9,6 @@ uses
 
 type
   TvgVulkanDataModule1 = class(TvgVulkanDataModule)
-    vgInstance1: TvgInstance;
-    vgPhysicalDevice1: TvgPhysicalDevice;
-    vgScreenRenderDevice1: TvgScreenRenderDevice;
-    vgLinker1: TvgLinker;
   private
     { Private declarations }
   public

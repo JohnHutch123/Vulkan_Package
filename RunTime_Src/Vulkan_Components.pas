@@ -1210,6 +1210,8 @@ TvgBaseComponent = class(TComponent)
  //   procedure SetScreenRenderDevice(const Value: TvgScreenRenderDevice);      remove
 
   protected
+
+  //links
     fInstance           : TvgInstance;
 
     fLogicalDevice      : TvgLogicalDevice;
