@@ -111,7 +111,8 @@ whole session is disabled again and the exception reports the reason.
 ## 4. Building a session entirely in code
 
 Every `TDataModule` descendant needs a `.dfm`. To create a module without one,
-use `CreateNew`:
+use `CreateNew`. `TvgVulkanDataModule.Create` also works, because on the base
+class it calls `CreateNew` instead of looking for a `.dfm`:
 
 ```pascal
 DM := TvgVulkanDataModule.CreateNew(Self);

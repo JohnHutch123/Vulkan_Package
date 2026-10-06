@@ -75,10 +75,11 @@
   wants its own tool manager on its own linker - set that linker's
   ToolManager (or the tool manager's Linker) in the Object Inspector.
 
-  A TvgVulkanDataModule needs a .dfm, as every TDataModule descendant does.
-  To build one purely in code use CreateNew:
+  A TvgVulkanDataModule descendant needs a .dfm, as every TDataModule
+  descendant does.  To build one purely in code use Create (on the base
+  class, it calls CreateNew) or CreateNew:
 
-      DM := TvgVulkanDataModule.CreateNew(Self);
+      DM := TvgVulkanDataModule.Create(Self);
       DM.BuildSession;
       DM.Window := VulkanWindow1;
       DM.AddLinker(VulkanWindow2);
@@ -158,6 +159,10 @@ type
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
 
   public
+    { The base class has no .dfm, so Create on TvgVulkanDataModule itself
+      falls back to CreateNew instead of raising EResNotFound.  Descendants
+      with a .dfm stream it as usual. }
+    constructor Create(AOwner: TComponent); override;
     constructor CreateNew(AOwner: TComponent; Dummy: Integer = 0); override;
     destructor Destroy; override;
 
@@ -524,6 +529,14 @@ begin
 end;
 
 { TvgVulkanDataModule }
+
+constructor TvgVulkanDataModule.Create(AOwner: TComponent);
+begin
+  if ClassType = TvgVulkanDataModule then
+    CreateNew(AOwner)
+  else
+    inherited Create(AOwner);
+end;
 
 constructor TvgVulkanDataModule.CreateNew(AOwner: TComponent; Dummy: Integer = 0);
 begin
