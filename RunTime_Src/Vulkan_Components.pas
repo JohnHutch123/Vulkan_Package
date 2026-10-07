@@ -24305,7 +24305,7 @@ begin
   if (Length(fFrames)=0) then exit;
   if Not assigned(fFrames[fPresentFrameIndex]) then exit;
 
-  If Not fRenderer.Active   then exit;
+  If not assigned(fRenderer) or Not fRenderer.Active   then exit;
 
   Inc(fRepaintSerial);   //a frame is coming, now or when the busy one ends
 
