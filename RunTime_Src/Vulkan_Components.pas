@@ -95,6 +95,7 @@ Const
 
 Var
   VulkanDLLsLoaded     : Boolean = False;
+  VulkanLoadStatus     : TvgInstanceResult = VC_UNKNOWN_STATUS;  //one load attempt per process, see CheckVulkanHardwareStatus
 
   MaxFramesInFlight    : TvkUint32 = 3;   //IMPORTANT  Used Everywhere  Particle system needs at least three
   FrameResMax          : TvkUint32 = 10;  //Used to restrict MAX resolution of Frames
@@ -7002,31 +7003,25 @@ end;
 Function TvgInstance.CheckVulkanHardwareStatus:Boolean;
 
 begin
-  Result:=False;
+  //The loader is tried once per process, whatever the outcome: every
+  //instance after the first just reads the result.  Never raises, as it is
+  //called from Create, where an exception would stop the component being made.
+  If VulkanLoadStatus = VC_UNKNOWN_STATUS then
+  Begin
+    Try
+      If LoadVulkanLibrary and LoadVulkanGlobalCommands then
+        VulkanLoadStatus := VC_VULKAN_OK
+      else
+        VulkanLoadStatus := VC_VULKAN_NOT_AVAILABLE;
+    Except
+      VulkanLoadStatus := VC_VULKAN_NOT_AVAILABLE;
+    End;
 
-  If VulkanDllsLoaded then Exit(True);
-
-  fVulkanStatus:= VC_UNKNOWN_STATUS;
-
-  Try
-
-    If  LoadVulkanLibrary and LoadVulkanGlobalCommands then
-    Begin
-      fVulkanStatus:= VC_VULKAN_OK;
-      Result:=True;
-      VulkanDllsLoaded:=True;
-    end else
-      fVulkanStatus := VC_VULKAN_NOT_AVAILABLE;
-
-  //  LoadShadercLibrary;
-
-  Except
-     On E :Exception do
-     Begin
-       fVulkanStatus:= VC_VULKAN_NOT_AVAILABLE;
-       raise;
-     End;
+    VulkanDllsLoaded := (VulkanLoadStatus = VC_VULKAN_OK);
   End;
+
+  fVulkanStatus := VulkanLoadStatus;
+  Result        := (fVulkanStatus = VC_VULKAN_OK);
 end;
 
 procedure TvgInstance.ClearAllExtensionsAndlayers;
@@ -7071,6 +7066,9 @@ begin
    fExtensions        := TvgExtensions.Create(self);
 
    Inherited;      //must stay here
+
+   //is Vulkan installed: the result is in VulkanStatus
+   CheckVulkanHardwareStatus;
 
    fValidation        := False;
 
@@ -7290,7 +7288,7 @@ end;
 procedure TvgInstance.Loaded;
 begin
   inherited;
-  CheckVulkanHardwareStatus;
+  CheckVulkanHardwareStatus;   //already done in Create: this only copies the result
 end;
 
 procedure TvgInstance.Notification(AComponent: TComponent;  Operation: TOperation);
@@ -8069,6 +8067,9 @@ Function TvgInstance.SetEnabled:Boolean;
 begin
   Result := Inherited;
   CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
+
+    CustomAssert(fVulkanStatus = VC_VULKAN_OK, 'Vulkan is not installed on this computer (no Vulkan loader found).', Self);
+    If fVulkanStatus <> VC_VULKAN_OK then Exit(False);   //release-safe guard
 
   //need to start from scratch
     fPhysicalDeviceList.Clear;

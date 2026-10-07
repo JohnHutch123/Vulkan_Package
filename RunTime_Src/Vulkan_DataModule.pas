@@ -290,6 +290,7 @@ procedure vgDisableSession(aInstance: TvgInstance);
 
 resourcestring
   vgSesNoInstance       = 'No Vulkan Instance assigned to the session.';
+  vgSesNoVulkan         = 'Vulkan is not installed on this computer (no Vulkan loader found).';
   vgSesNoPhysicalDevice = 'No Physical Device is connected to the Instance.';
   vgSesNoScreenDevice   = 'No Screen Render Device assigned to the session.';
   vgSesLinkerNoWindow   = 'Linker %s has no window.  Set the window''s Linker to it.';
@@ -425,6 +426,9 @@ begin
 
   If not assigned(aInstance) then
     Exit(vgSesNoInstance);
+
+  If aInstance.VulkanStatus <> VC_VULKAN_OK then
+    Exit(vgSesNoVulkan);
 
   If aInstance.DevicesCount = 0 then
     Exit(vgSesNoPhysicalDevice);
