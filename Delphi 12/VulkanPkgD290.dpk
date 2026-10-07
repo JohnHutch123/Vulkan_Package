@@ -35,8 +35,6 @@ requires
   VulkanPkgR290;
 
 contains
-  VulkanPkg_Designers in '..\Design_Src\VulkanPkg_Designers.pas',
-  VulkanPkg_DataModuleReg in '..\Design_Src\VulkanPkg_DataModuleReg.pas',
-  VulkanDataModuleEditFM in '..\Design_Src\VulkanDataModuleEditFM.pas' {vgSessionEditorFM};
+  VulkanPkg_Designers in '..\Design_Src\VulkanPkg_Designers.pas';
 
 end.
