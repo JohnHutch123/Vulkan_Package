@@ -37,8 +37,9 @@ implementation
 
 procedure TForm8.Button1Click(Sender: TObject);
 begin
-  fVCLWindow       := TvgWindowVCL.Create(self);
-  fVCLWindow.Align := alClient;
+  fVCLWindow        := TvgWindowVCL.Create(self);
+  fVCLWindow.Parent := self;
+  fVCLWindow.Align  := alClient;
 
   fVulkanDM  :=  TvgVulkanDataModule.Create(self);
 
