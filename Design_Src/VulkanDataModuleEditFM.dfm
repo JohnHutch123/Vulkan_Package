@@ -34,7 +34,7 @@ object vgSessionEditorFM: TvgSessionEditorFM
     BevelOuter = bvNone
     TabOrder = 0
     object lblStatus: TLabel
-      Left = 574
+      Left = 661
       Top = 12
       Width = 92
       Height = 15
@@ -121,6 +121,20 @@ object vgSessionEditorFM: TvgSessionEditorFM
       ShowHint = True
       TabOrder = 3
       OnClick = btnRefreshClick
+    end
+    object btnShaders: TButton
+      Left = 572
+      Top = 8
+      Width = 81
+      Height = 25
+      Hint =
+        'Show the GLSL the ShaderBuilder writes for each pipeline of the ' +
+        'running session'
+      Caption = 'S&haders...'
+      ParentShowHint = False
+      ShowHint = True
+      TabOrder = 6
+      OnClick = btnShadersClick
     end
   end
   object pnlBottom: TPanel

@@ -1207,6 +1207,18 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
     property PickRadius : Integer read fPickRadius write fPickRadius default 6;
   end;
 
+  { A component that writes GLSL for a graphic pipeline.  The core only
+    declares it, so a TvgVulkanDataModule can hold one and the session editor
+    can show what it generates; the implementation (TvgShaderBuilder) is in
+    the PRO package. }
+  TvgBaseShaderBuilder = Class(TvgBaseComponent)
+  Public
+    { The vertex, geometry and fragment source for aGP; a stage aGP does not
+      use comes back ''.  False when nothing could be built. }
+    function BuildSources(aGP: TvgGraphicPipeline;
+                          out aVert, aGeom, aFrag: String): Boolean; Virtual; Abstract;
+  end;
+
   { Renderer registry.  A renderer class lives in its own package (e.g.
     TvgRenderEngine_Single), so code that only knows TvgRenderEngine - such
     as TvgVulkanDataModule.BuildSession - creates one by registered name.

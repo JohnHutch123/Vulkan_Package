@@ -79,6 +79,10 @@
   wants its own tool manager on its own linker - set that linker's
   ToolManager (or the tool manager's Linker) in the Object Inspector.
 
+  ShaderBuilder (optional, a TvgBaseShaderBuilder - PRO's TvgShaderBuilder)
+  lets the session editor show the GLSL it would write for each of the
+  running session's pipelines.
+
   A TvgVulkanDataModule descendant needs a .dfm, as every TDataModule
   descendant does.  To build one purely in code use Create (on the base
   class, it calls CreateNew) or CreateNew:
@@ -147,6 +151,7 @@ type
     fLoadSceneOnEnable : Boolean;
     fToolManager       : TvgToolManager;
     fZoomAllOnLoad     : Boolean;
+    fShaderBuilder     : TvgBaseShaderBuilder;
 
     fOnSessionEnabled  : TNotifyEvent;
     fOnSessionDisabled : TNotifyEvent;
@@ -160,6 +165,7 @@ type
     procedure SetRenderer(const Value: TvgRenderEngine);
     procedure SetSceneLoader(const Value: TvgSceneLoaderStorer);
     procedure SetToolManager(const Value: TvgToolManager);
+    procedure SetShaderBuilder(const Value: TvgBaseShaderBuilder);
 
     function  GetSessionActive: Boolean;
     procedure SetSessionActive(const Value: Boolean);
@@ -287,6 +293,11 @@ type
 
     { After LoadScene, move the camera so the whole scene is in view. }
     property ZoomAllOnLoad  : Boolean read fZoomAllOnLoad write fZoomAllOnLoad default True;
+
+    { Optional: writes GLSL for the session's pipelines, so the session
+      editor can show the generated shaders.  Not part of the session - it
+      is never enabled or required.  Drop a TvgShaderBuilder (PRO). }
+    property ShaderBuilder  : TvgBaseShaderBuilder   read fShaderBuilder  write SetShaderBuilder;
 
     property OnSessionEnabled  : TNotifyEvent read fOnSessionEnabled  write fOnSessionEnabled;
     property OnSessionDisabled : TNotifyEvent read fOnSessionDisabled write fOnSessionDisabled;
@@ -618,7 +629,9 @@ begin
     else
     If (C is TvgSceneLoaderStorer)  and not assigned(fSceneLoader)    then SceneLoader    := TvgSceneLoaderStorer(C)
     else
-    If (C is TvgToolManager)        and not assigned(fToolManager)    then ToolManager    := TvgToolManager(C);
+    If (C is TvgToolManager)        and not assigned(fToolManager)    then ToolManager    := TvgToolManager(C)
+    else
+    If (C is TvgBaseShaderBuilder)  and not assigned(fShaderBuilder)  then ShaderBuilder  := TvgBaseShaderBuilder(C);
   End;
 
   //a slot that was already filled still needs the new part linked to it
@@ -641,6 +654,7 @@ begin
   If AComponent = fRenderer       then fRenderer       := nil;
   If AComponent = fSceneLoader    then fSceneLoader    := nil;
   If AComponent = fToolManager    then fToolManager    := nil;
+  If AComponent = fShaderBuilder  then fShaderBuilder  := nil;
 
 
 end;
@@ -759,6 +773,20 @@ begin
   Old          := fToolManager;
   fToolManager := Value;
   ReferenceChanged(Old, Value);
+end;
+
+procedure TvgVulkanDataModule.SetShaderBuilder(const Value: TvgBaseShaderBuilder);
+begin
+  //not linked into the session: no rewiring, the session can stay up
+  If fShaderBuilder = Value then exit;
+
+  If assigned(fShaderBuilder) and (fShaderBuilder.Owner <> Self) then
+    fShaderBuilder.RemoveFreeNotification(Self);
+
+  fShaderBuilder := Value;
+
+  If assigned(fShaderBuilder) then
+    fShaderBuilder.FreeNotification(Self);
 end;
 
 function TvgVulkanDataModule.MakeUniqueName(const aBase: string): string;

@@ -100,6 +100,7 @@ type
     cbValue: TComboBox;
     clbValue: TCheckListBox;
     btnApply: TButton;
+    btnShaders: TButton;
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure FormShow(Sender: TObject);
@@ -115,6 +116,7 @@ type
     procedure btnEnableClick(Sender: TObject);
     procedure btnDisableClick(Sender: TObject);
     procedure btnRefreshClick(Sender: TObject);
+    procedure btnShadersClick(Sender: TObject);
   private
     fModule      : TvgVulkanDataModule;
     fDesigner    : IDesigner;
@@ -482,6 +484,9 @@ begin
               End;
         End;
       End;
+
+      //never connected under the instance: it only reads the pipelines
+      AddComponentNode(nil, fModule.ShaderBuilder, Shown);
 
       //the rest: dropped but not (yet) connected under the instance
       AddOther(fModule.PhysicalDevice);
@@ -931,6 +936,7 @@ begin
   btnLoadScene.Enabled := assigned(fOnLoadScene);
   btnEnable.Enabled  := not Running and (Problem = '');
   btnDisable.Enabled := Running;
+  btnShaders.Enabled := assigned(fModule.ShaderBuilder);   //says why when the session is off
 end;
 
 procedure TvgSessionEditorFM.btnApplyClick(Sender: TObject);
@@ -1058,6 +1064,183 @@ procedure TvgSessionEditorFM.btnRefreshClick(Sender: TObject);
 begin
   BuildTree(fObject);
   UpdateStatus;
+end;
+
+{ TvgShaderViewFM - the generated GLSL of one pipeline at a time.  Built in
+  code: a pipeline picker over three read-only stage pages. }
+
+type
+  TvgShaderViewFM = class(TForm)
+  private
+    fBuilder   : TvgBaseShaderBuilder;
+    fPipelines : TList<TvgGraphicPipeline>;
+    cbPipeline : TComboBox;
+    memos      : array[0..2] of TMemo;   //vertex, geometry, fragment
+    pages      : TPageControl;
+    procedure PipelineChange(Sender: TObject);
+  public
+    constructor CreateViewer(aModule: TvgVulkanDataModule);
+    destructor Destroy; override;
+  end;
+
+constructor TvgShaderViewFM.CreateViewer(aModule: TvgVulkanDataModule);
+const
+  cStages : array[0..2] of string = ('Vertex', 'Geometry', 'Fragment');
+var
+  PnlTop   : TPanel;
+  PnlBot   : TPanel;
+  Btn   : TButton;
+  Sheet : TTabSheet;
+  Store : TvgBaseObjectStore;
+  GP    : TvgGraphicPipeline;
+  I, J  : Integer;
+  Cap  : string;
+begin
+  inherited CreateNew(Application);
+  fBuilder   := aModule.ShaderBuilder;
+  fPipelines := TList<TvgGraphicPipeline>.Create;
+
+  Caption  := Format('Generated Shaders - %s', [fBuilder.Name]);
+  Width    := 900;
+  Height   := 650;
+  Position := poScreenCenter;
+
+  PnlTop := TPanel.Create(Self);
+  PnlTop.Parent     := Self;
+  PnlTop.Align      := alTop;
+  PnlTop.Height     := 37;
+  PnlTop.BevelOuter := bvNone;
+
+  cbPipeline := TComboBox.Create(Self);
+  cbPipeline.Parent   := PnlTop;
+  cbPipeline.Left     := 8;
+  cbPipeline.Top      := 7;
+  cbPipeline.Width    := 500;
+  cbPipeline.Style    := csDropDownList;
+  cbPipeline.OnChange := PipelineChange;
+
+  PnlBot := TPanel.Create(Self);
+  PnlBot.Parent     := Self;
+  PnlBot.Align      := alBottom;
+  PnlBot.Height     := 41;
+  PnlBot.BevelOuter := bvNone;
+
+  Btn := TButton.Create(Self);
+  Btn.Parent      := PnlBot;
+  Btn.Caption     := 'Close';
+  Btn.Width       := 75;
+  Btn.Top         := 8;
+  Btn.Left        := PnlBot.ClientWidth - Btn.Width - 8;
+  Btn.Anchors     := [akTop, akRight];
+  Btn.Cancel      := True;
+  Btn.ModalResult := mrOk;
+
+  pages := TPageControl.Create(Self);
+  pages.Parent := Self;
+  pages.Align  := alClient;
+
+  For I := 0 to 2 do
+  Begin
+    Sheet := TTabSheet.Create(Self);
+    Sheet.PageControl := pages;
+    Sheet.Caption     := cStages[I];
+
+    memos[I] := TMemo.Create(Self);
+    memos[I].Parent     := Sheet;
+    memos[I].Align      := alClient;
+    memos[I].ReadOnly   := True;
+    memos[I].WordWrap   := False;
+    memos[I].ScrollBars := ssBoth;
+    memos[I].Font.Name  := 'Consolas';
+    memos[I].Font.Size  := 10;
+  End;
+
+  //pipelines exist only while the session runs: one per store and sub pass
+  If assigned(aModule.Scene) then
+    For I := 0 to aModule.Scene.GetObjectStoreCount - 1 do
+    Begin
+      Store := aModule.Scene.ObjectStore[I];
+      If not assigned(Store) then continue;
+
+      For J := 0 to Store.PipelineCount - 1 do
+      Begin
+        GP := Store.GraphicPipeline[J];
+        If not assigned(GP) then continue;
+
+        Cap := GP.Name;
+        If Cap = '' then
+          Cap := Format('%s #%d', [GP.ClassName, J]);
+        If Store.Name <> '' then
+          Cap := Store.Name + ' / ' + Cap;
+
+        fPipelines.Add(GP);
+        cbPipeline.Items.Add(Cap);
+      End;
+    End;
+
+  If cbPipeline.Items.Count > 0 then
+  Begin
+    cbPipeline.ItemIndex := 0;
+    PipelineChange(nil);
+  End else
+    memos[0].Text := 'The scene has no pipelines yet - load or add data to the scene.';
+end;
+
+destructor TvgShaderViewFM.Destroy;
+begin
+  FreeAndNil(fPipelines);
+  inherited;
+end;
+
+procedure TvgShaderViewFM.PipelineChange(Sender: TObject);
+  Var S : array[0..2] of string;
+      I : Integer;
+begin
+  For I := 0 to 2 do
+    memos[I].Clear;
+  If cbPipeline.ItemIndex < 0 then exit;
+
+  Try
+    If not fBuilder.BuildSources(fPipelines[cbPipeline.ItemIndex], S[0], S[1], S[2]) then
+    Begin
+      memos[0].Text := '// The shader builder could not build this pipeline''s shaders.';
+      pages.ActivePageIndex := 0;
+      exit;
+    End;
+  Except
+    On E: Exception do
+    Begin
+      memos[0].Text := '// Unable to build the shaders:' + sLineBreak + '// ' + E.Message;
+      pages.ActivePageIndex := 0;
+      exit;
+    End;
+  End;
+
+  For I := 0 to 2 do
+    If S[I] = '' then
+      memos[I].Text := '// not used by this pipeline'
+    else
+      memos[I].Text := S[I];
+end;
+
+procedure TvgSessionEditorFM.btnShadersClick(Sender: TObject);
+  Var F : TvgShaderViewFM;
+begin
+  If not assigned(fModule.ShaderBuilder) then exit;
+
+  If not fModule.SessionActive then
+  Begin
+    MessageDlg('Enable the session first: its pipelines are only built while it runs.',
+               mtInformation, [mbOK], 0);
+    exit;
+  End;
+
+  F := TvgShaderViewFM.CreateViewer(fModule);
+  Try
+    F.ShowModal;
+  Finally
+    F.Free;
+  End;
 end;
 
 end.

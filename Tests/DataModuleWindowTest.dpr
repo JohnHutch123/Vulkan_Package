@@ -20,6 +20,7 @@ program DataModuleWindowTest;
 uses
   System.SysUtils,
   System.Classes,
+  System.Generics.Collections,
   Vulkan,
   Vulkan_Components_Lookups,
   Vulkan_Components,
@@ -50,6 +51,21 @@ type
     function  vgCrossHairON: Boolean;
     procedure SurfaceWinPlatformCallback(var aWinInstance: TVkHWND; var aModInstance: TVkHINSTANCE);
   end;
+
+type
+  //stands in for PRO's TvgShaderBuilder
+  TFakeShaderBuilder = class(TvgBaseShaderBuilder)
+  public
+    function BuildSources(aGP: TvgGraphicPipeline; out aVert, aGeom, aFrag: String): Boolean; override;
+  end;
+
+function TFakeShaderBuilder.BuildSources(aGP: TvgGraphicPipeline; out aVert, aGeom, aFrag: String): Boolean;
+begin
+  aVert := 'void main() {}';
+  aGeom := '';
+  aFrag := 'void main() {}';
+  Result := True;
+end;
 
 destructor TFakeWindow.Destroy;
 begin
@@ -106,6 +122,18 @@ begin
   Result := assigned(aLinker) and (aLinker.WindowIntf = IvgVulkanWindow(aWin));
 end;
 
+function SessionHas(aDM: TvgVulkanDataModule; aComp: TComponent): Boolean;
+  Var L : TList<TComponent>;
+begin
+  L := TList<TComponent>.Create;
+  Try
+    aDM.GetSessionComponents(L);
+    Result := L.IndexOf(aComp) <> -1;
+  Finally
+    L.Free;
+  End;
+end;
+
 var
   Failures : Integer = 0;
 
@@ -137,6 +165,7 @@ var
   Lk       : TvgLinker;
   S2       : TvgScene;
   TM2      : TvgToolManager;
+  SB       : TFakeShaderBuilder;
 begin
   DM := TvgVulkanDataModule.CreateNew(nil);
   W1 := TFakeWindow.Create(nil);
@@ -246,11 +275,19 @@ begin
     Check('first Scene kept',       DM2.Scene = S2, True);
     Check('first ToolManager kept', DM2.ToolManager = TM2, True);
 
+    //a shader builder is adopted too, but is not part of the session
+    SB := TFakeShaderBuilder.Create(DM2);
+    DM2.AdoptComponents;
+    Check('ShaderBuilder adopted', DM2.ShaderBuilder = SB, True);
+    Check('ShaderBuilder not in the session', SessionHas(DM2, SB), False);
+
     //removal: Notification clears the references
     FreeAndNil(S2);
     FreeAndNil(TM2);
+    FreeAndNil(SB);
     Check('Scene cleared on free',       DM2.Scene = nil, True);
     Check('ToolManager cleared on free', DM2.ToolManager = nil, True);
+    Check('ShaderBuilder cleared on free', DM2.ShaderBuilder = nil, True);
   finally
     DM2.Free;
   end;
