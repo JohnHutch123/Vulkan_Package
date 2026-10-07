@@ -118,6 +118,7 @@
         </DCCReference>
         <DCCReference Include="..\RunTime_Src\Vulkan_Components.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_Scene_Renderer.pas"/>
+        <DCCReference Include="..\Samples\Renderers\Vulkan_Renderer_Single.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_DataModule.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_WindowVCL.pas"/>
         <BuildConfiguration Include="Base">

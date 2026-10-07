@@ -77,6 +77,7 @@ uses
   DesignEditors,
   DMForm,
   ToolsAPI,
+  Vulkan_Assert,
   Vulkan_Components,
   Vulkan_Components_Scene_Renderer,
   Vulkan_SceneLoaders,
@@ -115,6 +116,13 @@ type
 
   { SceneLoaderType: the registered scene loaders. }
   TvgSceneLoaderTypeProperty = class(TStringProperty)
+  public
+    function  GetAttributes: TPropertyAttributes; override;
+    procedure GetValues(Proc: TGetStrProc); override;
+  end;
+
+  { RendererType: the registered renderers. }
+  TvgRendererTypeProperty = class(TStringProperty)
   public
     function  GetAttributes: TPropertyAttributes; override;
     procedure GetValues(Proc: TGetStrProc); override;
@@ -306,6 +314,7 @@ begin
 
   RegisterPropertyEditor(TypeInfo(string), TvgVulkanDataModule, 'SceneLoaderType', TvgSceneLoaderTypeProperty);
   RegisterPropertyEditor(TypeInfo(string), TvgVulkanDataModule, 'SceneFileName',   TvgSceneFileNameProperty);
+  RegisterPropertyEditor(TypeInfo(string), TvgVulkanDataModule, 'RendererType',    TvgRendererTypeProperty);
 
   RegisterCustomModule(TvgVulkanDataModule, TvgVulkanDataModuleCustomModule);
 
@@ -342,6 +351,9 @@ begin
       If aIndex = cToolManagerSlot then
         Result := D.CreateComponent(aClass, aModule, 24 + 112, 120, 0, 0)
       else
+      If aIndex = cRendererSlot then
+        Result := D.CreateComponent(aClass, aModule, 24 + 2 * 112, 120, 0, 0)
+      else
       If aIndex < 3 then
         Result := D.CreateComponent(aClass, aModule, 24 + aIndex * 112, 24, 0, 0)
       else
@@ -367,12 +379,17 @@ begin
   If not assigned(aModule) then exit;
 
   If not assigned(aModule.ScreenDevice) then
-    raise EvgVulkanSessionError.Create('Build the session (or set ScreenDevice) before adding a linker.');
+  Begin
+    CustomAssert(False, 'Build the session (or set ScreenDevice) before adding a linker.', aModule);
+    exit;
+  End;
 
   If assigned(aDesigner) then
     L := aModule.AddLinker(nil, DesignerFactory(aModule, aDesigner))
   else
     L := aModule.AddLinker(nil);
+
+  If not assigned(L) then exit;
 
   NotifySessionModified(aModule, aDesigner);
 
@@ -470,6 +487,20 @@ procedure TvgSceneLoaderTypeProperty.GetValues(Proc: TGetStrProc);
   Var Info : TvgSceneLoaderInfo;
 begin
   For Info in SceneLoaders do
+    Proc(Info.Name);
+end;
+
+{ TvgRendererTypeProperty }
+
+function TvgRendererTypeProperty.GetAttributes: TPropertyAttributes;
+begin
+  Result := [paValueList, paSortList, paRevertable, paMultiSelect];
+end;
+
+procedure TvgRendererTypeProperty.GetValues(Proc: TGetStrProc);
+  Var Info : TvgRenderEngineInfo;
+begin
+  For Info in vgRenderEngines do
     Proc(Info.Name);
 end;
 

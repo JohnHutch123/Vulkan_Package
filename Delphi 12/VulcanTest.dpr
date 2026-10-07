@@ -5,6 +5,7 @@ uses
   VulkanTestMF in 'VulkanTestMF.pas' {Form8},
   Vulkan_Components in '..\RunTime_Src\Vulkan_Components.pas',
   Vulkan_Components_Scene_Renderer in '..\RunTime_Src\Vulkan_Components_Scene_Renderer.pas',
+  Vulkan_Renderer_Single in '..\Samples\Renderers\Vulkan_Renderer_Single.pas',
   Vulkan_DataModule in '..\RunTime_Src\Vulkan_DataModule.pas',
   Vulkan_WindowVCL in '..\RunTime_Src\Vulkan_WindowVCL.pas';
 

@@ -10,6 +10,8 @@ program DataModuleWindowTest;
       component that is not one, leaving the old window in place;
     - ConnectSession/BuildSession hand the primary linker to the window, and
       vgSessionInstance finds the instance from the window;
+    - BuildSession creates the registered renderer and a scene, and a
+      missing Renderer or Scene is a SessionProblem;
     - AddLinker takes the window as an interface;
     - SessionActive reads False and := False is harmless (enabling needs a
       real surface, so it is left to the sample app);
@@ -21,7 +23,9 @@ uses
   Vulkan,
   Vulkan_Components_Lookups,
   Vulkan_Components,
+  Vulkan_Assert,
   Vulkan_Components_Scene_Renderer,
+  Vulkan_Renderer_Single,
   Vulkan_DataModule;
 
 type
@@ -124,6 +128,7 @@ var
   Raised   : Boolean;
   L2       : TvgLinker;
   Scene    : TvgScene;
+  Rend     : TvgRenderEngine;
   Tools    : TvgToolManager;
   DM2      : TvgVulkanDataModule;
   Inst     : TvgInstance;
@@ -143,17 +148,25 @@ begin
     Check('Window set', DM.Window = W1, True);
     Check('WindowIntf set', HasWindowIntf(DM), True);
 
+    //CustomAssert: raises only in DEBUG / design time, otherwise it logs
     Raised := False;
     Try
       DM.Window := Plain;
     Except
-      on EvgVulkanSessionError do Raised := True;
+      on EvgVulkanAssertException do Raised := True;
     End;
-    Check('non-window rejected', Raised, True);
-    Check('old window kept after rejection', DM.Window = W1, True);
+    {$IFDEF DEBUG}
+    Check('non-window asserted', Raised, True);
+    {$ENDIF}
+    Check('non-window rejected: old window kept', DM.Window = W1, True);
 
     Writeln('BuildSession');
+    Check('Single renderer registered', vgFindRenderEngine('') = TvgRenderEngine_Single, True);
     DM.BuildSession;
+    Check('BuildSession made the Renderer', DM.Renderer is TvgRenderEngine_Single, True);
+    Check('BuildSession made the Scene', assigned(DM.Scene), True);
+    Check('Renderer.Scene linked', assigned(DM.Renderer) and (DM.Renderer.Scene = DM.Scene), True);
+    Check('Renderer.Linker linked', assigned(DM.Renderer) and (DM.Renderer.Linker = DM.Linker), True);
     Check('window got the primary linker', W1.GetLinker = DM.Linker, True);
     Check('linker knows the window', LinkerHas(DM.Linker, W1), True);
     Check('vgSessionInstance(window) = Instance', vgSessionInstance(W1) = DM.Instance, True);
@@ -170,12 +183,23 @@ begin
     DM.SessionActive := False;
     Check('disable when inactive is harmless', DM.SessionActive, False);
 
+    Writeln('Renderer and Scene are part of the session');
+    Rend := DM.Renderer;
+    Scene := DM.Scene;
+    DM.Renderer := nil;
+    Check('no Renderer is a SessionProblem', DM.SessionProblem = vgSesNoRenderer, True);
+    DM.Renderer := Rend;
+    DM.Scene := nil;
+    Check('no Scene is a SessionProblem', DM.SessionProblem = vgSesNoScene, True);
+    DM.Scene := Scene;
+    Check('both back: no SessionProblem', DM.SessionProblem = '', True);
+
     Writeln('Dropping parts on the module');
-    Scene := TvgScene.Create(DM);
     Tools := TvgToolManager.Create(DM);
-    Check('nothing linked inside the constructors', DM.Scene = nil, True);
+    TvgScene.Create(DM);
+    Check('nothing linked inside the constructors', DM.ToolManager = nil, True);
     DM.AdoptComponents;     //what the designer does after the drop
-    Check('Scene adopted', (DM.Scene = Scene), True);
+    Check('built Scene kept over a dropped one', (DM.Scene = Scene), True);
     Check('ToolManager adopted', (DM.ToolManager = Tools), True);
     Check('Scene.Linker set', Scene.Linker = DM.Linker, True);
     Check('ToolManager.Linker set', Tools.Linker = DM.Linker, True);

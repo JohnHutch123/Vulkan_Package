@@ -217,9 +217,10 @@ end;
 
 
 Initialization
-
+  //lets TvgVulkanDataModule.BuildSession create one (RendererType 'Single')
+  vgRegisterRenderEngine('Single', TvgRenderEngine_Single);
 
 Finalization
-
+  vgUnregisterRenderEngine(TvgRenderEngine_Single);
 
 end.

@@ -632,6 +632,7 @@ procedure TvgSessionEditorFM.ShowEditor;
       Running : Boolean;
       Comp    : TComponent;
       Info    : TvgSceneLoaderInfo;
+      RInfo   : TvgRenderEngineInfo;
 begin
   fUpdating := True;
   Try
@@ -673,6 +674,19 @@ begin
       cbValue.Visible   := True;
       cbValue.Enabled   := not Running;
       lblHint.Caption   := lblHint.Caption + ' Blank picks the loader by file extension.';
+      exit;
+    End;
+
+    //the module's renderer type: offer the registered renderers
+    If (fObject is TvgVulkanDataModule) and SameText(vgPropName(fProp), 'RendererType') then
+    Begin
+      cbValue.Items.Add('');   //blank: the first registered
+      For RInfo in vgRenderEngines do
+        cbValue.Items.Add(RInfo.Name);
+      cbValue.ItemIndex := cbValue.Items.IndexOf(Current);
+      cbValue.Visible   := True;
+      cbValue.Enabled   := not Running;
+      lblHint.Caption   := lblHint.Caption + ' The renderer Build creates.  Blank takes the first registered.';
       exit;
     End;
 

@@ -772,8 +772,6 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
  Private
     procedure SetScene(const Value: TvgScene);
 
-
-
  Protected
 
    fScene                  : TvgScene;
@@ -1209,9 +1207,87 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
     property PickRadius : Integer read fPickRadius write fPickRadius default 6;
   end;
 
+  { Renderer registry.  A renderer class lives in its own package (e.g.
+    TvgRenderEngine_Single), so code that only knows TvgRenderEngine - such
+    as TvgVulkanDataModule.BuildSession - creates one by registered name.
+    A renderer unit registers itself in its initialization section and
+    unregisters in finalization, so an unloaded design package leaves no
+    stale class behind. }
+  TvgRenderEngineClass = class of TvgRenderEngine;
+
+  TvgRenderEngineInfo = record
+    Name        : string;
+    EngineClass : TvgRenderEngineClass;
+  end;
+
+procedure vgRegisterRenderEngine(const aName: string; aClass: TvgRenderEngineClass);
+procedure vgUnregisterRenderEngine(aClass: TvgRenderEngineClass);
+function  vgRenderEngines: TArray<TvgRenderEngineInfo>;
+
+{ The class registered as aName; blank gives the first one registered.  nil
+  when there is no such renderer. }
+function  vgFindRenderEngine(const aName: string): TvgRenderEngineClass;
 
 
 implementation
+
+var
+  gRenderEngines : TList<TvgRenderEngineInfo> = nil;
+
+procedure vgRegisterRenderEngine(const aName: string; aClass: TvgRenderEngineClass);
+  Var Info : TvgRenderEngineInfo;
+      I    : Integer;
+begin
+  If (aName = '') or not assigned(aClass) then exit;
+
+  If not assigned(gRenderEngines) then
+    gRenderEngines := TList<TvgRenderEngineInfo>.Create;
+
+  Info.Name        := aName;
+  Info.EngineClass := aClass;
+
+  //re-registering a name replaces it
+  For I := 0 to gRenderEngines.Count - 1 do
+    If SameText(gRenderEngines[I].Name, aName) then
+    Begin
+      gRenderEngines[I] := Info;
+      exit;
+    End;
+
+  gRenderEngines.Add(Info);
+end;
+
+procedure vgUnregisterRenderEngine(aClass: TvgRenderEngineClass);
+  Var I : Integer;
+begin
+  If not assigned(gRenderEngines) then exit;
+
+  For I := gRenderEngines.Count - 1 downto 0 do
+    If gRenderEngines[I].EngineClass = aClass then
+      gRenderEngines.Delete(I);
+end;
+
+function vgRenderEngines: TArray<TvgRenderEngineInfo>;
+begin
+  If assigned(gRenderEngines) then
+    Result := gRenderEngines.ToArray
+  else
+    Result := nil;
+end;
+
+function vgFindRenderEngine(const aName: string): TvgRenderEngineClass;
+  Var Info : TvgRenderEngineInfo;
+begin
+  Result := nil;
+  If not assigned(gRenderEngines) or (gRenderEngines.Count = 0) then exit;
+
+  If aName = '' then
+    Exit(gRenderEngines[0].EngineClass);
+
+  For Info in gRenderEngines do
+    If SameText(Info.Name, aName) then
+      Exit(Info.EngineClass);
+end;
 
 { TvgObject }
 
@@ -5762,8 +5838,10 @@ begin
 end;
 
 
+initialization
 
-
+finalization
+  FreeAndNil(gRenderEngines);
 
 end.
 

@@ -60,8 +60,12 @@
   At run time call EnableSession once the forms holding the windows have
   their handles, e.g. from the main form's OnShow.
 
-  Scene: Scene and Renderer hang off the primary Linker (drop a renderer such
-  as TvgRenderEngine_Single; Add Scene creates the TvgScene).  LoadScene reads
+  Scene: Scene and Renderer hang off the primary Linker.  Both are part of
+  the session - SessionProblem reports either one missing.  BuildSession
+  creates the Scene and, when a renderer class is registered (see
+  vgRegisterRenderEngine; Vulkan_Renderer_Single registers 'Single'), a
+  Renderer of RendererType - blank takes the first registered.  Otherwise
+  drop a renderer such as TvgRenderEngine_Single and assign Renderer.  LoadScene reads
   SceneFileName with a registered scene loader - SceneLoaderType names one
   (e.g. 'glTF'), or leave it blank to pick by file extension - or with the
   SceneLoader component if one is assigned.  LoadSceneOnEnable loads the file
@@ -80,14 +84,19 @@
   class, it calls CreateNew) or CreateNew:
 
       DM := TvgVulkanDataModule.Create(Self);
-      DM.BuildSession;
+      DM.BuildSession;                       //+ Renderer and Scene
       DM.Window := VulkanWindow1;
       DM.AddLinker(VulkanWindow2);
-      DM.Renderer := TvgRenderEngine_Single.Create(DM);
-      DM.BuildScene;
       DM.BuildToolManager;
       DM.EnableSession;
       DM.LoadScene('C:\Models\Box.glb');     //loader picked by extension
+
+  Failures (a session that can't start, a part that can't be made, a
+  Window that is not a window) are reported with CustomAssert
+  (Vulkan_Assert): logged, and raised as EvgVulkanAssertException at design
+  time and in DEBUG builds.  In a release build the call logs the reason
+  and returns with nothing changed - check CanEnableSession / SessionActive
+  rather than relying on an exception.
 }
 
 unit Vulkan_DataModule;
@@ -99,6 +108,7 @@ uses
   System.Classes,
   System.Generics.Collections,
   Vcl.Controls,
+  Vulkan_Assert,
   Vulkan_Components,
   Vulkan_Components_Lookups,
   Vulkan_Components_Scene_Renderer,
@@ -115,6 +125,7 @@ type
 const
   cSceneSlot       = 100;   //layout slot a factory gets for the scene
   cToolManagerSlot = 101;   //... and for the tool manager
+  cRendererSlot    = 102;   //... and for the renderer
 
 type
   TvgVulkanDataModule = class(TDataModule)
@@ -129,6 +140,7 @@ type
 
     fScene             : TvgScene;
     fRenderer          : TvgRenderEngine;
+    fRendererType      : string;
     fSceneLoader       : TvgSceneLoaderStorer;
     fSceneLoaderType   : string;
     fSceneFileName     : string;
@@ -173,8 +185,10 @@ type
       component's constructor, too early to link it. }
     procedure AdoptComponents;
 
-    { Creates whichever of Instance, PhysicalDevice, ScreenDevice and Linker is
-      missing, then wires the primary chain.  Without a factory the components
+    { Creates whichever of Instance, PhysicalDevice, ScreenDevice, Linker,
+      Renderer and Scene is missing, then wires the primary chain.  The
+      Renderer is a registered class (RendererType); with none registered it
+      is left for you to drop and assign.  Without a factory the components
       are created in code, owned by this module. }
     procedure BuildSession; overload;
     procedure BuildSession(const aFactory: TvgSessionComponentFactory); overload;
@@ -190,11 +204,16 @@ type
       A running session is disabled first. }
     procedure ConnectSession;
 
-    { Creates Scene if missing and connects it (see ConnectScene).  The
-      renderer is not created: drop one (e.g. TvgRenderEngine_Single) and
-      assign Renderer, as its class lives in its own package. }
+    { Creates Scene if missing and connects it (see ConnectScene). }
     procedure BuildScene; overload;
     procedure BuildScene(const aFactory: TvgSessionComponentFactory); overload;
+
+    { Creates Renderer if missing, of the registered class RendererType
+      names (blank: the first registered), and connects it.  Leaves it
+      unassigned when no renderer is registered; asserts when RendererType
+      names one that isn't. }
+    procedure BuildRenderer; overload;
+    procedure BuildRenderer(const aFactory: TvgSessionComponentFactory); overload;
 
     { Creates ToolManager if missing (camera orbit mode) and connects it. }
     procedure BuildToolManager; overload;
@@ -220,8 +239,8 @@ type
     function  SessionProblem: string;
     function  CanEnableSession: Boolean;
 
-    { Raises EvgVulkanSessionError when the session can't be started; nothing
-      is left half enabled. }
+    { CustomAsserts with SessionProblem (or the part that failed) when the
+      session can't be started; nothing is left half enabled. }
     procedure EnableSession;
     procedure DisableSession;
 
@@ -247,6 +266,10 @@ type
     { The primary linker's renderer and scene. }
     property Renderer       : TvgRenderEngine        read fRenderer       write SetRenderer;
     property Scene          : TvgScene               read fScene          write SetScene;
+
+    { The registered renderer BuildSession / BuildRenderer create, e.g.
+      'Single'.  Blank: the first one registered. }
+    property RendererType   : string read fRendererType write fRendererType;
 
     { Optional loader component (with its own settings); without one a loader
       of SceneLoaderType - or picked by extension - is made for each load. }
@@ -293,6 +316,10 @@ resourcestring
   vgSesNoVulkan         = 'Vulkan is not installed on this computer (no Vulkan loader found).';
   vgSesNoPhysicalDevice = 'No Physical Device is connected to the Instance.';
   vgSesNoScreenDevice   = 'No Screen Render Device assigned to the session.';
+  vgSesNoRenderer       = 'No Renderer assigned to the session.  Drop a renderer (e.g. TvgRenderEngine_Single) and set Renderer.';
+  vgSesNoScene          = 'No Scene assigned to the session.  Use Add Scene (or Build) to create one.';
+  vgSesNoRendererType   = 'No renderer is registered as ''%s''.';
+  vgSesCantCreate       = 'Unable to create a %s.';
   vgSesLinkerNoWindow   = 'Linker %s has no window.  Set the window''s Linker to it.';
   vgSesNotAWindow       = '%s is not a Vulkan window (it does not implement IvgVulkanWindow).';
   vgSesNoWindowHandle   = 'Window %s has no window handle yet.  Enable the session once its form is showing.';
@@ -490,7 +517,10 @@ begin
 
   Problem := vgSessionProblem(aInstance);
   If Problem <> '' then
-    raise EvgVulkanSessionError.Create(Problem);
+  Begin
+    CustomAssert(False, Problem, aInstance);
+    exit;
+  End;
 
   For L in vgSessionLinkers(aInstance) do
   Begin
@@ -524,9 +554,10 @@ begin
     vgDisableSession(aInstance);
 
     If Failed <> '' then
-      raise EvgVulkanSessionError.CreateFmt(vgSesLinkersFailed, [Failed])
+      CustomAssert(False, Format(vgSesLinkersFailed, [Failed]), aInstance)
     else
-      raise EvgVulkanSessionError.Create(vgSesFailed);
+      CustomAssert(False, vgSesFailed, aInstance);
+    exit;
   End;
 
   InvalidateWindows(aInstance);
@@ -675,7 +706,10 @@ begin
 
   Intf := nil;
   If assigned(Value) and not Supports(Value, IvgVulkanWindow, Intf) then
-    raise EvgVulkanSessionError.CreateFmt(vgSesNotAWindow, [Value.Name]);
+  Begin
+    CustomAssert(False, Format(vgSesNotAWindow, [Value.Name]), Self);
+    exit;
+  End;
 
   DisableSession;
   Old         := fWindow;
@@ -754,8 +788,7 @@ procedure TvgVulkanDataModule.BuildSession(const aFactory: TvgSessionComponentFa
       Result.Name := MakeUniqueName(cPartNames[aIndex]);
     End;
 
-    If not assigned(Result) then
-      raise EvgVulkanSessionError.CreateFmt('Unable to create %s', [aClass.ClassName]);
+    CustomAssert(assigned(Result), Format(vgSesCantCreate, [aClass.ClassName]), Self);
   End;
 
 begin
@@ -774,6 +807,10 @@ begin
     Linker := TvgLinker(MakePart(TvgLinker, 3));
 
   ConnectSession;
+
+  //the rest of what SessionProblem asks for
+  BuildRenderer(aFactory);
+  BuildScene(aFactory);
 end;
 
 function TvgVulkanDataModule.AddLinker(const aWindow: IvgVulkanWindow): TvgLinker;
@@ -783,8 +820,12 @@ end;
 
 function TvgVulkanDataModule.AddLinker(const aWindow: IvgVulkanWindow; const aFactory: TvgSessionComponentFactory): TvgLinker;
 begin
+  Result := nil;
   If not assigned(fScreenDevice) then
-    raise EvgVulkanSessionError.Create(vgSesNoScreenDevice);
+  Begin
+    CustomAssert(False, vgSesNoScreenDevice, Self);
+    exit;
+  End;
 
   DisableSession;
 
@@ -797,7 +838,10 @@ begin
   End;
 
   If not assigned(Result) then
-    raise EvgVulkanSessionError.Create('Unable to create a TvgLinker');
+  Begin
+    CustomAssert(False, Format(vgSesCantCreate, [TvgLinker.ClassName]), Self);
+    exit;
+  End;
 
   If Result.ScreenDevice <> fScreenDevice then
     Result.ScreenDevice := fScreenDevice;
@@ -887,7 +931,10 @@ begin
   End;
 
   If not (C is TvgToolManager) then
-    raise EvgVulkanSessionError.Create('Unable to create a TvgToolManager');
+  Begin
+    CustomAssert(False, Format(vgSesCantCreate, [TvgToolManager.ClassName]), Self);
+    exit;
+  End;
 
   //view the scene: left drag orbits, as in the SimpleTest sample
   TvgToolManager(C).ToolMode   := TMM_CAMERA;
@@ -915,11 +962,55 @@ begin
     End;
 
     If not (C is TvgScene) then
-      raise EvgVulkanSessionError.Create('Unable to create a TvgScene');
+    Begin
+      CustomAssert(False, Format(vgSesCantCreate, [TvgScene.ClassName]), Self);
+      exit;
+    End;
 
     Scene := TvgScene(C);   //connects it
   End else
     ConnectScene;
+end;
+
+procedure TvgVulkanDataModule.BuildRenderer;
+begin
+  BuildRenderer(nil);
+end;
+
+procedure TvgVulkanDataModule.BuildRenderer(const aFactory: TvgSessionComponentFactory);
+  Var RC : TvgRenderEngineClass;
+      C  : TComponent;
+begin
+  If assigned(fRenderer) then
+  Begin
+    ConnectScene;
+    exit;
+  End;
+
+  RC := vgFindRenderEngine(fRendererType);
+  If not assigned(RC) then
+  Begin
+    //none registered: left to be dropped (SessionProblem says so); a name
+    //that isn't registered is a mistake
+    CustomAssert(fRendererType = '', Format(vgSesNoRendererType, [fRendererType]), Self);
+    exit;
+  End;
+
+  If assigned(aFactory) then
+    C := aFactory(RC, cRendererSlot)
+  else
+  Begin
+    C      := RC.Create(Self);
+    C.Name := MakeUniqueName('vgRenderer');
+  End;
+
+  If not (C is TvgRenderEngine) then
+  Begin
+    CustomAssert(False, Format(vgSesCantCreate, [RC.ClassName]), Self);
+    exit;
+  End;
+
+  Renderer := TvgRenderEngine(C);   //connects it
 end;
 
 procedure TvgVulkanDataModule.LoadScene(const aFileName: string = '');
@@ -964,6 +1055,13 @@ begin
     Exit(vgSesNoScreenDevice);
 
   Result := vgSessionProblem(fInstance);
+  If Result <> '' then exit;
+
+  If not assigned(fRenderer) then
+    Exit(vgSesNoRenderer);
+
+  If not assigned(fScene) then
+    Exit(vgSesNoScene);
 end;
 
 function TvgVulkanDataModule.CanEnableSession: Boolean;
@@ -991,10 +1089,16 @@ begin
 
   Problem := SessionProblem;
   If Problem <> '' then
-    raise EvgVulkanSessionError.Create(Problem);
+  Begin
+    CustomAssert(False, Problem, Self);
+    exit;
+  End;
 
   ConnectSession;
   vgEnableSession(fInstance);
+
+  //vgEnableSession asserted the reason; a release build carries on to here
+  If not GetSessionActive then exit;
 
   //the session stays up if the file can't be read: the error says why, and
   //OnSessionEnabled still fires, as the session is enabled
