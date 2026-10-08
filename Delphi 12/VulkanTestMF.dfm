@@ -21,8 +21,6 @@ object Form8: TForm8
         Text = 'test'
         Width = 50
       end>
-    ExplicitTop = 297
-    ExplicitWidth = 847
   end
   object Panel1: TPanel
     Left = 0
@@ -40,5 +38,20 @@ object Form8: TForm8
       TabOrder = 0
       OnClick = Button1Click
     end
+    object Button2: TButton
+      Left = 16
+      Top = 80
+      Width = 105
+      Height = 25
+      Caption = 'Open Scene'
+      TabOrder = 1
+      OnClick = Button2Click
+    end
+  end
+  object SceneOpenDlg: TOpenDialog
+    Filter = 'GLTF ( *.gltf)|*.gltf|All Files (*.*|*.*'
+    Options = [ofHideReadOnly, ofPathMustExist, ofFileMustExist, ofEnableSizing]
+    Left = 200
+    Top = 88
   end
 end

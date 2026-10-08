@@ -17,7 +17,10 @@ type
     StatusBar1: TStatusBar;
     Panel1: TPanel;
     Button1: TButton;
+    SceneOpenDlg: TOpenDialog;
+    Button2: TButton;
     procedure Button1Click(Sender: TObject);
+    procedure Button2Click(Sender: TObject);
   private
     { Private declarations }
 
@@ -46,6 +49,7 @@ begin
   fVulkanDM.BuildSession;
 
   fVulkanDM.BuildScene;
+  fVulkanDM.BuildRenderer;
   fVulkanDM.BuildToolManager;
 
 
@@ -53,13 +57,23 @@ begin
   fVulkanDM.Window := fVCLWindow;
 
 
-
   fVulkanDM.EnableSession;
 
 
 
-  fVulkanDM.DisableSession;
 
+
+end;
+
+procedure TForm8.Button2Click(Sender: TObject);
+begin
+  If  SceneOpenDlg.execute then
+  Begin
+
+    fVulkanDM.ClearScene;
+    fVulkanDM.LoadScene(SceneOpenDlg.FileName)   ;
+
+  End;
 end;
 
 end.
