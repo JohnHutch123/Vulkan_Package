@@ -48,9 +48,17 @@ begin
   fVulkanDM.BuildScene;
   fVulkanDM.BuildToolManager;
 
+
+
   fVulkanDM.Window := fVCLWindow;
 
+
+
   fVulkanDM.EnableSession;
+
+
+
+  fVulkanDM.DisableSession;
 
 end;
 
