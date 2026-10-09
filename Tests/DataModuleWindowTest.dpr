@@ -134,6 +134,19 @@ begin
   End;
 end;
 
+// The module's reference to the freed part (0 Instance .. 4 Scene) is nil.
+function PartCleared(aDM: TvgVulkanDataModule; aPart: Integer): Boolean;
+begin
+  case aPart of
+    0 : Result := aDM.Instance = nil;
+    1 : Result := aDM.PhysicalDevice = nil;
+    2 : Result := aDM.Linker = nil;
+    3 : Result := aDM.Renderer = nil;
+  else
+    Result := aDM.Scene = nil;
+  end;
+end;
+
 var
   Failures : Integer = 0;
 
@@ -166,6 +179,9 @@ var
   S2       : TvgScene;
   TM2      : TvgToolManager;
   SB       : TFakeShaderBuilder;
+  Part     : Integer;
+  Victim   : TComponent;
+  VictimName : string;
 begin
   DM := TvgVulkanDataModule.CreateNew(nil);
   W1 := TFakeWindow.Create(nil);
@@ -290,6 +306,79 @@ begin
     Check('ShaderBuilder cleared on free', DM2.ShaderBuilder = nil, True);
   finally
     DM2.Free;
+  end;
+
+  //the designer's Delete on a built session's screen device: its linkers are
+  //told while it is being destroyed, and must not reach back into it
+  Writeln('Deleting the screen device of a built session');
+  DM2 := TvgVulkanDataModule.CreateNew(nil);
+  try
+    DM2.BuildSession;
+    Lk := DM2.Linker;
+    L2 := DM2.AddLinker(nil);
+    SD := DM2.ScreenDevice;
+
+    Raised := False;
+    Try
+      FreeAndNil(SD);
+    Except
+      on E: Exception do
+      Begin
+        Raised := True;
+        Writeln('    ', E.ClassName, ': ', E.Message);
+      End;
+    End;
+    Check('freeing the screen device raises nothing', Raised, False);
+    Check('module ScreenDevice cleared', DM2.ScreenDevice = nil, True);
+    Check('primary linker let go of it', Lk.ScreenDevice = nil, True);
+    Check('second linker let go of it', L2.ScreenDevice = nil, True);
+    Check('session reports the missing device', DM2.SessionProblem = vgSesNoScreenDevice, True);
+  finally
+    DM2.Free;
+  end;
+
+  //and every other part of a built session
+  for Part := 0 to 4 do
+  begin
+    DM2 := TvgVulkanDataModule.CreateNew(nil);
+    try
+      DM2.BuildSession;
+      DM2.AddLinker(nil);
+      case Part of
+        0 : Victim := DM2.Instance;
+        1 : Victim := DM2.PhysicalDevice;
+        2 : Victim := DM2.Linker;
+        3 : Victim := DM2.Renderer;
+      else
+        Victim := DM2.Scene;
+      end;
+      VictimName := Victim.ClassName;
+
+      Raised := False;
+      Try
+        FreeAndNil(Victim);
+      Except
+        on E: Exception do
+        Begin
+          Raised := True;
+          Writeln('    ', E.ClassName, ': ', E.Message);
+        End;
+      End;
+      Check('freeing the ' + VictimName + ' raises nothing', Raised, False);
+      Check('...and the module no longer refers to it', PartCleared(DM2, Part), True);
+    finally
+      Raised := False;
+      Try
+        DM2.Free;
+      Except
+        on E: Exception do
+        Begin
+          Raised := True;
+          Writeln('    ', E.ClassName, ': ', E.Message);
+        End;
+      End;
+      Check('...and the module frees cleanly afterwards', Raised, False);
+    end;
   end;
   if Failures = 0 then
     Writeln('DataModuleWindowTest: all checks passed')

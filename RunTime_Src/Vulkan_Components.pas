@@ -24823,11 +24823,22 @@ begin
 end;
 
 destructor TvgScreenRenderDevice.Destroy;
+  Var L : TvgLinker;
 begin
   SetActiveState(False); //must stay here
 
   If assigned(fLinkers) then
   Begin
+    //let the linkers go before the list does: otherwise inherited tells each
+    //one this device is going, and its SetScreenDevice(nil) calls
+    //RemoveLinker on a list that no longer exists.  SetScreenDevice(nil)
+    //takes the linker out of fLinkers and drops both free notifications.
+    For L in fLinkers.ToArray do
+      If assigned(L) and (L.fScreenDevice = self) then
+        L.SetScreenDevice(nil)
+      else
+        RemoveLinker(L);
+
     fLinkers.clear;
     FreeAndNil(fLinkers);
   End;
@@ -32763,12 +32774,25 @@ procedure TvgBaseScene.SetLinker(const Value: TvgLinker);
 begin
   If fLinker=Value then exit;
   SetActiveState(False)  ;
+
+  //told when the linker is freed (Notification calls SetLinker(nil)), even
+  //when it lives on another form
+  If assigned(fLinker) then
+     fLinker.RemoveFreeNotification(self);
+
   fLinker := Value;
+
+  If assigned(fLinker) then
+     fLinker.FreeNotification(self);
 
   If assigned(fSceneRes) then
      fSceneRes.Linker:=fLinker;
 
-  SetScreenDevice(fLinker.ScreenDevice);
+  //nil when the linker is cleared: the scene's device comes from its linker
+  If assigned(fLinker) then
+     SetScreenDevice(fLinker.ScreenDevice)
+  else
+     SetScreenDevice(nil);
 end;
 
 procedure TvgBaseScene.SetSceneState(const Value: TvgSceneState);
