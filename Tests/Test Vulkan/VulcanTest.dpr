@@ -21,7 +21,8 @@ uses
   Vulkan_Components_VulkanAPI,
   Vulkan_Components_Scene_Renderer,
   Vulkan_Components_Compute,
-  Vulkan_HUD;
+  Vulkan_HUD,
+  VulkanTestDM in 'VulkanTestDM.pas' {vgVulkanDataModule1: TvgVulkanDataModule};
 
 {$R *.res}
 
@@ -29,5 +30,6 @@ begin
   Application.Initialize;
   Application.MainFormOnTaskbar := True;
   Application.CreateForm(TTestVulkan, TestVulkan);
+  Application.CreateForm(TvgVulkanDataModule1, vgVulkanDataModule1);
   Application.Run;
 end.

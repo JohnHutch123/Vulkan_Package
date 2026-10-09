@@ -1,5 +1,6 @@
-object DataModule2: TDataModule2
-  OldCreateOrder = False
-  Height = 324
-  Width = 416
+object vgVulkanDataModule1: TvgVulkanDataModule1
+  ScreenDevice = vgScreenRenderDevice1
+  Linker = vgLinker1
+  Height = 480
+  Width = 640
 end

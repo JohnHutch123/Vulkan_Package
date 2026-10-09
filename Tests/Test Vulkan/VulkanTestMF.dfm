@@ -291,6 +291,13 @@ object TestVulkan: TTestVulkan
       'Index Triangle')
     TabOrder = 26
   end
+  object vgWindowVCL1: TvgWindowVCL
+    Left = 384
+    Top = 40
+    Width = 697
+    Height = 553
+    ClearColor = clBlack
+  end
   object OpenDialog1: TOpenDialog
     Left = 336
     Top = 160

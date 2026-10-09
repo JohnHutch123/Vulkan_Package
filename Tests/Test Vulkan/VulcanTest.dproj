@@ -113,6 +113,11 @@
             <Form>TestVulkan</Form>
         </DCCReference>
         <DCCReference Include="Vulkan_Render_Tests.pas"/>
+        <DCCReference Include="VulkanTestDM.pas">
+            <Form>vgVulkanDataModule1</Form>
+            <FormType>dfm</FormType>
+            <DesignClass>TvgVulkanDataModule</DesignClass>
+        </DCCReference>
         <None Include="ModelSupport_VulcanTest\default.txaPackage"/>
         <None Include="ModelSupport_VulcanTest\default.txvpck"/>
         <None Include="ModelSupport_VulcanTest\VulcanTest\default.txvpck"/>

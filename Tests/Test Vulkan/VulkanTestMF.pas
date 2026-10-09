@@ -50,6 +50,7 @@ type
     OpenDialog1: TOpenDialog;
     BitBtn3: TBitBtn;
     TestRead: TRadioGroup;
+    vgWindowVCL1: TvgWindowVCL;
 
     procedure Button1Click(Sender: TObject);
     procedure Button2Click(Sender: TObject);
