@@ -91,7 +91,8 @@ See [`RunTime_Src/DATA_MODULE_GUIDE.md`](RunTime_Src/DATA_MODULE_GUIDE.md) for a
 
 Files: `RunTime_Src/Vulkan_DataModule.pas` (runtime base class, in the VCL runtime package, e.g.
 `VulkanPkg_VCLR290`), and `Design_Src/VulkanPkg_DataModuleReg.pas` and `Design_Src/VulkanDataModuleEditFM.pas/.dfm`
-(IDE side, in the VCL design package, e.g. `VulkanPkg_VCLD290`).
+(IDE side, in the core design package with the other session components, e.g. `VulkanPkgD290`,
+which therefore requires the VCL runtime package).
 
 ---
 

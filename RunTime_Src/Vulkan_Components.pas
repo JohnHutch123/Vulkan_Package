@@ -288,10 +288,18 @@ type
     vgcsActive
   );
 
+  { An owner told when a TvgBaseComponent it owns has finished constructing
+    - TvgVulkanDataModule, which links a part dropped on it then. }
+  IvgComponentHost = interface
+    ['{069A99D7-D2E7-4DA2-ABEB-DEEE19B1154C}']
+    procedure ComponentConstructed(aComponent: TComponent);
+  end;
+
 TvgBaseComponent = class(TComponent)
   private
     fState          : TvgComponentState;
     fStateChanging  : Boolean;
+    fConstructed    : Boolean;   //see AfterConstruction
 
     function GetActive: Boolean;
     function GetDesigning: Boolean;
@@ -321,8 +329,17 @@ TvgBaseComponent = class(TComponent)
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
 
+    { TComponent.Create announces a component to its owner's components
+      (opInsert) before the descendant constructors have run, and at design
+      time they link to it there and then - to fields not yet created, or
+      that the constructor then resets.  So those notices are ignored (see
+      vgLinkable) and sent again here, once it is whole, to the owner's
+      other components - and to the owner through IvgComponentHost. }
+    procedure AfterConstruction; override;
+
     Function ApplyState(const ANewState: TvgComponentState): Boolean; virtual;
 
+    property Constructed : Boolean read fConstructed;
     property State     : TvgComponentState read fState;
     property Designing : Boolean read GetDesigning write SetDesignState;
     property StateChanging: Boolean read fStateChanging;
@@ -744,6 +761,19 @@ TvgBaseComponent = class(TComponent)
     constructor Create(AOwner: TComponent); Override;
     destructor Destroy; override;
 
+    { Recomputes DescriptorIndexing and DynamicRendering from the logical
+      devices on this instance - on when any of them asks for it - so the
+      instance gets the API version and extensions they need.  aDevice is
+      counted even when it is not yet on one of the physical devices.  A
+      logical device calls it when its request or its instance changes. }
+    Procedure UpdateDeviceRequests(aDevice: TvgLogicalDevice = nil);
+
+    { What the instance's devices need: set by UpdateDeviceRequests from
+      TvgLogicalDevice.DescriptorIndexingON / DynamicRenderingON.  Not
+      published - the screen render device is where they are set. }
+    Property DescriptorIndexing: Boolean read GetDescriptorIndexing write SetDescriptorIndexing;
+    Property DynamicRendering  : Boolean read GetynamicRendering  write SetDynamicRendering ;
+
     Procedure BuildAllExtensionsAndLayers;
     Procedure ClearAllExtensionsAndlayers;
 
@@ -791,9 +821,6 @@ TvgBaseComponent = class(TComponent)
      Property MemAllocation     : TvgAllocationMode Read GetAllocationMode write SetAllocationMode default VG_SELF_MANAGE;
 
      Property RenderToScreen    : Boolean read GetRenderToScreen write SetRenderToScreen default false;
-
-     Property DescriptorIndexing: Boolean read GetDescriptorIndexing write SetDescriptorIndexing;
-     Property DynamicRendering  : Boolean read GetynamicRendering  write SetDynamicRendering ;
 
 
      //if true the screen rendering extensions MUST be available and enabled
@@ -1047,139 +1074,143 @@ TvgBaseComponent = class(TComponent)
        Property SetLocked : Boolean read fSetLocked;
        Property LogicalDevice :  TvgLogicalDevice read GetLogicalDevice write SetLogicalDevice;
 
-  //  Published   not sure about published in this way
-       Property RobustBufferAccess : Boolean Read frobustBufferAccess  Write frobustBufferAccess  ;
-       Property FullDrawIndex      : Boolean Read ffullDrawIndexUint32  Write ffullDrawIndexUint32  ;
-       Property ImageCubeArray     : Boolean Read fImageCubeArray  Write fImageCubeArray  ;
-       Property IndependentBlend   : Boolean Read findependentBlend  Write findependentBlend  ;
-       Property GeometryShader     : Boolean Read fGeometryShader  Write fGeometryShader  ;
-       Property TessellationShader : Boolean Read fTessellationShader  Write fTessellationShader  ;
-       Property SampleRateShading  : Boolean Read fSampleRateShading Write fSampleRateShading ;
-       Property DualSrcBlend        : Boolean Read fDualSrcBlend Write fDualSrcBlend ;
-       Property LogicOp             : Boolean Read fLogicOp Write fLogicOp ;
-       Property MultiDrawIndirect   : Boolean Read fMultiDrawIndirect Write fMultiDrawIndirect ;
-       Property DrawIndirectFirstInstance : Boolean Read fDrawIndirectFirstInstance Write fDrawIndirectFirstInstance ;
-       Property DepthClamp          : Boolean Read fDepthClamp Write fDepthClamp ;
-       Property DepthBiasClamp      : Boolean Read fDepthBiasClamp Write fDepthBiasClamp ;
-       Property FillModeNonSolid    : Boolean Read fFillModeNonSolid Write fFillModeNonSolid ;
-       Property DepthBounds         : Boolean Read fDepthBounds Write fDepthBounds ;
-       Property WideLines           : Boolean Read fWideLines Write fWideLines ;
-       Property LargePoints         : Boolean Read fLargePoints Write fLargePoints ;
-       Property AlphaToOne         : Boolean Read fAlphaToOne Write fAlphaToOne ;
-       Property MultiViewport         : Boolean Read fMultiViewport Write fMultiViewport ;
-       Property SamplerAnisotropy         : Boolean Read fSamplerAnisotropy Write fSamplerAnisotropy ;
-       Property TextureComprssionETC2         : Boolean Read fTextureCompressionETC2 Write fTextureCompressionETC2 ;
-       Property TextureComprssionASTC_LDR         : Boolean Read fTextureCompressionASTC_LDR Write fTextureCompressionASTC_LDR ;
-       Property TextureComprssionBC         : Boolean Read fTextureCompressionBC Write fTextureCompressionBC ;
-       Property OcclusionQueryPrecise         : Boolean Read fOcclusionQueryPrecise Write fOcclusionQueryPrecise ;
-       Property PipelineStatisticsQuery   : Boolean Read fPipelineStatisticsQuery Write fPipelineStatisticsQuery ;
-       Property VertexPipelineStoresAndAtomics   : Boolean Read fVertexPipelineStoresAndAtomics Write fVertexPipelineStoresAndAtomics ;
-       Property FragmentStoresAndAtomics   : Boolean Read fFragmentStoresAndAtomics Write fFragmentStoresAndAtomics ;
-       Property ShaderTessellationAndGeometryPointSize   : Boolean Read fShaderTessellationAndGeometryPointSize Write fShaderTessellationAndGeometryPointSize ;
-       Property ShaderImageGatherExtended   : Boolean Read fShaderImageGatherExtended Write fShaderImageGatherExtended ;
-       Property ShaderStorageImageExtendedFormats   : Boolean Read fShaderStorageImageExtendedFormats Write fShaderStorageImageExtendedFormats ;
-       Property ShaderStorageImageMultisample   : Boolean Read fShaderStorageImageMultisample Write fShaderStorageImageMultisample ;
-       Property ShaderStorageImageReadWithoutFormat   : Boolean Read fShaderStorageImageReadWithoutFormat Write fShaderStorageImageReadWithoutFormat ;
-       Property ShaderStorageImageWriteWithoutFormat   : Boolean Read fShaderStorageImageWriteWithoutFormat Write fShaderStorageImageWriteWithoutFormat ;
-       Property ShaderUniformBufferArrayDynamicIndexing   : Boolean Read fShaderUniformBufferArrayDynamicIndexing Write fShaderUniformBufferArrayDynamicIndexing ;
-       Property ShaderSampledImageArrayDynamicIndexing   : Boolean Read fShaderSampledImageArrayDynamicIndexing Write fShaderSampledImageArrayDynamicIndexing ;
-       Property ShaderStorageBufferArrayDynamicIndexing   : Boolean Read fShaderStorageBufferArrayDynamicIndexing Write fShaderStorageBufferArrayDynamicIndexing ;
-       Property ShaderStorageImageArrayDynamicIndexing   : Boolean Read fShaderStorageImageArrayDynamicIndexing Write fShaderStorageImageArrayDynamicIndexing ;
-       Property ShaderClipDistance   : Boolean Read fShaderClipDistance Write fShaderClipDistance ;
-       Property ShaderCullDistance   : Boolean Read fShaderCullDistance Write fShaderCullDistance;
-       Property ShaderFloat64   : Boolean Read fShaderFloat64 Write fShaderFloat64 ;
-       Property ShaderInt64   : Boolean Read fShaderInt64 Write fShaderInt64 ;
-       Property ShaderInt16   : Boolean Read fShaderInt16 Write fShaderInt16 ;
-       Property ShaderResourceResidency   : Boolean Read fShaderResourceResidency Write fShaderResourceResidency ;
-       Property ShaderResourceMinLod   : Boolean Read fShaderResourceMinLod Write fShaderResourceMinLod ;
-       Property SparseBinding   : Boolean Read fSparseBinding Write fSparseBinding ;
-       Property SparseResidencyBuffer   : Boolean Read fSparseResidencyBuffer Write fSparseResidencyBuffer ;
-       Property SparseResidencyImage2D   : Boolean Read fSparseResidencyImage2D Write fSparseResidencyImage2D ;
-       Property SparseResidencyImage3D   : Boolean Read fSparseResidencyImage3D Write fSparseResidencyImage3D ;
-       Property SparseResidency2Samples   : Boolean Read fSparseResidency2Samples Write fSparseResidency2Samples ;
-       Property SparseResidency4Samples   : Boolean Read fSparseResidency4Samples Write fSparseResidency4Samples ;
-       Property SparseResidency8Samples   : Boolean Read fSparseResidency8Samples Write fSparseResidency8Samples ;
-       Property SparseResidency16Samples   : Boolean Read fSparseResidency16Samples Write fSparseResidency16Samples ;
-       Property SparseResidencyAliased   : Boolean Read fSparseResidencyAliased Write fSparseResidencyAliased ;
-       Property VariableMultisampleRate   : Boolean Read fVariableMultisampleRate Write fVariableMultisampleRate ;
-       Property InheritedQueries   : Boolean Read fInheritedQueries Write fInheritedQueries ;
+    { What the device is to be created with, read from the GPU at design
+      time (see QuerySupportedFeatures).  Published so the Object Inspector
+      can show them - read only there (TvgReadOnlyBoolProperty) and not
+      stored: they are worked out, not chosen. }
+    Published
+       Property RobustBufferAccess : Boolean Read frobustBufferAccess  Write frobustBufferAccess stored False;
+       Property FullDrawIndex      : Boolean Read ffullDrawIndexUint32  Write ffullDrawIndexUint32 stored False;
+       Property ImageCubeArray     : Boolean Read fImageCubeArray  Write fImageCubeArray stored False;
+       Property IndependentBlend   : Boolean Read findependentBlend  Write findependentBlend stored False;
+       Property GeometryShader     : Boolean Read fGeometryShader  Write fGeometryShader stored False;
+       Property TessellationShader : Boolean Read fTessellationShader  Write fTessellationShader stored False;
+       Property SampleRateShading  : Boolean Read fSampleRateShading Write fSampleRateShading stored False;
+       Property DualSrcBlend        : Boolean Read fDualSrcBlend Write fDualSrcBlend stored False;
+       Property LogicOp             : Boolean Read fLogicOp Write fLogicOp stored False;
+       Property MultiDrawIndirect   : Boolean Read fMultiDrawIndirect Write fMultiDrawIndirect stored False;
+       Property DrawIndirectFirstInstance : Boolean Read fDrawIndirectFirstInstance Write fDrawIndirectFirstInstance stored False;
+       Property DepthClamp          : Boolean Read fDepthClamp Write fDepthClamp stored False;
+       Property DepthBiasClamp      : Boolean Read fDepthBiasClamp Write fDepthBiasClamp stored False;
+       Property FillModeNonSolid    : Boolean Read fFillModeNonSolid Write fFillModeNonSolid stored False;
+       Property DepthBounds         : Boolean Read fDepthBounds Write fDepthBounds stored False;
+       Property WideLines           : Boolean Read fWideLines Write fWideLines stored False;
+       Property LargePoints         : Boolean Read fLargePoints Write fLargePoints stored False;
+       Property AlphaToOne         : Boolean Read fAlphaToOne Write fAlphaToOne stored False;
+       Property MultiViewport         : Boolean Read fMultiViewport Write fMultiViewport stored False;
+       Property SamplerAnisotropy         : Boolean Read fSamplerAnisotropy Write fSamplerAnisotropy stored False;
+       Property TextureComprssionETC2         : Boolean Read fTextureCompressionETC2 Write fTextureCompressionETC2 stored False;
+       Property TextureComprssionASTC_LDR         : Boolean Read fTextureCompressionASTC_LDR Write fTextureCompressionASTC_LDR stored False;
+       Property TextureComprssionBC         : Boolean Read fTextureCompressionBC Write fTextureCompressionBC stored False;
+       Property OcclusionQueryPrecise         : Boolean Read fOcclusionQueryPrecise Write fOcclusionQueryPrecise stored False;
+       Property PipelineStatisticsQuery   : Boolean Read fPipelineStatisticsQuery Write fPipelineStatisticsQuery stored False;
+       Property VertexPipelineStoresAndAtomics   : Boolean Read fVertexPipelineStoresAndAtomics Write fVertexPipelineStoresAndAtomics stored False;
+       Property FragmentStoresAndAtomics   : Boolean Read fFragmentStoresAndAtomics Write fFragmentStoresAndAtomics stored False;
+       Property ShaderTessellationAndGeometryPointSize   : Boolean Read fShaderTessellationAndGeometryPointSize Write fShaderTessellationAndGeometryPointSize stored False;
+       Property ShaderImageGatherExtended   : Boolean Read fShaderImageGatherExtended Write fShaderImageGatherExtended stored False;
+       Property ShaderStorageImageExtendedFormats   : Boolean Read fShaderStorageImageExtendedFormats Write fShaderStorageImageExtendedFormats stored False;
+       Property ShaderStorageImageMultisample   : Boolean Read fShaderStorageImageMultisample Write fShaderStorageImageMultisample stored False;
+       Property ShaderStorageImageReadWithoutFormat   : Boolean Read fShaderStorageImageReadWithoutFormat Write fShaderStorageImageReadWithoutFormat stored False;
+       Property ShaderStorageImageWriteWithoutFormat   : Boolean Read fShaderStorageImageWriteWithoutFormat Write fShaderStorageImageWriteWithoutFormat stored False;
+       Property ShaderUniformBufferArrayDynamicIndexing   : Boolean Read fShaderUniformBufferArrayDynamicIndexing Write fShaderUniformBufferArrayDynamicIndexing stored False;
+       Property ShaderSampledImageArrayDynamicIndexing   : Boolean Read fShaderSampledImageArrayDynamicIndexing Write fShaderSampledImageArrayDynamicIndexing stored False;
+       Property ShaderStorageBufferArrayDynamicIndexing   : Boolean Read fShaderStorageBufferArrayDynamicIndexing Write fShaderStorageBufferArrayDynamicIndexing stored False;
+       Property ShaderStorageImageArrayDynamicIndexing   : Boolean Read fShaderStorageImageArrayDynamicIndexing Write fShaderStorageImageArrayDynamicIndexing stored False;
+       Property ShaderClipDistance   : Boolean Read fShaderClipDistance Write fShaderClipDistance stored False;
+       Property ShaderCullDistance   : Boolean Read fShaderCullDistance Write fShaderCullDistance stored False;
+       Property ShaderFloat64   : Boolean Read fShaderFloat64 Write fShaderFloat64 stored False;
+       Property ShaderInt64   : Boolean Read fShaderInt64 Write fShaderInt64 stored False;
+       Property ShaderInt16   : Boolean Read fShaderInt16 Write fShaderInt16 stored False;
+       Property ShaderResourceResidency   : Boolean Read fShaderResourceResidency Write fShaderResourceResidency stored False;
+       Property ShaderResourceMinLod   : Boolean Read fShaderResourceMinLod Write fShaderResourceMinLod stored False;
+       Property SparseBinding   : Boolean Read fSparseBinding Write fSparseBinding stored False;
+       Property SparseResidencyBuffer   : Boolean Read fSparseResidencyBuffer Write fSparseResidencyBuffer stored False;
+       Property SparseResidencyImage2D   : Boolean Read fSparseResidencyImage2D Write fSparseResidencyImage2D stored False;
+       Property SparseResidencyImage3D   : Boolean Read fSparseResidencyImage3D Write fSparseResidencyImage3D stored False;
+       Property SparseResidency2Samples   : Boolean Read fSparseResidency2Samples Write fSparseResidency2Samples stored False;
+       Property SparseResidency4Samples   : Boolean Read fSparseResidency4Samples Write fSparseResidency4Samples stored False;
+       Property SparseResidency8Samples   : Boolean Read fSparseResidency8Samples Write fSparseResidency8Samples stored False;
+       Property SparseResidency16Samples   : Boolean Read fSparseResidency16Samples Write fSparseResidency16Samples stored False;
+       Property SparseResidencyAliased   : Boolean Read fSparseResidencyAliased Write fSparseResidencyAliased stored False;
+       Property VariableMultisampleRate   : Boolean Read fVariableMultisampleRate Write fVariableMultisampleRate stored False;
+       Property InheritedQueries   : Boolean Read fInheritedQueries Write fInheritedQueries stored False;
   //1_1
-       Property StorageBuffer16BitAccess   : Boolean Read fStorageBuffer16BitAccess Write fStorageBuffer16BitAccess ;
-       Property UniformAndStorageBuffer16BitAccess   : Boolean Read fUniformAndStorageBuffer16BitAccess Write fUniformAndStorageBuffer16BitAccess ;
-       Property StoragePushConstant16   : Boolean Read fStoragePushConstant16 Write fStoragePushConstant16 ;
-       Property StorageInputOutput16   : Boolean Read fStorageInputOutput16 Write fStorageInputOutput16 ;
-       Property Multiview   : Boolean Read fMultiview Write fMultiview ;
-       Property MultiviewGeometryShader   : Boolean Read fMultiviewGeometryShader Write fMultiviewGeometryShader ;
-       Property MultiviewTessellationShader   : Boolean Read fMultiviewTessellationShader Write fMultiviewTessellationShader ;
-       Property VariablePointersStorageBuffer   : Boolean Read fVariablePointersStorageBuffer Write fVariablePointersStorageBuffer ;
-       Property VariablePointers   : Boolean Read fVariablePointers Write fVariablePointers ;
-       Property ProtectedMemory   : Boolean Read fProtectedMemory Write fProtectedMemory ;
-       Property SamplerYcbcrConversion   : Boolean Read fSamplerYcbcrConversion Write fSamplerYcbcrConversion ;
-       Property ShaderDrawParameters   : Boolean Read fShaderDrawParameters Write fShaderDrawParameters ;
+       Property StorageBuffer16BitAccess   : Boolean Read fStorageBuffer16BitAccess Write fStorageBuffer16BitAccess stored False;
+       Property UniformAndStorageBuffer16BitAccess   : Boolean Read fUniformAndStorageBuffer16BitAccess Write fUniformAndStorageBuffer16BitAccess stored False;
+       Property StoragePushConstant16   : Boolean Read fStoragePushConstant16 Write fStoragePushConstant16 stored False;
+       Property StorageInputOutput16   : Boolean Read fStorageInputOutput16 Write fStorageInputOutput16 stored False;
+       Property Multiview   : Boolean Read fMultiview Write fMultiview stored False;
+       Property MultiviewGeometryShader   : Boolean Read fMultiviewGeometryShader Write fMultiviewGeometryShader stored False;
+       Property MultiviewTessellationShader   : Boolean Read fMultiviewTessellationShader Write fMultiviewTessellationShader stored False;
+       Property VariablePointersStorageBuffer   : Boolean Read fVariablePointersStorageBuffer Write fVariablePointersStorageBuffer stored False;
+       Property VariablePointers   : Boolean Read fVariablePointers Write fVariablePointers stored False;
+       Property ProtectedMemory   : Boolean Read fProtectedMemory Write fProtectedMemory stored False;
+       Property SamplerYcbcrConversion   : Boolean Read fSamplerYcbcrConversion Write fSamplerYcbcrConversion stored False;
+       Property ShaderDrawParameters   : Boolean Read fShaderDrawParameters Write fShaderDrawParameters stored False;
    //1_2
-       Property SamplerMirrorClampToEdge   : Boolean Read fSamplerMirrorClampToEdge Write fSamplerMirrorClampToEdge ;
-       Property DrawIndirectCount   : Boolean Read fDrawIndirectCount Write fDrawIndirectCount ;
-       Property StorageBuffer8BitAccess   : Boolean Read fStorageBuffer8BitAccess Write fStorageBuffer8BitAccess ;
-       Property UniformAndStorageBuffer8BitAccess   : Boolean Read fUniformAndStorageBuffer8BitAccess Write fUniformAndStorageBuffer8BitAccess ;
-       Property StoragePushConstant8   : Boolean Read fStoragePushConstant8 Write fStoragePushConstant8 ;
-       Property ShaderBufferInt64Atomics   : Boolean Read fShaderBufferInt64Atomics Write fShaderBufferInt64Atomics ;
-       Property ShaderSharedInt64Atomics   : Boolean Read fShaderSharedInt64Atomics Write fShaderSharedInt64Atomics ;
-       Property ShaderFloat16   : Boolean Read fShaderFloat16 Write fShaderFloat16 ;
-       Property ShaderInt8   : Boolean Read fShaderInt8 Write fShaderInt8 ;
-       Property DescriptorIndexing   : Boolean Read fDescriptorIndexing Write fDescriptorIndexing ;
-       Property ShaderInputAttachmentArrayDynamicIndexing   : Boolean Read fShaderInputAttachmentArrayDynamicIndexing Write fShaderInputAttachmentArrayDynamicIndexing ;
-       Property ShaderUniformTexelBufferArrayDynamicIndexing   : Boolean Read fShaderUniformTexelBufferArrayDynamicIndexing Write fShaderUniformTexelBufferArrayDynamicIndexing ;
-       Property ShaderStorageTexelBufferArrayDynamicIndexing   : Boolean Read fShaderStorageTexelBufferArrayDynamicIndexing Write fShaderStorageTexelBufferArrayDynamicIndexing ;
-       Property ShaderUniformBufferArrayNonUniformIndexing   : Boolean Read fShaderUniformBufferArrayNonUniformIndexing Write fShaderUniformBufferArrayNonUniformIndexing ;
-       Property ShaderSampledImageArrayNonUniformIndexing   : Boolean Read fShaderSampledImageArrayNonUniformIndexing Write fShaderSampledImageArrayNonUniformIndexing ;
-       Property ShaderStorageBufferArrayNonUniformIndexing   : Boolean Read fShaderStorageBufferArrayNonUniformIndexing Write fShaderStorageBufferArrayNonUniformIndexing ;
-       Property ShaderStorageImageArrayNonUniformIndexing   : Boolean Read fShaderStorageImageArrayNonUniformIndexing Write fShaderStorageImageArrayNonUniformIndexing ;
-       Property ShaderInputAttachmentArrayNonUniformIndexing   : Boolean Read fShaderInputAttachmentArrayNonUniformIndexing Write fShaderInputAttachmentArrayNonUniformIndexing ;
-       Property ShaderUniformTexelBufferArrayNonUniformIndexing   : Boolean Read fShaderUniformTexelBufferArrayNonUniformIndexing Write fShaderUniformTexelBufferArrayNonUniformIndexing ;
-       Property ShaderStorageTexelBufferArrayNonUniformIndexing   : Boolean Read fShaderStorageTexelBufferArrayNonUniformIndexing Write fShaderStorageTexelBufferArrayNonUniformIndexing ;
-       Property DescriptorBindingUniformBufferUpdateAfterBind   : Boolean Read fDescriptorBindingUniformBufferUpdateAfterBind Write fDescriptorBindingUniformBufferUpdateAfterBind ;
-       Property DescriptorBindingSampledImageUpdateAfterBind   : Boolean Read fDescriptorBindingSampledImageUpdateAfterBind Write fDescriptorBindingSampledImageUpdateAfterBind ;
-       Property DescriptorBindingStorageImageUpdateAfterBind   : Boolean Read fDescriptorBindingStorageImageUpdateAfterBind Write fDescriptorBindingStorageImageUpdateAfterBind ;
-       Property DescriptorBindingStorageBufferUpdateAfterBind   : Boolean Read fDescriptorBindingStorageBufferUpdateAfterBind Write fDescriptorBindingStorageBufferUpdateAfterBind ;
-       Property DescriptorBindingUniformTexelBufferUpdateAfterBind   : Boolean Read fDescriptorBindingUniformTexelBufferUpdateAfterBind Write fDescriptorBindingUniformTexelBufferUpdateAfterBind ;
-       Property DescriptorBindingStorageTexelBufferUpdateAfterBind   : Boolean Read fDescriptorBindingStorageTexelBufferUpdateAfterBind Write fDescriptorBindingStorageTexelBufferUpdateAfterBind ;
-       Property DescriptorBindingUpdateUnusedWhilePending   : Boolean Read fDescriptorBindingUpdateUnusedWhilePending Write fDescriptorBindingUpdateUnusedWhilePending ;
-       Property DescriptorBindingPartiallyBound   : Boolean Read fDescriptorBindingPartiallyBound Write fDescriptorBindingPartiallyBound ;
-       Property DescriptorBindingVariableDescriptorCount   : Boolean Read fDescriptorBindingVariableDescriptorCount Write fDescriptorBindingVariableDescriptorCount ;
-       Property RuntimeDescriptorArray   : Boolean Read fRuntimeDescriptorArray Write fRuntimeDescriptorArray ;
-       Property SamplerFilterMinmax   : Boolean Read fSamplerFilterMinmax Write fSamplerFilterMinmax ;
-       Property ScalarBlockLayout   : Boolean Read fScalarBlockLayout Write fScalarBlockLayout ;
-       Property ImagelessFramebuffer   : Boolean Read fImagelessFramebuffer Write fImagelessFramebuffer ;
-       Property UniformBufferStandardLayout   : Boolean Read fUniformBufferStandardLayout Write fUniformBufferStandardLayout ;
-       Property ShaderSubgroupExtendedTypes   : Boolean Read fShaderSubgroupExtendedTypes Write fShaderSubgroupExtendedTypes ;
-       Property SeparateDepthStencilLayouts   : Boolean Read fSeparateDepthStencilLayouts Write fSeparateDepthStencilLayouts ;
-       Property HostQueryReset   : Boolean Read fHostQueryReset Write fHostQueryReset ;
-       Property TimelineSemaphore   : Boolean Read fTimelineSemaphore Write fTimelineSemaphore ;
-       Property BufferDeviceAddress   : Boolean Read fBufferDeviceAddress Write fBufferDeviceAddress ;
-       Property BufferDeviceAddressCaptureReplay   : Boolean Read fBufferDeviceAddressCaptureReplay Write fBufferDeviceAddressCaptureReplay ;
-       Property BufferDeviceAddressMultiDevice   : Boolean Read fBufferDeviceAddressMultiDevice Write fBufferDeviceAddressMultiDevice ;
-       Property VulkanMemoryModel   : Boolean Read fVulkanMemoryModel Write fVulkanMemoryModel ;
-       Property VulkanMemoryModelDeviceScope   : Boolean Read fVulkanMemoryModelDeviceScope Write fVulkanMemoryModelDeviceScope ;
-       Property VulkanMemoryModelAvailabilityVisibilityChains   : Boolean Read fVulkanMemoryModelAvailabilityVisibilityChains Write fVulkanMemoryModelAvailabilityVisibilityChains ;
-       Property ShaderOutputViewportIndex   : Boolean Read fShaderOutputViewportIndex Write fShaderOutputViewportIndex ;
-       Property ShaderOutputLayer   : Boolean Read fShaderOutputLayer Write fShaderOutputLayer ;
-       Property SubgroupBroadcastDynamicId   : Boolean Read fSubgroupBroadcastDynamicId Write fSubgroupBroadcastDynamicId ;
+       Property SamplerMirrorClampToEdge   : Boolean Read fSamplerMirrorClampToEdge Write fSamplerMirrorClampToEdge stored False;
+       Property DrawIndirectCount   : Boolean Read fDrawIndirectCount Write fDrawIndirectCount stored False;
+       Property StorageBuffer8BitAccess   : Boolean Read fStorageBuffer8BitAccess Write fStorageBuffer8BitAccess stored False;
+       Property UniformAndStorageBuffer8BitAccess   : Boolean Read fUniformAndStorageBuffer8BitAccess Write fUniformAndStorageBuffer8BitAccess stored False;
+       Property StoragePushConstant8   : Boolean Read fStoragePushConstant8 Write fStoragePushConstant8 stored False;
+       Property ShaderBufferInt64Atomics   : Boolean Read fShaderBufferInt64Atomics Write fShaderBufferInt64Atomics stored False;
+       Property ShaderSharedInt64Atomics   : Boolean Read fShaderSharedInt64Atomics Write fShaderSharedInt64Atomics stored False;
+       Property ShaderFloat16   : Boolean Read fShaderFloat16 Write fShaderFloat16 stored False;
+       Property ShaderInt8   : Boolean Read fShaderInt8 Write fShaderInt8 stored False;
+       Property DescriptorIndexing   : Boolean Read fDescriptorIndexing Write fDescriptorIndexing stored False;
+       Property ShaderInputAttachmentArrayDynamicIndexing   : Boolean Read fShaderInputAttachmentArrayDynamicIndexing Write fShaderInputAttachmentArrayDynamicIndexing stored False;
+       Property ShaderUniformTexelBufferArrayDynamicIndexing   : Boolean Read fShaderUniformTexelBufferArrayDynamicIndexing Write fShaderUniformTexelBufferArrayDynamicIndexing stored False;
+       Property ShaderStorageTexelBufferArrayDynamicIndexing   : Boolean Read fShaderStorageTexelBufferArrayDynamicIndexing Write fShaderStorageTexelBufferArrayDynamicIndexing stored False;
+       Property ShaderUniformBufferArrayNonUniformIndexing   : Boolean Read fShaderUniformBufferArrayNonUniformIndexing Write fShaderUniformBufferArrayNonUniformIndexing stored False;
+       Property ShaderSampledImageArrayNonUniformIndexing   : Boolean Read fShaderSampledImageArrayNonUniformIndexing Write fShaderSampledImageArrayNonUniformIndexing stored False;
+       Property ShaderStorageBufferArrayNonUniformIndexing   : Boolean Read fShaderStorageBufferArrayNonUniformIndexing Write fShaderStorageBufferArrayNonUniformIndexing stored False;
+       Property ShaderStorageImageArrayNonUniformIndexing   : Boolean Read fShaderStorageImageArrayNonUniformIndexing Write fShaderStorageImageArrayNonUniformIndexing stored False;
+       Property ShaderInputAttachmentArrayNonUniformIndexing   : Boolean Read fShaderInputAttachmentArrayNonUniformIndexing Write fShaderInputAttachmentArrayNonUniformIndexing stored False;
+       Property ShaderUniformTexelBufferArrayNonUniformIndexing   : Boolean Read fShaderUniformTexelBufferArrayNonUniformIndexing Write fShaderUniformTexelBufferArrayNonUniformIndexing stored False;
+       Property ShaderStorageTexelBufferArrayNonUniformIndexing   : Boolean Read fShaderStorageTexelBufferArrayNonUniformIndexing Write fShaderStorageTexelBufferArrayNonUniformIndexing stored False;
+       Property DescriptorBindingUniformBufferUpdateAfterBind   : Boolean Read fDescriptorBindingUniformBufferUpdateAfterBind Write fDescriptorBindingUniformBufferUpdateAfterBind stored False;
+       Property DescriptorBindingSampledImageUpdateAfterBind   : Boolean Read fDescriptorBindingSampledImageUpdateAfterBind Write fDescriptorBindingSampledImageUpdateAfterBind stored False;
+       Property DescriptorBindingStorageImageUpdateAfterBind   : Boolean Read fDescriptorBindingStorageImageUpdateAfterBind Write fDescriptorBindingStorageImageUpdateAfterBind stored False;
+       Property DescriptorBindingStorageBufferUpdateAfterBind   : Boolean Read fDescriptorBindingStorageBufferUpdateAfterBind Write fDescriptorBindingStorageBufferUpdateAfterBind stored False;
+       Property DescriptorBindingUniformTexelBufferUpdateAfterBind   : Boolean Read fDescriptorBindingUniformTexelBufferUpdateAfterBind Write fDescriptorBindingUniformTexelBufferUpdateAfterBind stored False;
+       Property DescriptorBindingStorageTexelBufferUpdateAfterBind   : Boolean Read fDescriptorBindingStorageTexelBufferUpdateAfterBind Write fDescriptorBindingStorageTexelBufferUpdateAfterBind stored False;
+       Property DescriptorBindingUpdateUnusedWhilePending   : Boolean Read fDescriptorBindingUpdateUnusedWhilePending Write fDescriptorBindingUpdateUnusedWhilePending stored False;
+       Property DescriptorBindingPartiallyBound   : Boolean Read fDescriptorBindingPartiallyBound Write fDescriptorBindingPartiallyBound stored False;
+       Property DescriptorBindingVariableDescriptorCount   : Boolean Read fDescriptorBindingVariableDescriptorCount Write fDescriptorBindingVariableDescriptorCount stored False;
+       Property RuntimeDescriptorArray   : Boolean Read fRuntimeDescriptorArray Write fRuntimeDescriptorArray stored False;
+       Property SamplerFilterMinmax   : Boolean Read fSamplerFilterMinmax Write fSamplerFilterMinmax stored False;
+       Property ScalarBlockLayout   : Boolean Read fScalarBlockLayout Write fScalarBlockLayout stored False;
+       Property ImagelessFramebuffer   : Boolean Read fImagelessFramebuffer Write fImagelessFramebuffer stored False;
+       Property UniformBufferStandardLayout   : Boolean Read fUniformBufferStandardLayout Write fUniformBufferStandardLayout stored False;
+       Property ShaderSubgroupExtendedTypes   : Boolean Read fShaderSubgroupExtendedTypes Write fShaderSubgroupExtendedTypes stored False;
+       Property SeparateDepthStencilLayouts   : Boolean Read fSeparateDepthStencilLayouts Write fSeparateDepthStencilLayouts stored False;
+       Property HostQueryReset   : Boolean Read fHostQueryReset Write fHostQueryReset stored False;
+       Property TimelineSemaphore   : Boolean Read fTimelineSemaphore Write fTimelineSemaphore stored False;
+       Property BufferDeviceAddress   : Boolean Read fBufferDeviceAddress Write fBufferDeviceAddress stored False;
+       Property BufferDeviceAddressCaptureReplay   : Boolean Read fBufferDeviceAddressCaptureReplay Write fBufferDeviceAddressCaptureReplay stored False;
+       Property BufferDeviceAddressMultiDevice   : Boolean Read fBufferDeviceAddressMultiDevice Write fBufferDeviceAddressMultiDevice stored False;
+       Property VulkanMemoryModel   : Boolean Read fVulkanMemoryModel Write fVulkanMemoryModel stored False;
+       Property VulkanMemoryModelDeviceScope   : Boolean Read fVulkanMemoryModelDeviceScope Write fVulkanMemoryModelDeviceScope stored False;
+       Property VulkanMemoryModelAvailabilityVisibilityChains   : Boolean Read fVulkanMemoryModelAvailabilityVisibilityChains Write fVulkanMemoryModelAvailabilityVisibilityChains stored False;
+       Property ShaderOutputViewportIndex   : Boolean Read fShaderOutputViewportIndex Write fShaderOutputViewportIndex stored False;
+       Property ShaderOutputLayer   : Boolean Read fShaderOutputLayer Write fShaderOutputLayer stored False;
+       Property SubgroupBroadcastDynamicId   : Boolean Read fSubgroupBroadcastDynamicId Write fSubgroupBroadcastDynamicId stored False;
   //1_3
-       Property RobustImageAccess   : Boolean Read fRobustImageAccess Write fRobustImageAccess ;
-       Property InlineUniformBlock   : Boolean Read fInlineUniformBlock Write fInlineUniformBlock ;
-       Property DescriptorBindingInlineUniformBlockUpdateAfterBind   : Boolean Read fDescriptorBindingInlineUniformBlockUpdateAfterBind Write fDescriptorBindingInlineUniformBlockUpdateAfterBind ;
-       Property PipelineCreationCacheControl   : Boolean Read fPipelineCreationCacheControl Write fPipelineCreationCacheControl ;
-       Property PrivateData   : Boolean Read fPrivateData Write fPrivateData ;
-       Property ShaderDemoteToHelperInvocation   : Boolean Read fShaderDemoteToHelperInvocation Write fShaderDemoteToHelperInvocation ;
-       Property ShaderTerminateInvocation   : Boolean Read fShaderTerminateInvocation Write fShaderTerminateInvocation ;
-       Property SubgroupSizeControl   : Boolean Read fSubgroupSizeControl Write fSubgroupSizeControl ;
-       Property ComputeFullSubgroups   : Boolean Read fComputeFullSubgroups Write fComputeFullSubgroups ;
-       Property Synchronization2   : Boolean Read fSynchronization2 Write fSynchronization2 ;
-       Property TextureCompressionASTC_HDR   : Boolean Read fTextureCompressionASTC_HDR Write fTextureCompressionASTC_HDR ;
-       Property ShaderZeroInitializeWorkgroupMemory   : Boolean Read fShaderZeroInitializeWorkgroupMemory Write fShaderZeroInitializeWorkgroupMemory ;
-       Property DynamicRendering   : Boolean Read fDynamicRendering Write fDynamicRendering ;
-       Property ShaderIntegerDotProduct   : Boolean Read fShaderIntegerDotProduct Write fShaderIntegerDotProduct ;
-       Property Maintenance4   : Boolean Read fMaintenance4 Write fMaintenance4 ;
+       Property RobustImageAccess   : Boolean Read fRobustImageAccess Write fRobustImageAccess stored False;
+       Property InlineUniformBlock   : Boolean Read fInlineUniformBlock Write fInlineUniformBlock stored False;
+       Property DescriptorBindingInlineUniformBlockUpdateAfterBind   : Boolean Read fDescriptorBindingInlineUniformBlockUpdateAfterBind Write fDescriptorBindingInlineUniformBlockUpdateAfterBind stored False;
+       Property PipelineCreationCacheControl   : Boolean Read fPipelineCreationCacheControl Write fPipelineCreationCacheControl stored False;
+       Property PrivateData   : Boolean Read fPrivateData Write fPrivateData stored False;
+       Property ShaderDemoteToHelperInvocation   : Boolean Read fShaderDemoteToHelperInvocation Write fShaderDemoteToHelperInvocation stored False;
+       Property ShaderTerminateInvocation   : Boolean Read fShaderTerminateInvocation Write fShaderTerminateInvocation stored False;
+       Property SubgroupSizeControl   : Boolean Read fSubgroupSizeControl Write fSubgroupSizeControl stored False;
+       Property ComputeFullSubgroups   : Boolean Read fComputeFullSubgroups Write fComputeFullSubgroups stored False;
+       Property Synchronization2   : Boolean Read fSynchronization2 Write fSynchronization2 stored False;
+       Property TextureCompressionASTC_HDR   : Boolean Read fTextureCompressionASTC_HDR Write fTextureCompressionASTC_HDR stored False;
+       Property ShaderZeroInitializeWorkgroupMemory   : Boolean Read fShaderZeroInitializeWorkgroupMemory Write fShaderZeroInitializeWorkgroupMemory stored False;
+       Property DynamicRendering   : Boolean Read fDynamicRendering Write fDynamicRendering stored False;
+       Property ShaderIntegerDotProduct   : Boolean Read fShaderIntegerDotProduct Write fShaderIntegerDotProduct stored False;
+       Property Maintenance4   : Boolean Read fMaintenance4 Write fMaintenance4 stored False;
 
   end;
 
@@ -5814,6 +5845,12 @@ TvgBaseComponent = class(TComponent)
     constructor Create(AOwner: TComponent); Override;
     destructor Destroy; override;
 
+    { The linker's frame this renderer is preparing - set from
+      PrepareRenderEngine to FinishRenderEnginePrepare, nil otherwise.  Not
+      published: the frame belongs to the linker and is freed with it, and
+      the Object Inspector read it after that. }
+    Property CurrentPrepareFrame  : TvgFrame read fCurrentPrepareFrame;
+
     Procedure AddSceneRenderCommands(ImageIndex:TvkUint32; aFrame:TvgFrame ;aSubPass : TvkUint32);  Virtual;Abstract;
 
     //will remove and FREE the Pipeline
@@ -5889,8 +5926,6 @@ TvgBaseComponent = class(TComponent)
     Property Linker        : TvgLinker read GetLinker write SetLinker;
     Property RenderPass    : TvgRenderPass read GetRenderPass ;//write SetRenderPass;
     Property BaseScene     : TvgBaseScene read fBaseScene write SetBaseScene;
-
-    Property CurrentPrepareFrame  : TvgFrame read fCurrentPrepareFrame;
 
     Property GlobalRes     : TvgDescriptorSet Read GetGlobalResources ;  //hold shader resource structure and data
 
@@ -6047,6 +6082,10 @@ TvgBaseComponent = class(TComponent)
   procedure Split64BitTo32Bit(Value: UInt64; out LowPart, HighPart: LongWord);
   function Combine32BitTo64Bit(LowPart, HighPart: LongWord): UInt64;
 
+  { False for a TvgBaseComponent still inside its constructor: an opInsert
+    for it is ignored, and repeated by its AfterConstruction. }
+  function vgLinkable(aComponent: TComponent): Boolean;
+
 
 
 
@@ -6069,6 +6108,15 @@ function Combine32BitTo64Bit(LowPart, HighPart: LongWord): UInt64;
 begin
   Result := Int64(HighPart) shl 32 or LowPart;   //low is R high is G
 end;
+
+function vgLinkable(aComponent: TComponent): Boolean;
+begin
+  Result := not (aComponent is TvgBaseComponent) or TvgBaseComponent(aComponent).fConstructed;
+end;
+
+type
+  //TComponent.Notification is protected
+  TvgComponentAccess = class(TComponent);
 
 
 Procedure IsMemoryAvailable(const PhysicalDevice: TVkPhysicalDevice; Var aMemRecord : TvgMemAvailable);
@@ -6748,6 +6796,29 @@ begin
   fState := vgcsInactive;
 end;
 
+procedure TvgBaseComponent.AfterConstruction;
+  Var I    : Integer;
+      Host : IvgComponentHost;
+begin
+  inherited;
+  fConstructed := True;
+  If not assigned(Owner) then exit;
+
+  //the opInsert TComponent.Create sent was ignored: send it again, to the
+  //owner's other components only.  Not through the owner's Notification -
+  //at design time the IDE listens there, and would hear of it twice.
+  I := Owner.ComponentCount - 1;
+  While I >= 0 do
+  Begin
+    If (I < Owner.ComponentCount) and (Owner.Components[I] <> Self) then
+      TvgComponentAccess(Owner.Components[I]).Notification(Self, opInsert);
+    Dec(I);
+  End;
+
+  If Supports(Owner, IvgComponentHost, Host) then
+    Host.ComponentConstructed(Self);
+end;
+
 destructor TvgBaseComponent.Destroy;
 begin
   CustomAssert(fState=vgcsInactive,Format('%s is NOT InACTIVE',[ClassName]),self);
@@ -7265,11 +7336,16 @@ end;
 
 function TvgInstance.GetAPIVersion: TvkUint32;
 begin
+      //every TvgAPI_Version: one left out fell through to 1.0, so choosing
+      //1.4 asked Vulkan for 1.0 and DynamicRendering (1.3+) asserted
       Case fAPIVersion  of
+         VG_API_VERSION     : Result := VK_API_VERSION;
          VG_API_VERSION_1_0 : Result := VK_API_VERSION_1_0;
          VG_API_VERSION_1_1 : Result := VK_API_VERSION_1_1;
          VG_API_VERSION_1_2 : Result := VK_API_VERSION_1_2;
          VG_API_VERSION_1_3 : Result := VK_API_VERSION_1_3;
+         VG_API_VERSION_1_4 : Result := VK_API_VERSION_1_4;
+         VG_API_VERSION_1_5 : Result := TvkUint32(VK_MAKE_API_VERSION(0, 1, 5, 0));
       else
           Result := VK_API_VERSION_1_0;
       End;
@@ -7299,6 +7375,7 @@ begin
   Case Operation of
      opInsert : Begin
                   If aComponent=self then exit;
+                  If not vgLinkable(aComponent) then exit;   //still being constructed: told again once it is
                   If NotificationTestON and Not (csDesigning in ComponentState) then exit;     //don't mess with links at runtime
 
                   If (aComponent is TvgPhysicalDevice) and not assigned(TvgPhysicalDevice(aComponent).Instance) then
@@ -7355,29 +7432,12 @@ begin
 end;
 
 procedure TvgInstance.SetAPIVersion(Value: TvkUint32);
-  Var V:TvgAPI_Version;
 begin
-   V:= VG_API_VERSION_1_0;
-
-   If Value = VK_API_VERSION then V:= VG_API_VERSION
-   else
-   If Value = VK_API_VERSION_1_0 then V:= VG_API_VERSION_1_0
-   else
-   If Value = VK_API_VERSION_1_1 then V:= VG_API_VERSION_1_1
-   else
-   If Value = VK_API_VERSION_1_2 then V:= VG_API_VERSION_1_2
-   else
-   If Value = VK_API_VERSION_1_3 then V:= VG_API_VERSION_1_3
-   else
-   If Value = VK_API_VERSION_1_4 then V:= VG_API_VERSION_1_4  ;
-//   else
-//   If Value = VK_API_VERSION_1_5 then V:= VG_API_VERSION_1_5;
-
+   //the version the created instance runs at (UnPackedVersion).  It is not
+   //copied back into APIVersion, the version asked for: PasVulkan caps an
+   //instance at 1.3 for now, which turned a chosen 1.4 into 1.3 - in the
+   //Object Inspector too, marking the form modified.
    fUnPackedVersion := TvgVulkanVersion.FromPacked(Value) ;
-
-   If V = fAPIVersion then exit;
-   fAPIVersion := V;
-
 end;
 
 procedure TvgInstance.SetApplicationName(const Value: TpvVulkanCharString);
@@ -7962,9 +8022,57 @@ begin
 
   fDescriptorIndexing := Value;
 
-  If fAPIVersion<VG_API_VERSION_1_2 then
+  If fDescriptorIndexing and (fAPIVersion<VG_API_VERSION_1_2) then
      fAPIVersion := VG_API_VERSION_1_2;
 
+end;
+
+procedure TvgInstance.UpdateDeviceRequests(aDevice: TvgLogicalDevice = nil);
+  Var PD       : TvgPhysicalDevice;
+      DI, DR   : Boolean;
+      Any      : Boolean;
+
+  Procedure Count(aLD: TvgLogicalDevice);
+  Begin
+    If not assigned(aLD) then exit;
+    Any := True;
+    DI  := DI or aLD.fDescriptorIndexingON;
+    DR  := DR or aLD.fDynamicRenderingON;
+  End;
+
+begin
+  DI  := False;
+  DR  := False;
+  Any := False;
+
+  If assigned(aDevice) and (aDevice.fInstance = Self) then
+    Count(aDevice);
+
+  If assigned(fPhysicalDevices) then
+    For PD in fPhysicalDevices do
+      If assigned(PD) and (PD.LogicalDevice <> aDevice) and
+         assigned(PD.LogicalDevice) and (PD.LogicalDevice.fInstance = Self) then
+        Count(PD.LogicalDevice);
+
+  //no device yet: whatever was set in code stands
+  If not Any then exit;
+
+  //while a form loads, only note what is needed: the setters also clear the
+  //extension and layer lists the form is still reading
+  If csLoading in ComponentState then
+  Begin
+    fDescriptorIndexing := DI;
+    fDynamicRendering   := DR;
+    If DR and (fAPIVersion < VG_API_VERSION_1_3) then
+      fAPIVersion := VG_API_VERSION_1_3
+    else
+    If DI and (fAPIVersion < VG_API_VERSION_1_2) then
+      fAPIVersion := VG_API_VERSION_1_2;
+    exit;
+  End;
+
+  SetDescriptorIndexing(DI);
+  SetDynamicRendering(DR);
 end;
 
 procedure TvgInstance.SetDynamicRendering(const Value: Boolean);
@@ -9461,6 +9569,8 @@ begin
       begin
         if AComponent = Self then
           Exit;
+        if not vgLinkable(AComponent) then
+          Exit; // still being constructed: told again once it is
         if NotificationTestON and not (csDesigning in ComponentState) then
           Exit;
 
@@ -9783,6 +9893,10 @@ begin
     fInstance.FreeNotification(self) ;
     fInstance.RenderToScreen := assigned(fScreenRenderDevice);
   end;
+
+  //the logical device runs on this device's instance
+  If assigned(fLogicalDevice) and (fLogicalDevice.fInstance <> fInstance) then
+    fLogicalDevice.SetInstance(fInstance);
 end;
 
 procedure TvgPhysicalDevice.SetLogicalDevice(const Value: TvgLogicalDevice);
@@ -9811,9 +9925,11 @@ begin
   begin
     fLogicalDevice.FreeNotification(Self);
 
-    // Keep reverse link consistent without re-entering if already set
+    // Keep reverse link consistent: through its setter, which also gives it
+    // this device's Instance (it does not call back - fLogicalDevice is
+    // already set)
     if fLogicalDevice.fPhysicalDevice <> Self then
-      fLogicalDevice.fPhysicalDevice := Self;
+      fLogicalDevice.SetPhysicalDevice(Self);
   end;
 end;
 (*
@@ -10197,6 +10313,8 @@ begin
       begin
         if AComponent = Self then
           Exit;
+        if not vgLinkable(AComponent) then
+          Exit; // still being constructed: told again once it is
         if NotificationTestON and not (csDesigning in ComponentState) then
           Exit; // don't mess with links at runtime
 
@@ -10292,11 +10410,14 @@ begin
 
   fDescriptorIndexingON := Value;
 
-  If assigned(fInstance) and not(fInstance.DescriptorIndexing) and fDescriptorIndexingON then
-     fInstance.DescriptorIndexing := fDescriptorIndexingON ;
-
-  CustomAssert(fInstance.GetAPIVersion >= VK_API_VERSION_1_2,
-               'DescriptorIndexing requires Instance.APIVersion to be at least VG_API_VERSION_1_2', self);
+  //the instance follows its devices, on or off (and raises its API version)
+  If assigned(fInstance) then
+  Begin
+    fInstance.UpdateDeviceRequests(Self);
+    If fDescriptorIndexingON then
+      CustomAssert(fInstance.GetAPIVersion >= VK_API_VERSION_1_2,
+                   'DescriptorIndexing requires Instance.APIVersion to be at least VG_API_VERSION_1_2', self);
+  End;
   CustomAssert(assigned(fFeatures),'Features object not assigned',self);
 
 
@@ -10356,8 +10477,9 @@ begin
 
   fDynamicRenderingON := Value;
 
-  If assigned(fInstance) and not(fInstance.DynamicRendering) and fDynamicRenderingON then
-     fInstance.DynamicRendering := fDynamicRenderingON;
+  //the instance follows its devices, on or off (and raises its API version)
+  If assigned(fInstance) then
+    fInstance.UpdateDeviceRequests(Self);
 
   If fDynamicRenderingON then
   Begin
@@ -10466,11 +10588,12 @@ begin
 end;
 
 procedure TvgLogicalDevice.SetInstance(const Value: TvgInstance);
-
+  Var OldInstance : TvgInstance;
 begin
   If fInstance = Value then exit;
   InvalidateStates;
 
+  OldInstance := fInstance;
   If assigned(fInstance) then
      fInstance.RemoveFreeNotification(self);
 
@@ -10479,11 +10602,13 @@ begin
   If assigned(fInstance) then
      fInstance.FreeNotification(self)  ;
 
-  If assigned(fInstance) and not (fInstance.DescriptorIndexing) and fDescriptorIndexingON then
-    fInstance.DescriptorIndexing := fDescriptorIndexingON ;
+  //the old instance no longer counts this device; the new one does.  Not
+  //while the old one is being freed (this is its notification arriving)
+  If assigned(OldInstance) and not (csDestroying in OldInstance.ComponentState) then
+    OldInstance.UpdateDeviceRequests;
 
-  If assigned(fInstance) and not (fInstance.DynamicRendering) and fDynamicRenderingON then
-    fInstance.DynamicRendering := fDynamicRenderingON ;
+  If assigned(fInstance) then
+    fInstance.UpdateDeviceRequests(Self);
 
   fSetUpComplete:=False;
 
@@ -10514,8 +10639,9 @@ begin
     if fPhysicalDevice.LogicalDevice <> Self then
       fPhysicalDevice.LogicalDevice := Self;
 
+    //through SetInstance: the instance then counts this device's requests
     if Assigned(fPhysicalDevice.Instance) then
-      fInstance := fPhysicalDevice.Instance;
+      SetInstance(fPhysicalDevice.Instance);
   end;
 
   fSetUpComplete := False;
@@ -10558,7 +10684,8 @@ begin
   CustomAssert(assigned(fFeatures),'Features object not assigned',self);
   CustomAssert(assigned(fInstance),'Instancet not assigned',self);
 
-  If not fInstance.DescriptorIndexing then exit;
+  //this device's own request: the instance's is any of its devices'
+  If not fDescriptorIndexingON then exit;
 
   CustomAssert(fInstance.GetAPIVersion >= VK_API_VERSION_1_2,
                'DescriptorIndexing requires Instance.APIVersion to be at least VG_API_VERSION_1_2', self);
@@ -11007,6 +11134,7 @@ begin
   Case Operation of
      opInsert : Begin
                   If aComponent=self then exit;
+                  If not vgLinkable(aComponent) then exit;   //still being constructed: told again once it is
                   If NotificationTestON and Not (csDesigning in ComponentState) then exit;        //don't mess with links at runtime
 
                   If (aComponent is TvgPhysicalDevice) and not assigned(fPhysicalDevice)  then
@@ -11854,6 +11982,7 @@ begin
     Case Operation of
        opInsert : Begin
                     If aComponent=self then exit;
+                    If not vgLinkable(aComponent) then exit;   //still being constructed: told again once it is
                     If NotificationTestON and Not (csDesigning in ComponentState) then exit;     //don't mess with links at runtime
 
                     If (aComponent is TvgScreenRenderDevice) and not assigned(fScreenDevice) then
@@ -13065,6 +13194,7 @@ begin
     Case Operation of
        opInsert : Begin
                     If aComponent=self then exit;
+                    If not vgLinkable(aComponent) then exit;   //still being constructed: told again once it is
                     If NotificationTestON and Not (csDesigning in ComponentState) then exit;     //don't mess with links at runtime
 
                     If (aComponent is TvgLinker) and Not assigned(fLinker) then
@@ -13746,19 +13876,28 @@ begin
 end;
 
 procedure TvgBaseRenderEngine.FinishRenderEnginePrepare;
+  Var Frame : TvgFrame;
 begin
     CustomAssert(Assigned(fLinker), 'LINKER Not assigned',Self);
-    CustomAssert(Assigned(fCurrentPrepareFrame), 'PREPARE Frame Not assigned',Self);
 
     if not fRenderLock then exit;
     fRenderLock:=False;
 
-    fCurrentPrepareFrame.FinishFramePrepare;   //call back up
+    CustomAssert(Assigned(fCurrentPrepareFrame), 'PREPARE Frame Not assigned',Self);
+
+    //let go of the frame before handing it back: the linker frees its frames
+    //when it shuts down, and FinishFramePrepare may move on to the next one
+    Frame                := fCurrentPrepareFrame;
+    fCurrentPrepareFrame := nil;
+
+    Frame.FinishFramePrepare;   //call back up
 
 end;
 
 Function TvgBaseRenderEngine.SetDisabled:Boolean;
 begin
+  //no frame is being prepared once disabled; the linker's frames may go next
+  fCurrentPrepareFrame := nil;
 
   if assigned(fGlobalRes) then
     fGlobalRes.Active := False;
@@ -14296,6 +14435,7 @@ begin
     Case Operation of
        opInsert : Begin
                     If aComponent=self then exit;
+                    If not vgLinkable(aComponent) then exit;   //still being constructed: told again once it is
                     If NotificationTestON and Not (csDesigning in ComponentState) then exit;     //don't mess with links at runtime
 
                     If (aComponent is TvgLogicalDevice) and not assigned(fLogicalDevice) then
@@ -17959,6 +18099,7 @@ procedure TvgDynamicState.SetDynamicState(const Value: TvgDynamicStateBit);
          VG_API_VERSION_1_1 : Ver := VK_API_VERSION_1_1;
          VG_API_VERSION_1_2 : Ver := VK_API_VERSION_1_2;
          VG_API_VERSION_1_3 : Ver := VK_API_VERSION_1_3;
+         VG_API_VERSION_1_4 : Ver := VK_API_VERSION_1_4;
       else
          Ver := VK_API_VERSION_1_3;
       End;
@@ -19686,6 +19827,7 @@ begin
   Case Operation of
      opInsert : Begin
                   If aComponent=self then exit;
+                  If not vgLinkable(aComponent) then exit;   //still being constructed: told again once it is
                   If NotificationTestON and Not (csDesigning in ComponentState) then exit;        //don't mess with links at runtime
 
                   If (aComponent is TvgLinker) and not assigned(fLinker)  then
@@ -21921,6 +22063,7 @@ begin
   Case Operation of
      opInsert : Begin
                   If aComponent=self then exit;
+                  If not vgLinkable(aComponent) then exit;   //still being constructed: told again once it is
                   If NotificationTestON and Not (csDesigning in ComponentState) then exit ;      //don't mess with links at runtime
 
                   If (aComponent is TvgLinker) and not assigned(fLinker)  then
@@ -23759,6 +23902,7 @@ begin
   Case Operation of
      opInsert : Begin
                   If aComponent=self then exit;
+                  If not vgLinkable(aComponent) then exit;   //still being constructed: told again once it is
                   If NotificationTestON and Not (csDesigning in ComponentState) then exit ;      //don't mess with links at runtime
 
                   If (aComponent is TvgScreenRenderDevice) and not assigned(fScreenDevice) then
@@ -24888,6 +25032,7 @@ begin
   Case Operation of
      opInsert : Begin
                   If aComponent=self then exit;
+                  If not vgLinkable(aComponent) then exit;   //still being constructed: told again once it is
                   If NotificationTestON and Not (csDesigning in ComponentState) then exit ;      //don't mess with links at runtime
 
                   If (aComponent is TvgBaseScene) and (fScene<>TvgBaseScene(aComponent)) then
@@ -32689,6 +32834,7 @@ begin
   Case Operation of
      opInsert : Begin
                   If aComponent=self then exit;
+                  If not vgLinkable(aComponent) then exit;   //still being constructed: told again once it is
 
                   If NotificationTestON and Not (csDesigning in ComponentState) then exit;     //don't mess with links at runtime
 
@@ -33322,6 +33468,7 @@ begin
   Case Operation of
      opInsert : Begin
                   If aComponent=self then exit;
+                  If not vgLinkable(aComponent) then exit;   //still being constructed: told again once it is
                   If NotificationTestON and Not (csDesigning in ComponentState) then exit;
 
                   If (aComponent is TvgLinker) and not assigned(fLinker)  then

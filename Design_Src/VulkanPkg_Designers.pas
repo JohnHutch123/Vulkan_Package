@@ -61,12 +61,14 @@ interface
         System.Types,
         DesignIntf,
         DesignEditors,
+        VCLEditors,
         ToolsAPI,
         Winapi.Windows,
         Vcl.Dialogs,
         Vulkan,
         Vulkan_Components,
         Vulkan_Components_Lookups,
+        PasVulkan.Framework,
         Vulkan_Components_Scene_Renderer;
 
 Var
@@ -103,11 +105,31 @@ Type
 
     end;
 
+    { TvgPhysicalDevice.PhysicalDeviceName: the GPUs Vulkan reports.  Picking
+      one also sets DeviceSelect to vgdsName (and DeviceIndex to match) -
+      under vgdsAutomatic the name is not used. }
     TvgPhysicalDeviceEditor = class(TStringProperty)
     public
       function GetAttributes: TPropertyAttributes; override;
       procedure GetValues(Proc: TGetStrProc); override;
-      procedure Edit; override;
+      procedure SetValue(const Value: string); override;
+    end;
+
+    { A Boolean shown as a check box that cannot be changed - the feature
+      flags of TvgFeatures, which are read from the GPU, not chosen. }
+    TvgReadOnlyBoolProperty = class(TBooleanProperty)
+    public
+      function GetAttributes: TPropertyAttributes; override;
+    end;
+
+    { TvgPhysicalDevice.DeviceIndex: the GPUs as "0: name".  Picking one
+      also sets DeviceSelect to vgdsIndex (and PhysicalDeviceName). }
+    TvgDeviceIndexEditor = class(TIntegerProperty)
+    public
+      function GetAttributes: TPropertyAttributes; override;
+      function GetValue: string; override;
+      procedure GetValues(Proc: TGetStrProc); override;
+      procedure SetValue(const Value: string); override;
     end;
 
     TvgDescriptorTypeEditor = class(TStringProperty)
@@ -276,7 +298,7 @@ End;
 procedure Register;
 begin
 
-   RegisterComponents('Vulkan Graphics', [TvgInstance,
+   RegisterComponents('Vulkan Graphics', [  TvgInstance,
                                             TvgPhysicalDevice,
                                             TvgScreenRenderDevice,
                                             TvgLinker,
@@ -287,7 +309,11 @@ begin
    RegisterComponentEditor (TvgLogicalDevice, TvgDeviceEditor);
    RegisterComponentEditor (TvgLinker,        TvgLinkEditor);
 
-   RegisterPropertyEditor (TypeInfo(string), TvgPhysicalDevice, 'PhysicalDevice',  TvgPhysicalDeviceEditor);
+   RegisterPropertyEditor (TypeInfo(string),  TvgPhysicalDevice, 'PhysicalDeviceName', TvgPhysicalDeviceEditor);
+   RegisterPropertyEditor (TypeInfo(Integer), TvgPhysicalDevice, 'DeviceIndex',        TvgDeviceIndexEditor);
+
+   //the device's feature flags: shown, read only
+   RegisterPropertyEditor (TypeInfo(Boolean), TvgFeatures, '', TvgReadOnlyBoolProperty);
 
    RegisterPropertyEditor(TypeInfo(TvgAttachment), TvgSubPassAttachment, 'Attachment', TvgAttachmentRefPropEditor);
 
@@ -396,7 +422,7 @@ end;
 function TvgInstanceEditor.GetVerb(Index: Integer): string;
 begin
   case Index of
-      0: Result := ' Vulkan Graphics Instance (©Datavis)';
+      0: Result := ' Vulkan Graphics Instance (ï¿½Datavis)';
       1: Result := '&About this component...';
       2: Result := 'Add &Extensions and Layers...';
     end;
@@ -408,52 +434,179 @@ begin
 end;
 
 
-{ TvgPhysicalDeviceEditor }
-
-procedure TvgPhysicalDeviceEditor.Edit;
+{ The GPUs aDevice's instance can see, in Vulkan's order (DeviceIndex).  An
+  instance with no Vulkan instance yet is put in design state for the call,
+  which creates one, and taken back out. }
+procedure PhysicalDeviceNames(aDevice: TvgPhysicalDevice; aNames: TStrings);
+  Var Inst   : TvgInstance;
+      I      : Integer;
+      Opened : Boolean;
+      P      : TpvVulkanPhysicalDevice;
 begin
-  inherited;
+  aNames.Clear;
+  If not assigned(aDevice) or not assigned(aDevice.Instance) then exit;
 
+  Inst   := aDevice.Instance;
+  Opened := False;
+  If not assigned(Inst.VulkanInstance) and (Inst.State = vgcsInactive) then
+  Begin
+    Inst.Designing := True;
+    Opened := Inst.State = vgcsDesign;
+  End;
+
+  Try
+    If not assigned(Inst.VulkanInstance) then exit;
+    For I := 0 to Inst.PhysicalDevices.Count - 1 do
+    Begin
+      P := TvgPhysDevice(Inst.PhysicalDevices.Items[I]).VulkanPhysicalDevice;
+      If assigned(P) then
+        aNames.Add(String(P.DeviceName))
+      else
+        aNames.Add('');
+    End;
+  Finally
+    If Opened then
+      Inst.Designing := False;
+  End;
 end;
 
-function TvgPhysicalDeviceEditor.GetAttributes: TPropertyAttributes;
-
+{ Sets every selected physical device to aIndex/aName and to the select
+  mode that uses them. }
+procedure SelectPhysicalDevice(aEditor: TPropertyEditor; aMode: TvgDeviceSelectMode;
+                               aIndex: Integer; const aName: string);
+  Var I : Integer;
+      D : TvgPhysicalDevice;
 begin
-  result:=inherited;
-  result := result + [paValueList, paSortList];
+  For I := 0 to aEditor.PropCount - 1 do
+    If aEditor.GetComponent(I) is TvgPhysicalDevice then
+    Begin
+      D := TvgPhysicalDevice(aEditor.GetComponent(I));
+      D.DeviceSelect       := aMode;
+      D.DeviceIndex        := aIndex;
+      D.PhysicalDeviceName := aName;
+    End;
+end;
+
+{ TvgPhysicalDeviceEditor }
+
+function TvgPhysicalDeviceEditor.GetAttributes: TPropertyAttributes;
+begin
+  Result := inherited GetAttributes + [paValueList, paSortList];
 end;
 
 procedure TvgPhysicalDeviceEditor.GetValues(Proc: TGetStrProc);
-  Var D:TvgPhysicalDevice;
-      I:Integer;
-      S:String;
-      B:Boolean;
+  Var Names : TStringList;
+      S     : string;
 begin
+  Names := TStringList.Create;
+  Try
+    PhysicalDeviceNames(TvgPhysicalDevice(GetComponent(0)), Names);
+    For S in Names do
+      If S <> '' then
+        Proc(S);
+  Finally
+    Names.Free;
+  End;
+end;
 
-  D:=TvgPhysicalDevice(GetComponent(0));
-  If assigned(D) and assigned(D.Instance) then
+procedure TvgPhysicalDeviceEditor.SetValue(const Value: string);
+  Var Names : TStringList;
+      I     : Integer;
+begin
+  If Value = '' then
   Begin
-    If not D.Instance.Active then
-    Begin
-       D.Instance.Active:=True;
-       B:=True;
-    End else
-       B:=False;
+    inherited;   //blank: back to a name not in use
+    exit;
+  End;
 
-    Try
-      If D.Instance.active then
-      Begin
-        For I:=0 to D.Instance.PhysicalDevices.Count-1 do
-        Begin
-           S:= TvgPhysDevice(D.Instance.PhysicalDevices.Items[I]).Description;
-           Proc(S);
-        End;
-      end else
-        Proc('Instance not Active');
-    Finally
-      If B then
-        D.Instance.Active:=False;
-    End;
+  Names := TStringList.Create;
+  Try
+    PhysicalDeviceNames(TvgPhysicalDevice(GetComponent(0)), Names);
+    I := Names.IndexOf(Value);
+  Finally
+    Names.Free;
+  End;
+
+  If I = -1 then
+    inherited      //a GPU not in this machine: kept, as typed
+  else
+  Begin
+    SelectPhysicalDevice(Self, vgdsName, I, Value);
+    Modified;
+  End;
+end;
+
+{ TvgReadOnlyBoolProperty }
+
+function TvgReadOnlyBoolProperty.GetAttributes: TPropertyAttributes;
+begin
+  Result := inherited GetAttributes + [paReadOnly];
+end;
+
+{ TvgDeviceIndexEditor }
+
+function TvgDeviceIndexEditor.GetAttributes: TPropertyAttributes;
+begin
+  //Vulkan's order: not sorted
+  Result := [paValueList, paRevertable, paMultiSelect];
+end;
+
+function TvgDeviceIndexEditor.GetValue: string;
+  Var D : TvgPhysicalDevice;
+begin
+  //never makes a Vulkan instance: this runs on every Object Inspector paint
+  Result := inherited GetValue;
+  D      := TvgPhysicalDevice(GetComponent(0));
+  If assigned(D) and (D.PhysicalDeviceName <> '') then
+    Result := Result + ': ' + D.PhysicalDeviceName;
+end;
+
+procedure TvgDeviceIndexEditor.GetValues(Proc: TGetStrProc);
+  Var Names : TStringList;
+      I     : Integer;
+begin
+  Names := TStringList.Create;
+  Try
+    PhysicalDeviceNames(TvgPhysicalDevice(GetComponent(0)), Names);
+    For I := 0 to Names.Count - 1 do
+      Proc(Format('%d: %s', [I, Names[I]]));
+  Finally
+    Names.Free;
+  End;
+end;
+
+procedure TvgDeviceIndexEditor.SetValue(const Value: string);
+  Var Names : TStringList;
+      P, I  : Integer;
+      Name  : string;
+begin
+  //"1: name" from the list, or a number typed in
+  P := Pos(':', Value);
+  If P > 0 then
+    I := StrToIntDef(Trim(Copy(Value, 1, P - 1)), -1)
+  else
+    I := StrToIntDef(Trim(Value), -1);
+
+  If I < 0 then
+    raise EDesignPropertyError.CreateFmt('%s is not a device index', [Value]);
+
+  Names := TStringList.Create;
+  Try
+    PhysicalDeviceNames(TvgPhysicalDevice(GetComponent(0)), Names);
+    If I < Names.Count then
+      Name := Names[I]
+    else
+      Name := '';
+  Finally
+    Names.Free;
+  End;
+
+  If Name = '' then
+    inherited SetValue(IntToStr(I))   //no such GPU here: kept, as typed
+  else
+  Begin
+    SelectPhysicalDevice(Self, vgdsIndex, I, Name);
+    Modified;
   End;
 end;
 
@@ -474,7 +627,7 @@ function TvgDeviceEditor.GetVerb(Index: Integer): string;
 begin
   Result:='' ;
   case Index of
-      0: Result := 'Vulkan Graphics Device (©Datavis)';
+      0: Result := 'Vulkan Graphics Device (ï¿½Datavis)';
       1: Result := '&About this component...';
       2: Result := 'Add &Extensions...';
       3: Result := 'Add &Layers...';
@@ -743,7 +896,7 @@ end;
 function TvgLinkEditor.GetVerb(Index: Integer): string;
 begin
   case Index of
-      0: Result := ' Vulkan Graphics Link (©Datavis)';
+      0: Result := ' Vulkan Graphics Link (ï¿½Datavis)';
       1: Result := '&About this component...';
       2: Result := 'Add All &Images and Color Spaces Modes...';
       3: Result := 'Add All &Presentation Modes...';

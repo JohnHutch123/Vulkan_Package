@@ -46,7 +46,9 @@
       half enabled.  Setting it False shuts that component down as before.
     * File > New > Other > Delphi Files > "Vulkan Session Data Module" creates
       a new unit whose data module descends from TvgVulkanDataModule.
-    * TvgScreenRenderDevice goes on the palette so it can sit on the module.
+    * The session components (TvgScreenRenderDevice, TvgScene,
+      TvgToolManager ...) go on the palette from VulkanPkg_Designers, so
+      each class is registered once.
 
   Scenes: Add Scene creates a TvgScene connected to the primary linker and
   renderer; Load Scene... picks a file and loads it with a registered scene
@@ -61,8 +63,9 @@
   from the Object Inspector's drop downs, across forms.  The editor and the
   Active test cover every linker connected under the instance.
 
-  Design time only: in the VCL design package (VulkanPkg_VCLDxxx, e.g.
-  VulkanPkg_VCLD290 for Delphi 12). }
+  Design time only: in the core design package with VulkanPkg_Designers
+  (VulkanPkgDxxx, e.g. VulkanPkgD290 for Delphi 12), which requires the VCL
+  runtime package for Vulkan_DataModule. }
 
 unit VulkanPkg_DataModuleReg;
 
@@ -80,6 +83,7 @@ uses
   Vcl.Forms,
   DesignIntf,
   DesignEditors,
+  VCLEditors,
   DMForm,
   ToolsAPI,
   Vulkan_Assert,
@@ -113,10 +117,14 @@ type
     procedure DesignerClosed(const ADesigner: IDesigner; ADestroying: Boolean);
   end;
 
-  { Active on a session component: True tests the whole session. }
-  TvgSessionActiveProperty = class(TBoolProperty)
+  { Active on a session component: True tests the whole session.  Shown as
+    a check box (TBooleanProperty); a click on it goes through SetValue,
+    where TBooleanProperty would set the bare property. }
+  TvgSessionActiveProperty = class(TBooleanProperty, ICustomPropertyMessage)
   public
     procedure SetValue(const Value: string); override;
+    procedure MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer;
+      InNameRect: Boolean; const ItemRect: TRect; var Handled: Boolean);
   end;
 
   { SceneLoaderType: the registered scene loaders. }
@@ -131,6 +139,26 @@ type
   public
     function  GetAttributes: TPropertyAttributes; override;
     procedure GetValues(Proc: TGetStrProc); override;
+  end;
+
+  { A component reference whose drop-down also lists the matching components
+    on every other module open in the IDE - e.g. a data module's linker for
+    a window's VulkanLink - as Module.Component.  Picking one from a module
+    this one does not use yet adds that module's unit to its uses clause
+    (IDesigner.MakeComponentLinkable); the standard drop-down only lists the
+    modules already used.  Used for every TvgLinker property. }
+  TvgCrossModuleProperty = class(TComponentProperty)
+  protected
+    function  Accepts(aComp: TComponent): Boolean; virtual;
+  public
+    procedure GetValues(Proc: TGetStrProc); override;
+    procedure SetValue(const Value: string); override;
+  end;
+
+  { TvgVulkanDataModule.Window: a window (IvgVulkanWindow) on any open form. }
+  TvgWindowRefProperty = class(TvgCrossModuleProperty)
+  protected
+    function  Accepts(aComp: TComponent): Boolean; override;
   end;
 
   { SceneFileName: file-open dialog filtered to the registered formats. }
@@ -321,13 +349,17 @@ begin
   DropNotification := TvgModuleDropNotification.Create;
   RegisterDesignNotification(DropNotification);
 
-  RegisterComponents('Vulkan Graphics', [TvgScreenRenderDevice, TvgScene, TvgToolManager]);
+ // RegisterComponents('Vulkan Graphics', []);
 
   RegisterComponentEditor(TvgScene, TvgSceneEditor);
 
   RegisterPropertyEditor(TypeInfo(string), TvgVulkanDataModule, 'SceneLoaderType', TvgSceneLoaderTypeProperty);
   RegisterPropertyEditor(TypeInfo(string), TvgVulkanDataModule, 'SceneFileName',   TvgSceneFileNameProperty);
   RegisterPropertyEditor(TypeInfo(string), TvgVulkanDataModule, 'RendererType',    TvgRendererTypeProperty);
+
+  //links across forms and data modules, adding the uses clause as needed
+  RegisterPropertyEditor(TypeInfo(TvgLinker),  nil,                 '',       TvgCrossModuleProperty);
+  RegisterPropertyEditor(TypeInfo(TComponent), TvgVulkanDataModule, 'Window', TvgWindowRefProperty);
 
   RegisterCustomModule(TvgVulkanDataModule, TvgVulkanDataModuleCustomModule);
 
@@ -359,10 +391,12 @@ end;
   A column is wide enough for the IDE's component captions (names such as
   vgScreenRenderDevice1), and the rows far enough apart to pick each icon. }
 const
-  cLayoutLeft   = 32;
-  cLayoutTop    = 32;
-  cLayoutColumn = 200;   //column pitch
-  cLayoutRow    = 80;    //row pitch
+  //left edge of each column's icons: session chain, linkers, scene side,
+  //then anything else
+  cLayoutColumnX : array[0..3] of Integer = (75, 200, 360, 520);
+  cLayoutTop     = 32;
+  cLayoutRow     = 80;    //row pitch
+  cLayoutCell    = 120;   //icons nearer than this across are in the same column
 
 { True when a component of aModule already sits in the cell at aLeft,aTop:
   a part kept from an earlier build, or one the user placed there. }
@@ -379,45 +413,9 @@ begin
     //a non-visual component's designer position: Left in Lo, Top in Hi
     X := SmallInt(LongRec(aModule.Components[I].DesignInfo).Lo);
     Y := SmallInt(LongRec(aModule.Components[I].DesignInfo).Hi);
-    If (Abs(X - aLeft) < cLayoutColumn div 2) and (Abs(Y - aTop) < cLayoutRow div 2) then
+    If (Abs(X - aLeft) < cLayoutCell div 2) and (Abs(Y - aTop) < cLayoutRow div 2) then
       Exit(True);
   End;
-end;
-
-function DesignerFactory(aModule: TvgVulkanDataModule; const aDesigner: IDesigner): TvgSessionComponentFactory;
-  Var D : IDesigner;
-begin
-  D := aDesigner;
-  Result :=
-    function(aClass: TComponentClass; aIndex: Integer): TComponent
-      Var Col, Row : Integer;
-          X, Y     : Integer;
-    begin
-      Case aIndex of
-        cRendererSlot    : Begin Col := 2; Row := 0; End;
-        cSceneSlot       : Begin Col := 2; Row := 1; End;
-        cToolManagerSlot : Begin Col := 2; Row := 2; End;
-      else
-        If aIndex < 3 then
-        Begin
-          Col := 0;              //instance, physical device, screen device
-          Row := aIndex;
-        End else
-        Begin
-          Col := 1;              //linkers, in the order they are added
-          Row := aIndex - 3;
-        End;
-      End;
-
-      X := cLayoutLeft + Col * cLayoutColumn;
-      Y := cLayoutTop  + Row * cLayoutRow;
-
-      //never on top of a part that is already there: next free row down
-      While CellTaken(aModule, X, Y) do
-        Inc(Y, cLayoutRow);
-
-      Result := D.CreateComponent(aClass, aModule, X, Y, 0, 0);
-    end;
 end;
 
 { Arrange.  The designer shows each non-visual component as a small child
@@ -452,36 +450,178 @@ begin
   End;
 end;
 
-function CollectContainer(aWnd: HWND; aList: LPARAM): BOOL; stdcall;
-  Var Buf : array[0..63] of Char;
+function CollectWindow(aWnd: HWND; aList: LPARAM): BOOL; stdcall;
 begin
-  If (GetClassName(aWnd, Buf, Length(Buf)) > 0) and (string(Buf) = 'TContainer') then
-    TList<HWND>(aList).Add(aWnd);
+  TList<HWND>(aList).Add(aWnd);
   Result := True;
 end;
 
-{ An icon window's top left, in its parent's client coordinates. }
-function WindowPos(aWnd: HWND): TPoint;
-  Var R : TRect;
+function IsIconWindow(aWnd: HWND): Boolean;
+  Var Buf : array[0..63] of Char;
 begin
-  GetWindowRect(aWnd, R);
-  Result := R.TopLeft;
-  ScreenToClient(GetParent(aWnd), Result);
+  Result := (GetClassName(aWnd, Buf, Length(Buf)) > 0) and (string(Buf) = 'TContainer');
+end;
+
+{ A window's bounds in its parent's client coordinates. }
+function WindowBounds(aWnd: HWND): TRect;
+begin
+  GetWindowRect(aWnd, Result);
+  MapWindowPoints(0, GetParent(aWnd), Result, 2);
+end;
+
+{ The caption window the designer shows under an icon (Show component
+  captions): a sibling just below it, centred on it.  0 when there is none. }
+function CaptionWindow(aIcon: HWND; aWindows: TList<HWND>): HWND;
+  Var Icon, R : TRect;
+      Mid     : Integer;
+      W       : HWND;
+      Gap     : Integer;
+begin
+  Result := 0;
+  Icon   := WindowBounds(aIcon);
+  Mid    := (Icon.Left + Icon.Right) div 2;
+  Gap    := MaxInt;
+  For W in aWindows do
+  Begin
+    If (W = aIcon) or (GetParent(W) <> GetParent(aIcon)) or IsIconWindow(W) or
+       not IsWindowVisible(W) then continue;
+
+    R := WindowBounds(W);
+    If (R.Top >= Icon.Bottom - 4) and (R.Top <= Icon.Bottom + 24) and
+       (R.Left <= Mid) and (R.Right >= Mid) and (Abs(R.Top - Icon.Bottom) < Gap) then
+    Begin
+      Result := W;
+      Gap    := Abs(R.Top - Icon.Bottom);
+    End;
+  End;
+end;
+
+{ Moves a designer window by aDX, aDY: through its VCL control when it is
+  one, so the control's own Left/Top stay right. }
+procedure MoveWindowBy(aWnd: HWND; aDX, aDY: Integer);
+  Var Ctl : TWinControl;
+      R   : TRect;
+begin
+  If (aWnd = 0) or ((aDX = 0) and (aDY = 0)) then exit;
+
+  Ctl := FindControl(aWnd);
+  If assigned(Ctl) then
+    Ctl.SetBounds(Ctl.Left + aDX, Ctl.Top + aDY, Ctl.Width, Ctl.Height)
+  else
+  Begin
+    R := WindowBounds(aWnd);
+    SetWindowPos(aWnd, 0, R.Left + aDX, R.Top + aDY, 0, 0,
+                 SWP_NOSIZE or SWP_NOZORDER or SWP_NOACTIVATE);
+  End;
+end;
+
+{ Every window on aModule's designer surface; empty when it is not open. }
+procedure SurfaceWindows(aModule: TvgVulkanDataModule; aList: TList<HWND>);
+  Var Surface : TCustomForm;
+begin
+  aList.Clear;
+  Surface := DesignerSurface(aModule);
+  If assigned(Surface) and Surface.HandleAllocated then
+    EnumChildWindows(Surface.Handle, @CollectWindow, LPARAM(aList));
+end;
+
+{ Puts a component the designer has just created at aX,aY.  The designer
+  places a new icon where it likes, so its DesignInfo is set and its icon -
+  the one icon window that was not there before (aBefore) - and caption
+  moved there. }
+procedure PlaceNewComponent(aModule: TvgVulkanDataModule; aComp: TComponent;
+                            aX, aY: Integer; aBefore: TList<HWND>);
+  Var After : TList<HWND>;
+      W     : HWND;
+      Icon  : HWND;
+      Cap   : HWND;
+      P     : TPoint;
+begin
+  If not assigned(aComp) then exit;
+  SetDesignPos(aComp, aX, aY);
+
+  After := TList<HWND>.Create;
+  Try
+    SurfaceWindows(aModule, After);
+
+    Icon := 0;
+    For W in After do
+      If IsIconWindow(W) and (aBefore.IndexOf(W) = -1) then
+      Begin
+        Icon := W;
+        Break;
+      End;
+    If Icon = 0 then exit;    //not shown yet: DesignInfo places it
+
+    Cap := CaptionWindow(Icon, After);
+    P   := WindowBounds(Icon).TopLeft;
+    MoveWindowBy(Icon, aX - P.X, aY - P.Y);
+    MoveWindowBy(Cap,  aX - P.X, aY - P.Y);
+  Finally
+    After.Free;
+  End;
+end;
+
+{ Where Build / Add put each part (see the layout above), on the designer. }
+function DesignerFactory(aModule: TvgVulkanDataModule; const aDesigner: IDesigner): TvgSessionComponentFactory;
+  Var D : IDesigner;
+begin
+  D := aDesigner;
+  Result :=
+    function(aClass: TComponentClass; aIndex: Integer): TComponent
+      Var Col, Row : Integer;
+          X, Y     : Integer;
+          Before   : TList<HWND>;
+    begin
+      Case aIndex of
+        cRendererSlot    : Begin Col := 2; Row := 0; End;
+        cSceneSlot       : Begin Col := 2; Row := 1; End;
+        cToolManagerSlot : Begin Col := 2; Row := 2; End;
+      else
+        If aIndex < 3 then
+        Begin
+          Col := 0;              //instance, physical device, screen device
+          Row := aIndex;
+        End else
+        Begin
+          Col := 1;              //linkers, in the order they are added
+          Row := aIndex - 3;
+        End;
+      End;
+
+      X := cLayoutColumnX[Col];
+      Y := cLayoutTop  + Row * cLayoutRow;
+
+      //never on top of a part that is already there: next free row down
+      While CellTaken(aModule, X, Y) do
+        Inc(Y, cLayoutRow);
+
+      Before := TList<HWND>.Create;
+      Try
+        SurfaceWindows(aModule, Before);
+        Result := D.CreateComponent(aClass, aModule, X, Y, 0, 0);
+        PlaceNewComponent(aModule, Result, X, Y, Before);
+      Finally
+        Before.Free;
+      End;
+    end;
 end;
 
 function ArrangeSessionInDesigner(aModule: TvgVulkanDataModule; const aDesigner: IDesigner): Boolean;
   Var Cols      : array[0..3] of TList<TComponent>;
       Comps     : TList<TComponent>;
       Targets   : TList<TPoint>;
+      AllWnds   : TList<HWND>;
       Icons     : TList<HWND>;
       IconOf    : TDictionary<TComponent, HWND>;
+      CaptionOf : TDictionary<TComponent, HWND>;
       Surface   : TCustomForm;
       C         : TComponent;
       L         : TvgLinker;
       Old, P    : TPoint;
       I, Row    : Integer;
-      Best      : HWND;
-      Ctl       : TWinControl;
+      Best, Cap : HWND;
+      DX, DY    : Integer;
 
   Procedure Put(aCol: Integer; aComp: TComponent);
     Var K : Integer;
@@ -501,8 +641,10 @@ begin
     Cols[I] := TList<TComponent>.Create;
   Comps   := TList<TComponent>.Create;
   Targets := TList<TPoint>.Create;
-  Icons   := TList<HWND>.Create;
-  IconOf  := TDictionary<TComponent, HWND>.Create;
+  AllWnds   := TList<HWND>.Create;
+  Icons     := TList<HWND>.Create;
+  IconOf    := TDictionary<TComponent, HWND>.Create;
+  CaptionOf := TDictionary<TComponent, HWND>.Create;
   Try
     //the module's own references first, in session order, then the rest of
     //each kind, then anything else (scene loader, shader builder ...)
@@ -539,15 +681,19 @@ begin
       For Row := 0 to Cols[I].Count - 1 do
       Begin
         Comps.Add(Cols[I][Row]);
-        Targets.Add(Point(cLayoutLeft + I * cLayoutColumn, cLayoutTop + Row * cLayoutRow));
+        Targets.Add(Point(cLayoutColumnX[I], cLayoutTop + Row * cLayoutRow));
       End;
 
-    //match every icon to its component by where it is now, before any moves,
-    //so an icon moved onto another's old spot cannot be taken for it
+    //match every icon (and the caption under it) to its component by where
+    //it is now, before any moves, so an icon moved onto another's old spot
+    //cannot be taken for it
     Surface := DesignerSurface(aModule);
     If assigned(Surface) and Surface.HandleAllocated then
     Begin
-      EnumChildWindows(Surface.Handle, @CollectContainer, LPARAM(Icons));
+      EnumChildWindows(Surface.Handle, @CollectWindow, LPARAM(AllWnds));
+      For Best in AllWnds do
+        If IsIconWindow(Best) then
+          Icons.Add(Best);
 
       For C in Comps do
       Begin
@@ -555,7 +701,7 @@ begin
         Best := 0;
         For I := 0 to Icons.Count - 1 do
         Begin
-          P := WindowPos(Icons[I]);
+          P := WindowBounds(Icons[I]).TopLeft;
           If (Abs(P.X - Old.X) <= 2) and (Abs(P.Y - Old.Y) <= 2) then
           Begin
             Best := Icons[I];
@@ -563,33 +709,43 @@ begin
             Break;
           End;
         End;
+
         If Best <> 0 then
+        Begin
           IconOf.Add(C, Best);
+          Cap := CaptionWindow(Best, AllWnds);
+          If Cap <> 0 then
+            CaptionOf.Add(C, Cap);
+        End;
       End;
     End;
 
     For I := 0 to Comps.Count - 1 do
     Begin
-      C := Comps[I];
+      C   := Comps[I];
       SetDesignPos(C, Targets[I].X, Targets[I].Y);
 
       If IconOf.TryGetValue(C, Best) then
       Begin
-        Ctl := FindControl(Best);
-        If assigned(Ctl) then
-          Ctl.SetBounds(Targets[I].X, Targets[I].Y, Ctl.Width, Ctl.Height)
-        else
-          SetWindowPos(Best, 0, Targets[I].X, Targets[I].Y, 0, 0,
-                       SWP_NOSIZE or SWP_NOZORDER or SWP_NOACTIVATE);
+        //the caption keeps its place under the icon
+        P  := WindowBounds(Best).TopLeft;
+        DX := Targets[I].X - P.X;
+        DY := Targets[I].Y - P.Y;
+        MoveWindowBy(Best, DX, DY);
+        If CaptionOf.TryGetValue(C, Cap) then
+          MoveWindowBy(Cap, DX, DY);
       End else
         Result := False;    //stored, shown once the module is reopened
     End;
 
-    If assigned(Surface) then
-      Surface.Invalidate;
+    //whatever the designer paints itself (captions, selection) follows
+    If assigned(Surface) and Surface.HandleAllocated then
+      RedrawWindow(Surface.Handle, nil, 0, RDW_INVALIDATE or RDW_ERASE or RDW_ALLCHILDREN);
   Finally
+    CaptionOf.Free;
     IconOf.Free;
     Icons.Free;
+    AllWnds.Free;
     Targets.Free;
     Comps.Free;
     For I := 0 to 3 do
@@ -742,6 +898,126 @@ begin
     Proc(Info.Name);
 end;
 
+{ TvgCrossModuleProperty }
+
+{ The root of every module open in the IDE (forms and data modules). }
+procedure OpenModuleRoots(aList: TList<TComponent>);
+  Var Services : IOTAModuleServices;
+      Module   : IOTAModule;
+      FormEd   : IOTAFormEditor;
+      NTA      : INTAComponent;
+      I, J     : Integer;
+begin
+  If not Supports(BorlandIDEServices, IOTAModuleServices, Services) then exit;
+
+  For I := 0 to Services.ModuleCount - 1 do
+  Begin
+    Module := Services.Modules[I];
+    For J := 0 to Module.GetModuleFileCount - 1 do
+      If Supports(Module.GetModuleFileEditor(J), IOTAFormEditor, FormEd) and
+         Supports(FormEd.GetRootComponent, INTAComponent, NTA) and
+         assigned(NTA.GetComponent) and (aList.IndexOf(NTA.GetComponent) = -1) then
+        aList.Add(NTA.GetComponent);
+  End;
+end;
+
+function TvgCrossModuleProperty.Accepts(aComp: TComponent): Boolean;
+begin
+  Result := aComp is GetTypeData(GetPropType)^.ClassType;
+end;
+
+procedure TvgCrossModuleProperty.GetValues(Proc: TGetStrProc);
+  Var Names : TStringList;
+      Roots : TList<TComponent>;
+      Root  : TComponent;
+      I     : Integer;
+      N     : string;
+begin
+  Names := TStringList.Create;
+  Roots := TList<TComponent>.Create;
+  Try
+    Names.Sorted     := True;
+    Names.Duplicates := dupIgnore;
+
+    //this module and the ones it already uses, as the Object Inspector lists them
+    Designer.GetComponentNames(GetTypeData(GetPropType), Names.Append);
+    For I := Names.Count - 1 downto 0 do
+      If not Accepts(Designer.GetComponent(Names[I])) then
+        Names.Delete(I);
+
+    //every other open module, linked or not
+    OpenModuleRoots(Roots);
+    For Root in Roots do
+    Begin
+      If (Root = Designer.Root) or (Root.Name = '') then continue;
+      For I := 0 to Root.ComponentCount - 1 do
+        If (Root.Components[I].Name <> '') and Accepts(Root.Components[I]) then
+        Begin
+          N := Root.Name + '.' + Root.Components[I].Name;
+          Names.Add(N);
+        End;
+    End;
+
+    For N in Names do
+      Proc(N);
+  Finally
+    Roots.Free;
+    Names.Free;
+  End;
+end;
+
+procedure TvgCrossModuleProperty.SetValue(const Value: string);
+  Var Comp  : TComponent;
+      Roots : TList<TComponent>;
+      Root  : TComponent;
+      P     : Integer;
+begin
+  If Value = '' then
+  Begin
+    inherited;
+    exit;
+  End;
+
+  Comp := Designer.GetComponent(Value);
+
+  //Module.Component on a module this one does not use yet
+  If not assigned(Comp) then
+  Begin
+    P := Pos('.', Value);
+    If P > 0 then
+    Begin
+      Roots := TList<TComponent>.Create;
+      Try
+        OpenModuleRoots(Roots);
+        For Root in Roots do
+          If SameText(Root.Name, Copy(Value, 1, P - 1)) then
+          Begin
+            Comp := Root.FindComponent(Copy(Value, P + 1, MaxInt));
+            Break;
+          End;
+      Finally
+        Roots.Free;
+      End;
+    End;
+  End;
+
+  If not assigned(Comp) or not Accepts(Comp) then
+    raise EDesignPropertyError.CreateFmt('%s is not a valid value for %s', [Value, GetName]);
+
+  //adds the other module's unit to this one's uses clause
+  If not Designer.IsComponentLinkable(Comp) then
+    Designer.MakeComponentLinkable(Comp);
+
+  SetOrdValue(IntPtr(Comp));
+end;
+
+{ TvgWindowRefProperty }
+
+function TvgWindowRefProperty.Accepts(aComp: TComponent): Boolean;
+begin
+  Result := Supports(aComp, IvgVulkanWindow);
+end;
+
 { TvgSceneFileNameProperty }
 
 function TvgSceneFileNameProperty.GetAttributes: TPropertyAttributes;
@@ -806,6 +1082,23 @@ begin
 end;
 
 { TvgSessionActiveProperty }
+
+procedure TvgSessionActiveProperty.MouseUp(Button: TMouseButton; Shift: TShiftState;
+  X, Y: Integer; InNameRect: Boolean; const ItemRect: TRect; var Handled: Boolean);
+begin
+  Handled := False;
+  If (paReadOnly in GetAttributes) or InNameRect then exit;
+
+  If PtInRect(CBRect(ItemRect), Point(X, Y)) then
+  Begin
+    //True starts the whole session (SetValue), not just this component
+    If GetOrdValue = 0 then
+      SetValue('True')
+    else
+      SetValue('False');
+    Handled := True;
+  End;
+end;
 
 procedure TvgSessionActiveProperty.SetValue(const Value: string);
   Var I    : Integer;

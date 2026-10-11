@@ -9,10 +9,10 @@
         <Projects Include="VulkanPkgR370.dproj">
             <Dependencies />
         </Projects>
-        <Projects Include="VulkanPkgD370.dproj">
+        <Projects Include="VulkanPkg_VCLR370.dproj">
             <Dependencies />
         </Projects>
-        <Projects Include="VulkanPkg_VCLR370.dproj">
+        <Projects Include="VulkanPkgD370.dproj">
             <Dependencies />
         </Projects>
         <Projects Include="VulkanPkg_VCLD370.dproj">
@@ -96,13 +96,13 @@
         <MSBuild Projects="VulkanPkg_FMXR370.dproj" Targets="Make" />
     </Target>
     <Target Name="Build">
-        <CallTarget Targets="VulcanTest;VulkanPkgR370;VulkanPkgD370;VulkanPkg_VCLR370;VulkanPkg_VCLD370;VulkanPkg_SingleR;VulkanPkg_FMXR370" />
+        <CallTarget Targets="VulcanTest;VulkanPkgR370;VulkanPkg_VCLR370;VulkanPkgD370;VulkanPkg_VCLD370;VulkanPkg_SingleR;VulkanPkg_FMXR370" />
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="VulcanTest:Clean;VulkanPkgR370:Clean;VulkanPkgD370:Clean;VulkanPkg_VCLR370:Clean;VulkanPkg_VCLD370:Clean;VulkanPkg_SingleR:Clean;VulkanPkg_FMXR370:Clean" />
+        <CallTarget Targets="VulcanTest:Clean;VulkanPkgR370:Clean;VulkanPkg_VCLR370:Clean;VulkanPkgD370:Clean;VulkanPkg_VCLD370:Clean;VulkanPkg_SingleR:Clean;VulkanPkg_FMXR370:Clean" />
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="VulcanTest:Make;VulkanPkgR370:Make;VulkanPkgD370:Make;VulkanPkg_VCLR370:Make;VulkanPkg_VCLD370:Make;VulkanPkg_SingleR:Make;VulkanPkg_FMXR370:Make" />
+        <CallTarget Targets="VulcanTest:Make;VulkanPkgR370:Make;VulkanPkg_VCLR370:Make;VulkanPkgD370:Make;VulkanPkg_VCLD370:Make;VulkanPkg_SingleR:Make;VulkanPkg_FMXR370:Make" />
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')" />
     <ItemGroup Condition="'$(BuildGroup)'=='Vulkan Test Debug Build'">

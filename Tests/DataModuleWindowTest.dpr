@@ -21,6 +21,7 @@ uses
   System.SysUtils,
   System.Classes,
   System.Generics.Collections,
+  System.TypInfo,
   Vulkan,
   Vulkan_Components_Lookups,
   Vulkan_Components,
@@ -132,6 +133,38 @@ begin
   Finally
     L.Free;
   End;
+end;
+
+type
+  TCompAccess = class(TComponent);
+
+  { The IDE's designer hears of a new component through the module's own
+    Notification(opInsert) - sent from inside TComponent.Create, before the
+    component's constructor has run - and calls ItemInserted, which makes
+    the module adopt it. }
+  TIdeLikeModule = class(TvgVulkanDataModule)
+  protected
+    procedure Notification(AComponent: TComponent; Operation: TOperation); override;
+  end;
+
+procedure TIdeLikeModule.Notification(AComponent: TComponent; Operation: TOperation);
+begin
+  inherited;
+  If (Operation = opInsert) and (AComponent.Owner = Self) then
+    AdoptComponents;
+end;
+
+{ Creates parts as the IDE does: designing, then ItemInserted, which makes
+  the module adopt what was dropped on it. }
+function DesignFactory(aDM: TvgVulkanDataModule): TvgSessionComponentFactory;
+begin
+  Result :=
+    function(aClass: TComponentClass; aIndex: Integer): TComponent
+    begin
+      Result := aClass.Create(aDM);
+      Result.Name := Format('%s%d', [Copy(aClass.ClassName, 2, MaxInt), aIndex]);
+      aDM.AdoptComponents;
+    end;
 end;
 
 // The module's reference to the freed part (0 Instance .. 4 Scene) is nil.
@@ -333,6 +366,67 @@ begin
     Check('primary linker let go of it', Lk.ScreenDevice = nil, True);
     Check('second linker let go of it', L2.ScreenDevice = nil, True);
     Check('session reports the missing device', DM2.SessionProblem = vgSesNoScreenDevice, True);
+  finally
+    DM2.Free;
+  end;
+
+  //design time: each new component is announced (opInsert) to the others
+  //while still in its constructor.  Linking to it there broke a scene made
+  //after the renderer (access violation) and left a new tool manager
+  //unlinked (its constructor reset what was linked).
+  Writeln('Building in the designer');
+  DM2 := TIdeLikeModule.CreateNew(nil);
+  try
+    TCompAccess(DM2).SetDesigning(True, True);
+    Raised := False;
+    Try
+      DM2.BuildSession(DesignFactory(DM2));
+      DM2.BuildToolManager(DesignFactory(DM2));
+    Except
+      on E: Exception do
+      Begin
+        Raised := True;
+        Writeln('    ', E.ClassName, ': ', E.Message);
+      End;
+    End;
+    Check('design time: build raises nothing', Raised, False);
+    Check('design time: renderer and scene built', Assigned(DM2.Renderer) and Assigned(DM2.Scene), True);
+    //the screen device is linked from the physical device's side: it must
+    //get the instance too, or enabling asserts "Instance not connected"
+    Check('design time: screen device has the instance',
+          Assigned(DM2.ScreenDevice) and (DM2.ScreenDevice.Instance = DM2.Instance), True);
+    Check('design time: renderer shows the scene', Assigned(DM2.Renderer) and (DM2.Renderer.Scene = DM2.Scene), True);
+    Check('design time: tool manager linked to the linker',
+          Assigned(DM2.ToolManager) and (DM2.ToolManager.Linker = DM2.Linker) and
+          (DM2.Linker.ToolManager = DM2.ToolManager), True);
+    Check('design time: tool manager has the scene and renderer',
+          Assigned(DM2.ToolManager) and (DM2.ToolManager.Scene = DM2.Scene) and
+          (DM2.ToolManager.Renderer = DM2.Renderer), True);
+  finally
+    DM2.Free;
+  end;
+
+  //the screen render device owns DescriptorIndexing/DynamicRendering; the
+  //instance follows its devices and no longer publishes them
+  Writeln('Device-owned DescriptorIndexing / DynamicRendering');
+  DM2 := TvgVulkanDataModule.CreateNew(nil);
+  try
+    DM2.BuildSession;
+    SD := DM2.ScreenDevice;
+    Inst := DM2.Instance;
+    Check('instance does not publish DescriptorIndexing', GetPropInfo(Inst, 'DescriptorIndexing') = nil, True);
+    Check('instance does not publish DynamicRendering', GetPropInfo(Inst, 'DynamicRendering') = nil, True);
+    Check('device publishes DescriptorIndexingON', GetPropInfo(SD, 'DescriptorIndexingON') <> nil, True);
+
+    SD.DescriptorIndexingON := True;
+    Check('device DescriptorIndexingON on -> instance on', Inst.DescriptorIndexing, True);
+    SD.DescriptorIndexingON := False;
+    Check('device DescriptorIndexingON off -> instance off', Inst.DescriptorIndexing, False);
+    SD.DynamicRenderingON := False;
+    Check('device DynamicRenderingON off -> instance off', Inst.DynamicRendering, False);
+    SD.DynamicRenderingON := True;
+    Check('device DynamicRenderingON on -> instance on', Inst.DynamicRendering, True);
+    Check('instance API raised to 1.3 for it', Ord(Inst.APIVersion) >= Ord(VG_API_VERSION_1_3), True);
   finally
     DM2.Free;
   end;

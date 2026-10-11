@@ -3346,7 +3346,10 @@ begin
   For TM in GetToolManagers do
     TM.SceneCleared;
 
-  ClearScene;  //clears the scene
+  //not when the constructor failed before making the list: the reason it
+  //failed is the error to show, not ClearScene's assertion
+  if assigned(fSceneData) then
+     ClearScene;  //clears the scene
 
   if assigned(fSceneData) then
      FreeAndNil(fSceneData);
@@ -3604,6 +3607,7 @@ begin
   Case Operation of
      opInsert : Begin
                   If aComponent=self then exit;
+                  If not vgLinkable(aComponent) then exit;   //still being constructed: told again once it is
 
                   If NotificationTestON and Not (csDesigning in ComponentState) then exit;     //don't mess with links at runtime
 
@@ -3954,6 +3958,8 @@ begin
   Case Operation of
      opInsert:
      Begin
+       If not vgLinkable(AComponent) then exit;   //still being constructed: told again once it is
+
        If (AComponent is TvgScene) and not assigned(fScene) then
        Begin
          Scene := TvgScene(AComponent) ;
@@ -5591,6 +5597,7 @@ begin
     Case Operation of
        opInsert : Begin
                     If aComponent=self then exit;
+                    If not vgLinkable(aComponent) then exit;   //still being constructed: told again once it is
                     If NotificationTestON and Not (csDesigning in ComponentState) then exit;     //don't mess with links at runtime
 
                     If (aComponent is TvgScene) and (fScene=Nil) then

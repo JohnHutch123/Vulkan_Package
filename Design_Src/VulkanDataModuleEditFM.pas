@@ -278,6 +278,10 @@ begin
   If (aObj is TComponent) and SameText(vgPropName(aProp), 'Name') then
     Exit(False);
 
+  //a device's feature flags are read from the GPU: shown, not edited
+  If aObj is TvgFeatures then
+    Exit(False);
+
   Case vgPropType(aProp)^.Kind of
     tkInteger, tkChar, tkWChar, tkInt64, tkFloat,
     tkString, tkLString, tkUString, tkWString,

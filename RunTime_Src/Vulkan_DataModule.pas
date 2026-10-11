@@ -132,7 +132,7 @@ const
   cRendererSlot    = 102;   //... and for the renderer
 
 type
-  TvgVulkanDataModule = class(TDataModule)
+  TvgVulkanDataModule = class(TDataModule, IvgComponentHost)
   private
     fInstance          : TvgInstance;
     fPhysicalDevice    : TvgPhysicalDevice;
@@ -175,6 +175,11 @@ type
 
   protected
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
+
+    { IvgComponentHost: a part dropped on the module (or made by Build) has
+      finished constructing - adopt it at design time.  The IDE's own
+      ItemInserted comes too early for that. }
+    procedure ComponentConstructed(aComponent: TComponent);
 
   public
     { The base class has no .dfm, so Create on TvgVulkanDataModule itself
@@ -603,6 +608,12 @@ begin
   inherited;
 end;
 
+procedure TvgVulkanDataModule.ComponentConstructed(aComponent: TComponent);
+begin
+  If csDesigning in ComponentState then
+    AdoptComponents;
+end;
+
 procedure TvgVulkanDataModule.AdoptComponents;
   Var I : Integer;
       C : TComponent;
@@ -614,6 +625,11 @@ begin
   For I := 0 to ComponentCount - 1 do
   Begin
     C := Components[I];
+
+    //the IDE's ItemInserted comes from this module's opInsert, sent while
+    //the new component's constructor has yet to run: it is adopted when
+    //the component announces itself again, once whole (vgLinkable)
+    If not vgLinkable(C) then continue;
 
     If (C is TvgInstance)           and not assigned(fInstance)       then Instance       := TvgInstance(C)
     else

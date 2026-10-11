@@ -118,8 +118,15 @@
         <DCCReference Include="rtl.dcp" />
         <DCCReference Include="designide.dcp" />
         <DCCReference Include="vcl.dcp" />
+        <DCCReference Include="vclx.dcp" />
         <DCCReference Include="VulkanPkgR280.dcp" />
+        <DCCReference Include="VulkanPkg_VCLR280.dcp" />
         <DCCReference Include="..\Design_Src\VulkanPkg_Designers.pas" />
+        <DCCReference Include="..\Design_Src\VulkanDataModuleEditFM.pas">
+            <Form>vgSessionEditorFM</Form>
+            <FormType>dfm</FormType>
+        </DCCReference>
+        <DCCReference Include="..\Design_Src\VulkanPkg_DataModuleReg.pas" />
         <RcCompile Include="..\Design_Src\VulkanPkg_DesignIcons.rc">
             <Form>VulkanPkg_DesignIcons.res</Form>
         </RcCompile>

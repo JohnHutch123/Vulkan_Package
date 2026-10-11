@@ -12,9 +12,9 @@ type
   TvgVulkanDataModule1 = class(TvgVulkanDataModule)
     vgInstance1: TvgInstance;
     vgPhysicalDevice1: TvgPhysicalDevice;
-    vgScreenDevice1: TvgScreenRenderDevice;
+    vgScreenRenderDevice1: TvgScreenRenderDevice;
     vgLinker1: TvgLinker;
-    vgRenderer1: TvgRenderEngine_Single;
+    vgRenderEngine_Single1: TvgRenderEngine_Single;
     vgScene1: TvgScene;
     vgToolManager1: TvgToolManager;
   private

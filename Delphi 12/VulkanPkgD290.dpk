@@ -32,9 +32,13 @@ requires
   rtl,
   designide,
   vcl,
-  VulkanPkgR290;
+  vclx,
+  VulkanPkgR290,
+  VulkanPkg_VCLR290;
 
 contains
-  VulkanPkg_Designers in '..\Design_Src\VulkanPkg_Designers.pas';
+  VulkanPkg_Designers in '..\Design_Src\VulkanPkg_Designers.pas',
+  VulkanDataModuleEditFM in '..\Design_Src\VulkanDataModuleEditFM.pas' {vgSessionEditorFM},
+  VulkanPkg_DataModuleReg in '..\Design_Src\VulkanPkg_DataModuleReg.pas';
 
 end.

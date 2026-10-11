@@ -412,7 +412,9 @@ end;
 
 function TvgWindowVCL.GetActive: Boolean;
 begin
-   Result:= fVulkanActive;
+   //the window is live when its linker is, however the session was started:
+   //fVulkanActive only followed this window's own Active
+   Result:= assigned(fLinker) and fLinker.Active;
 end;
 
 function TvgWindowVCL.GetClearColor: TColor;
@@ -624,6 +626,8 @@ begin
 
   Case Operation of
      opInsert : Begin
+                  If not vgLinkable(aComponent) then exit;   //still being constructed: told again once it is
+
                   //designer convenience: a linker dropped on the form joins an
                   //unlinked window.  Never while a form loads (the stored
                   //VulkanLink, or none, is what counts) nor at run time.
@@ -682,7 +686,7 @@ end;
 procedure TvgWindowVCL.SetActive(const Value: Boolean);
 begin
 
-  If fVulkanActive=Value then exit;
+  If GetActive=Value then exit;
   fVulkanActive := False;
   If not HandleAllocated then exit;
 
