@@ -22,7 +22,8 @@ uses
   Vulkan_Components_Scene_Renderer,
   Vulkan_Components_Compute,
   Vulkan_HUD,
-  VulkanTestDM in 'VulkanTestDM.pas' {vgVulkanDataModule1: TvgVulkanDataModule};
+  VulkanTestDM in 'VulkanTestDM.pas' {vgVulkanDataModule1: TvgVulkanDataModule},
+  Vulkan_Loader_OBJ in '..\..\RunTime_Src\Vulkan_Loader_OBJ.pas';
 
 {$R *.res}
 

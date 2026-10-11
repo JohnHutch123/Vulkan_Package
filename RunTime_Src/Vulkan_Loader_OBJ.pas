@@ -33,17 +33,16 @@ uses
 procedure TvgSceneLoader_OBJ.LoadScene;
 var
   Lines: TStringList;
-  Positions: TList<TpvVector3>;
+  Positions, Colors: TList<TpvVector3>;
   Indices: TList<Cardinal>;
   Words, Corner: TArray<string>;
   Face: TArray<Integer>;
   Line: string;
   LineNo, I, J, K, N, CommentAt: Integer;
-  X, Y, Z, W: Double;
+  X, Y, Z, W, R, G, B: Double;
   FS: TFormatSettings;
   Store: TvgObjectStore;
   Obj: TvgObject;
-  P: TpvVector3;
 
   procedure Error(const MessageText: string);
   begin
@@ -67,6 +66,7 @@ begin
 
   Lines := TStringList.Create;
   Positions := TList<TpvVector3>.Create;
+  Colors := TList<TpvVector3>.Create;
   Indices := TList<Cardinal>.Create;
   try
     // Parse everything before Load_Begin, which clears the existing scene.
@@ -85,14 +85,24 @@ begin
         Continue;
       if Words[0] = 'v' then
       begin
-        if not (Length(Words) in [4, 5]) then
-          Error('Expected v x y z [w]');
+        // v x y z [w], or the common x y z r g b vertex colour extension
+        if not (Length(Words) in [4, 5, 7]) then
+          Error('Expected v x y z [w] or v x y z r g b');
         X := Number(Words[1]);
         Y := Number(Words[2]);
         Z := Number(Words[3]);
         W := 1;
+        R := 0.8;
+        G := 0.8;
+        B := 0.8;
         if Length(Words) = 5 then
-          W := Number(Words[4]);
+          W := Number(Words[4])
+        else if Length(Words) = 7 then
+        begin
+          R := EnsureRange(Number(Words[4]), 0, 1);
+          G := EnsureRange(Number(Words[5]), 0, 1);
+          B := EnsureRange(Number(Words[6]), 0, 1);
+        end;
         if W = 0 then
           Error('Vertex weight must not be zero');
         X := X / W;
@@ -102,6 +112,7 @@ begin
            (Abs(Z) > MaxSingle) then
           Error('Vertex exceeds the scene single-precision range');
         Positions.Add(TpvVector3.Create(X, Y, Z));
+        Colors.Add(TpvVector3.Create(R, G, B));
       end
       else if Words[0] = 'f' then
       begin
@@ -155,11 +166,12 @@ begin
       Store.BaseVertName := 'EditLines';
       Store.BaseFragName := 'EditLines';
       Obj := Store.AddObject(True);
-      for P in Positions do
+      // Grey unless the file gave the vertex a colour.
+      for I := 0 to Positions.Count - 1 do
       begin
         Obj.AddVertex;
-        Obj.SetVertexPosition(P.x, P.y, P.z);
-        Obj.SetVertexColor(0.8, 0.8, 0.8);
+        Obj.SetVertexPosition(Positions[I].x, Positions[I].y, Positions[I].z);
+        Obj.SetVertexColor(Colors[I].x, Colors[I].y, Colors[I].z);
       end;
       Obj.AddIndices(Indices.ToArray);
       Obj.AddObjectID;
@@ -178,6 +190,7 @@ begin
     end;
   finally
     Indices.Free;
+    Colors.Free;
     Positions.Free;
     Lines.Free;
   end;
@@ -189,8 +202,7 @@ begin
 end;
 
 initialization
-  RegisterSceneLoader(TvgSceneLoader_OBJ, 'OBJ', 'Wavefront OBJ geometry',
-    '.obj', 'FileName');
+  RegisterSceneLoader(TvgSceneLoader_OBJ, 'OBJ', 'Wavefront OBJ geometry',   '.obj', 'FileName');
   RegisterClass(TvgSceneLoader_OBJ);
 
 finalization

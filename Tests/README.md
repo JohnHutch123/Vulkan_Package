@@ -184,4 +184,4 @@ three decimals, and a float32 `mat4` view-projection places them to about
 
 ## OBJLoaderTest
 
-Loads temporary OBJ files through the real loader and registry without a Vulkan device. Checks positions, bounds, indexed triangle winding, quad triangulation, negative indices, optional face attribute syntax, whitespace/comments, locale-independent decimals, homogeneous vertices, reload replacement, malformed input preserving the scene, missing files and rejected saving. Included in RunTests.bat.
+Loads temporary OBJ files through the real loader and registry without a Vulkan device. Checks positions, bounds, indexed triangle winding, quad triangulation, negative indices, optional face attribute syntax, whitespace/comments, locale-independent decimals, homogeneous vertices, `v x y z r g b` vertex colours, the real `Samples/OBJ Files/TeaPot.obj` (skipped if absent), reload replacement, malformed input preserving the scene, missing files and rejected saving. Included in RunTests.bat.

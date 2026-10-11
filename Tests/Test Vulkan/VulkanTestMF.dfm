@@ -129,6 +129,15 @@ object TestVulkan: TTestVulkan
     TabOrder = 11
     OnClick = Button7Click
   end
+  object LoadFileBtn: TButton
+    Left = 208
+    Top = 351
+    Width = 105
+    Height = 25
+    Caption = 'Load File...'
+    TabOrder = 27
+    OnClick = LoadFileBtnClick
+  end
   object Button8: TButton
     Left = 208
     Top = 169

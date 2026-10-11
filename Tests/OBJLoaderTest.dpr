@@ -49,7 +49,7 @@ var
   BMin, BMax: TpvVector3D;
   OldDecimal: Char;
   Raised: Boolean;
-  Form: string;
+  Form, TeaPot: string;
 begin
   Check('registered for case-insensitive OBJ extension',
     FindSceneLoaderForFile('mesh.OBJ', Info));
@@ -95,6 +95,11 @@ begin
   Loader.LoadScene;
   Check('homogeneous vertex and tabs',
     Abs(Scene.SceneData[0].GetObjectVertexPosition(0, 1).x - 2.5) < 1e-6);
+  Source('v 0 0 0 1 0 0'#10'v 2.5 0 0 0 1 0'#10'v 0 3 0 0 0 1'#10'f 1 2 3');
+  Loader.LoadScene;
+  Check('x y z r g b vertex colours accepted',
+    (Scene.SceneData[0].GetObjectIndexCount(0) = 3) and
+    (Abs(Scene.SceneData[0].GetObjectVertexPosition(0, 1).x - 2.5) < 1e-6));
 
   Reject('zero index', Vertices + 'f 0 2 3');
   Reject('positive index beyond vertices', Vertices + 'f 1 2 5');
@@ -103,12 +108,31 @@ begin
   Reject('invalid vertex', 'v bad 0 0'#10 + Vertices + 'f 1 2 3');
   Reject('overflow coordinate', 'v 1e100 0 0'#10 + Vertices + 'f 1 2 3');
   Reject('zero weight', 'v 1 0 0 0'#10 + Vertices + 'f 1 2 3');
+  Reject('six-value vertex', 'v 1 0 0 1 0'#10 + Vertices + 'f 1 2 3');
+  Reject('invalid vertex colour', 'v 1 0 0 1 x 0'#10 + Vertices + 'f 1 2 3');
   Reject('invalid corner', Vertices + 'f 1/ 2 3');
   Reject('no faces', Vertices);
   Reject('empty file', '');
   Source(Vertices + 'f 1 2 3');
   Loader.LoadScene;
   Check('successful load after errors', Scene.SceneData[0].GetObjectIndexCount(0) = 3);
+
+  // A real exported model, when the sample is present.
+  TeaPot := TPath.GetFullPath(TPath.Combine(ExtractFilePath(ParamStr(0)),
+    '..\..\Samples\OBJ Files\TeaPot.obj'));
+  if FileExists(TeaPot) then
+  begin
+    vgLoadSceneFile(Scene, TeaPot);
+    Store := Scene.SceneData[0];
+    Check('TeaPot.obj: 3644 vertices', Store.GetObjectVertexCount(0) = 3644);
+    Check('TeaPot.obj: 6320 triangles', Store.GetObjectIndexCount(0) = 3 * 6320);
+    Check('TeaPot.obj: bounds', Scene.GetDataBounds(BMin, BMax) and
+      (BMin.x < -2.9) and (BMax.x > 3.3) and (BMax.y > 3));
+    // back to the one triangle the checks below expect
+    Loader.LoadScene;
+  end
+  else
+    Writeln('  skip TeaPot.obj not found: ', TeaPot);
 
   Raised := False;
   try Loader.StoreScene;

@@ -14,6 +14,13 @@ uses Vulkan_Loader_OBJ, Vulkan_SceneLoaders;
 vgLoadSceneFile(Scene, 'C:\Models\example.obj');
 ```
 
+At design time `TvgSceneLoader_OBJ` is on the **Vulkan Graphics** palette.
+Drop one on a `TvgVulkanDataModule` to make it the module's `SceneLoader`,
+or leave `SceneLoaderType` blank (or set it to `OBJ`) and point
+`SceneFileName` at an `.obj` file. The *Load Scene File...* verbs list `.obj`
+in their file filter. The `Tests/Test Vulkan` sample has a **Load File...**
+button that loads any registered format and zooms to it.
+
 Or create the component directly:
 
 ```pascal
@@ -30,6 +37,8 @@ end;
 ## Supported subset
 
 - `v x y z [w]` positions, with optional nonzero homogeneous weight.
+- `v x y z r g b` vertex colours (the MeshLab/CloudCompare extension),
+  0..1 per channel. Vertices without a colour are grey.
 - `f` faces using one-based indices or negative indices relative to the
   positions already read. Zero and out-of-range position indices are errors.
 - `v`, `v/vt`, `v//vn`, and `v/vt/vn` face-corner syntax. Only positions
@@ -41,12 +50,12 @@ end;
 
 The file becomes one indexed triangle object in one store. Object/group names,
 normals, texture coordinates, materials, smoothing, lines, points and other
-records are ignored. No MTL or texture files are opened. Vertex colour
-extensions and continued records are not supported. Coordinates and axis
+records are ignored. No MTL or texture files are opened. Continued records
+(trailing backslash) are not supported. Coordinates and axis
 conventions are kept as supplied; there is no axis conversion or auto-scaling.
 An empty file or file without polygon faces is rejected.
 
-The object uses uniform grey vertex colour and the public `EditLines` shader
+The object uses the public `EditLines` shader
 pair, whose position/colour/object-ID inputs also work with triangle topology.
 Make `EditLines_vert.spv` and `EditLines_frag.spv` available through
 `ShaderFolderPath`, as described in [the shader guide](../VulkanShaders/README.md).

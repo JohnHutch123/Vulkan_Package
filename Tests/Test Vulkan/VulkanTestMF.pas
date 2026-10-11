@@ -22,7 +22,10 @@ uses
   Vulkan_Components_Descriptors,
   Vulkan_Renderer_Single,
   Vulkan_Components_Scene_Renderer,
-  Vulkan_Components_DataStore ;
+  Vulkan_Components_DataStore,
+  Vulkan_Components_Camera,
+  Vulkan_SceneLoaders,
+  Vulkan_Loader_OBJ;
 
 type
   TTestVulkan = class(TForm)
@@ -35,6 +38,7 @@ type
     Button6: TButton;
     Button7: TButton;
     Button8: TButton;
+    LoadFileBtn: TButton;
     DeviceSel: TRadioGroup;
     TestRB: TRadioGroup;
     DBCB: TCheckBox;
@@ -64,6 +68,7 @@ type
     procedure vgWindowLink1RenderPassBuild(Sender: TvgRenderPass);
     procedure Button7Click(Sender: TObject);
     procedure Button8Click(Sender: TObject);
+    procedure LoadFileBtnClick(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure FormClose(Sender: TObject; var Action: TCloseAction);
     procedure FormDestroy(Sender: TObject);
@@ -103,6 +108,9 @@ var
 implementation
 
 {$R *.dfm}
+
+uses
+  VulkanTestDM;
 
 function IsRenderDocActive: Boolean;
 type
@@ -750,6 +758,52 @@ begin
 
   MessagesTxt.Lines.add('Scene loaded');
 
+end;
+
+procedure TTestVulkan.LoadFileBtnClick(Sender: TObject);
+  Var Scene  : TvgScene;
+      Camera : TvgCamera;
+      BMin,
+      BMax   : TpvVector3D;
+      Aspect : Double;
+begin
+  //the scene built by Build Instance, else the data module's
+  Scene := fScene;
+  If not assigned(Scene) and assigned(vgVulkanDataModule1) then
+    Scene := vgVulkanDataModule1.vgScene1;
+  If not assigned(Scene) then exit;
+
+  //every registered scene loader (OBJ, and glTF with the PRO package)
+  OpenDialog1.Title  := 'Load Scene File';
+  OpenDialog1.Filter := SceneLoaderDialogFilter;
+  If not OpenDialog1.Execute then exit;
+
+  Try
+    vgLoadSceneFile(Scene, OpenDialog1.FileName);   //loader chosen by extension
+  Except
+    On E: Exception do
+    Begin
+      MessagesTxt.Lines.Add('Load failed: ' + E.Message);
+      exit;
+    End;
+  End;
+
+  //frame what was loaded
+  If (Scene = fScene) then
+  Begin
+    Camera := Scene.Cameras.GetActiveCamera;
+    If assigned(Camera) and Scene.GetDataBounds(BMin, BMax) then
+    Begin
+      Aspect := 1;
+      If assigned(fVCLWin) and (fVCLWin.ClientHeight > 0) then
+        Aspect := fVCLWin.ClientWidth / fVCLWin.ClientHeight;
+      Camera.ZoomAll(BMin, BMax, Aspect);
+    End;
+  End
+  else
+    vgVulkanDataModule1.vgToolManager1.ZoomAll;
+
+  MessagesTxt.Lines.Add('Scene file loaded: ' + OpenDialog1.FileName);
 end;
 
 procedure TTestVulkan.Button8Click(Sender: TObject);
