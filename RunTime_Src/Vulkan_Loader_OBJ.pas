@@ -188,6 +188,7 @@ begin
     finally
       Store.Free;
     end;
+
   finally
     Indices.Free;
     Colors.Free;

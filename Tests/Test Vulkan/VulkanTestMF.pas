@@ -87,6 +87,7 @@ type
     fGP       : TvgGraphicPipeline;
     fRenderer   : TvgRenderEngine;
     fScene      : TvgScene;
+    fToolManager : TvgToolManager;
 
     fMSAASample : TvgSampleCountFlagBits;
 
@@ -579,7 +580,11 @@ begin
     fRenderer.Scene := fScene;
     fScene.ConnectRenderEngine(fRenderer) ;
 
-
+     fToolManager := TvgToolManager.Create(self);
+     fToolManager.Linker:=fLinker;
+     fToolManager.Scene := fScene;
+     fToolManager.Renderer := fRenderer;
+     fToolManager.ActionMode := TAM_CAMERA_ORBIT;
 
     MessagesTxt.Lines.add('Build Instance complete');
 end;
@@ -792,6 +797,14 @@ begin
   If (Scene = fScene) then
   Begin
     Camera := Scene.Cameras.GetActiveCamera;
+
+    If Not assigned(Camera) then
+    Begin
+      Camera:= TvgCamera.create;
+
+      Scene.Cameras.AddCamera('Main',Camera) ;
+    End;
+
     If assigned(Camera) and Scene.GetDataBounds(BMin, BMax) then
     Begin
       Aspect := 1;
@@ -802,6 +815,8 @@ begin
   End
   else
     vgVulkanDataModule1.vgToolManager1.ZoomAll;
+
+  If assigned(fToolManager) then
 
   MessagesTxt.Lines.Add('Scene file loaded: ' + OpenDialog1.FileName);
 end;

@@ -5,6 +5,7 @@ object vgVulkanDataModule1: TvgVulkanDataModule1
   Linker = vgLinker1
   Renderer = vgRenderEngine_Single1
   Scene = vgScene1
+  SceneLoader = vgSceneLoader_OBJ1
   ToolManager = vgToolManager1
   Height = 385
   Width = 640
@@ -367,5 +368,10 @@ object vgVulkanDataModule1: TvgVulkanDataModule1
     ActionMode = TAM_CAMERA_ORBIT
     Left = 360
     Top = 192
+  end
+  object vgSceneLoader_OBJ1: TvgSceneLoader_OBJ
+    Scene = vgScene1
+    Left = 496
+    Top = 120
   end
 end

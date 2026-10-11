@@ -6,7 +6,7 @@ uses
   System.SysUtils, System.Classes,
   Vulkan_Components, Vulkan_WindowVCL, Vulkan_DataModule,
   Vulkan_Components_Scene_Renderer,
-  Vulkan_Renderer_Single;
+  Vulkan_Renderer_Single, Vulkan_Loader_OBJ;
 
 type
   TvgVulkanDataModule1 = class(TvgVulkanDataModule)
@@ -17,6 +17,7 @@ type
     vgRenderEngine_Single1: TvgRenderEngine_Single;
     vgScene1: TvgScene;
     vgToolManager1: TvgToolManager;
+    vgSceneLoader_OBJ1: TvgSceneLoader_OBJ;
   private
     { Private declarations }
   public
