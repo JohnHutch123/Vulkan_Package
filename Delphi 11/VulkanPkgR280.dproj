@@ -1,4 +1,4 @@
-﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
         <ProjectGuid>{413EE3C7-D5AD-406F-A0F1-572F3176852E}</ProjectGuid>
         <MainSource>VulkanPkgR280.dpk</MainSource>
@@ -206,6 +206,7 @@
         <DCCReference Include="..\RunTime_Src\Vulkan_CriticalSection.pas" />
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_ShaderCompiler.pas" />
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_Compute.pas" />
+        <DCCReference Include="..\RunTime_Src\Vulkan_Loader_OBJ.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_SceneLoaders.pas" />
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_Light.pas" />
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_TextureInspector.pas" />

@@ -181,3 +181,7 @@ The float32 limits that remain are on the GPU side and are measured by
 `PrecisionTest` (PRO): vertex offsets within 16,384 of `TvgScene.WorldOrigin` keep
 three decimals, and a float32 `mat4` view-projection places them to about
 1 mm.
+
+## OBJLoaderTest
+
+Loads temporary OBJ files through the real loader and registry without a Vulkan device. Checks positions, bounds, indexed triangle winding, quad triangulation, negative indices, optional face attribute syntax, whitespace/comments, locale-independent decimals, homogeneous vertices, reload replacement, malformed input preserving the scene, missing files and rejected saving. Included in RunTests.bat.

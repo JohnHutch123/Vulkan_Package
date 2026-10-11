@@ -15,7 +15,7 @@ Datavis (johnh@datavis.com.au); the link works once you have been given access.
 |---|---|
 | Instance/device/swapchain/pipeline components, descriptors, data stores, scene and render engine base, `TvgRenderEngine_Single`, camera, lights, HUD, compute, shader compiler, VCL/SDL2 windows, hand-built shaders (`VulkanShaders/`) | Particle system, glTF scene loader, shader builder (unit and app), `TvgCommThread_RenderEngine` (multi-threaded recording) |
 | `TvgToolManager`: camera control, CPU/GPU picking, selection, zoom to all | `TvgEditToolManager` (a `TvgToolManager` descendant): edit tools, undo/redo, snapping, work plane |
-| `TvgSceneLoaderStorer` (abstract loader base) | Natural neighbour, spring system, Delaunay display |
+| `TvgSceneLoaderStorer` (abstract loader base), `TvgSceneLoader_OBJ` (load-only OBJ geometry) | Natural neighbour, spring system, Delaunay display |
 
 `TvgToolManager` exposes virtual hooks (`ToolMouseDown/Move/Up`,
 `DoCameraDrag`, `DoSelectionChanged`, `ForgetObject`, `StoreGone`,
@@ -168,3 +168,7 @@ It’s a **component-oriented architecture**:
 - CI (`.github/workflows/delphi-tests.yml`) is designed for a **self-hosted Windows runner** with Delphi installed.
 - Tests are CPU-focused and compile/run real runtime units via `dcc32`.
 - Repo expects an external PasVulkan checkout (paths referenced from tests/packages).
+
+### Simple OBJ loading
+
+The public runtime includes a load-only OBJ loader. See [OBJ loader](RunTime_Src/OBJ_LOADER.md) for usage and the supported subset.
