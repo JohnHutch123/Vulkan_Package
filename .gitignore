@@ -94,3 +94,8 @@ projectmanager
 # Palette icon resources, compiled from Design_Src/*.rc at build time
 # (the IDE/MSBuild writes them next to the .dproj)
 VulkanPkg_*Icons*.res
+
+# Large downloaded sample models (not for the repo)
+Samples/OBJ Files/*Mustang*
+Samples/OBJ Files/*mustang*
+Samples/OBJ Files/96-uploads_files_2720101_textures-2.zip
