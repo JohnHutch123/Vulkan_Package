@@ -128,8 +128,9 @@ The supplied OBJ shaders display vertex/material diffuse colour multiplied by
 the diffuse texture, with material opacity in output alpha. They do not perform
 lighting. The store selects float/double view-projection and no-picking,
 storage-buffer-picking or image-picking variants to match the renderer.
-Make **all `OBJ*.spv` files** in `VulkanShaders` available through
-`ShaderFolderPath`, as described in [the shader guide](../VulkanShaders/README.md).
+An application built inside this checkout finds them in `VulkanShaders` with no
+setup; elsewhere, deploy **all `OBJ*.spv` files** or set `ShaderFolderPath`, as
+described in [the shader guide](../VulkanShaders/README.md).
 The previous `EditLines` pair is no longer used by this loader.
 
 ## Errors and tests

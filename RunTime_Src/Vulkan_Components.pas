@@ -6077,6 +6077,22 @@ TvgBaseComponent = class(TComponent)
  function IsImageFormatSupported(aDevice   : TvgPhysicalDevice;
                                 aImageFormatProp : TvgImageFormatProps):Boolean;
 
+ { Shader file lookup.  vgFindShaderFile returns the full path of aFileName
+   (e.g. 'OBJ_vert.spv'), or '' when it is nowhere to be found.  Folders, in
+   order (each once): aPrimary, ShaderFolderPath, ExecutableFolderPath, the
+   exe's folder, the nearest 'VulkanShaders' folder above the exe and above
+   the current directory (a source checkout), the ProgramData, Program Files
+   and Documents Datavis folders, then TEMP.  With aSearchSubFolders, only
+   aPrimary and ShaderFolderPath are also searched recursively - never TEMP
+   or the exe's folder tree.  Hits are cached (re-checked to still exist);
+   misses are not, so a shader deployed later is found.
+   vgClearShaderFileCache forgets every hit, e.g. after moving shaders. }
+ Function vgFindShaderFile(const aFileName: String; const aPrimary: String = '';
+                           aSearchSubFolders: Boolean = True): String;
+ Function vgShaderSearchFolders(const aPrimary: String = ''): TArray<String>;
+ Procedure vgClearShaderFileCache;
+
+ { Kept for existing callers: vgFindShaderFile(aFileName, ShaderPath, SearchSubFolders). }
  Function FileExistsInVariousLocations(aFileName:String; const ShaderPath:String = ''; SearchSubFolders:Boolean = False): String;
 
   procedure Split64BitTo32Bit(Value: UInt64; out LowPart, HighPart: LongWord);
@@ -25652,64 +25668,142 @@ begin
 
 end;
 
-Function FileExistsInVariousLocations(aFileName:String; const ShaderPath:String = ''; SearchSubFolders:Boolean = False): String;
+{ --- Shader file lookup --- }
+
 var
-  Paths: TArray<string>;
-  Path, S, FName: string;
+  gShaderFileCache     : TDictionary<String, String> = nil;  //lower-case key -> full path
+  gShaderFileCacheLock : TCriticalSection = nil;
 
+Function vgShaderSearchFolders(const aPrimary: String = ''): TArray<String>;
+  Var Folders : TList<String>;
 
-  Function  FindFileInDirectoryAndSubfolders(const RootDir, FileName : String):String;
-    Var  Files : TArray<String>;
+  Procedure Add(const aDir: String);
+    Var D, S : String;
   Begin
-      if not TDirectory.Exists(RootDir) then
-        Exit('');
+    D := Trim(aDir);
+    If D = '' then exit;
+    D := ExcludeTrailingPathDelimiter(D);
+    For S in Folders do
+      If SameText(S, D) then exit;
+    Folders.Add(D);
+  End;
 
-      // Search recursively
-      Files := TDirectory.GetFiles(RootDir, FileName, TSearchOption.soAllDirectories);
-
-      if Length(Files) > 0 then
-        Result := Files[0] // Return first match
-      else
-        Result := '';
-end;
+  //a source checkout: <repo>\VulkanShaders above <repo>\Tests\...\Win64\Debug
+  Procedure AddVulkanShadersAbove(const aStart: String);
+    Var D, Parent : String;
+        I         : Integer;
+  Begin
+    D := ExcludeTrailingPathDelimiter(Trim(aStart));
+    For I := 1 to 8 do
+    Begin
+      If D = '' then exit;
+      If TDirectory.Exists(TPath.Combine(D, 'VulkanShaders')) then
+      Begin
+        Add(TPath.Combine(D, 'VulkanShaders'));
+        exit;
+      End;
+      Parent := ExtractFileDir(D);
+      If SameText(Parent, D) then exit;
+      D := Parent;
+    End;
+  End;
 
 begin
-    Result := '';
-    S := Trim(aFileName);
+  Folders := TList<String>.Create;
+  Try
+    Add(aPrimary);
+    Add(ShaderFolderPath);
+    Add(ExecutableFolderPath);
+    Add(ExtractFileDir(ParamStr(0)));
+    AddVulkanShadersAbove(ExtractFileDir(ParamStr(0)));
+    AddVulkanShadersAbove(GetCurrentDir);
+    Add(GetEnvironmentVariable('PROGRAMDATA')  + ShaderFolderProgramData);
+    Add(GetEnvironmentVariable('PROGRAMFILES') + ShaderFolderProgramFiles);
+    Add(TPath.GetDocumentsPath + ShaderFolderDocuments);
+    Add(TPath.GetTempPath);
+    Result := Folders.ToArray;
+  Finally
+    Folders.Free;
+  End;
+end;
 
-    If (S='') then exit;
+Procedure vgClearShaderFileCache;
+begin
+  If not assigned(gShaderFileCacheLock) then exit;
+  gShaderFileCacheLock.Enter;
+  Try
+    gShaderFileCache.Clear;
+  Finally
+    gShaderFileCacheLock.Leave;
+  End;
+end;
 
-    If ShaderPath<>'' then
-      Paths := [ Trim(ShaderPath),
-                 ExtractFilePath(ParamStr(0)),
-                 TPath.GetTempPath,
-                 GetEnvironmentVariable('PROGRAMDATA')  + ShaderFolderProgramData,
-                 GetEnvironmentVariable('PROGRAMFILES') + ShaderFolderProgramFiles,
-                 TPath.GetDocumentsPath + ShaderFolderDocuments ]
+Function vgFindShaderFile(const aFileName: String; const aPrimary: String = '';
+                          aSearchSubFolders: Boolean = True): String;
+  Var Name, Key, Dir, FName : String;
+      Files                 : TArray<String>;
+begin
+  Result := '';
+  Name   := Trim(aFileName);
+  If Name = '' then exit;
 
-  else
-      Paths := [
-                 ExtractFilePath(ParamStr(0)),
-                 TPath.GetTempPath,
-                 GetEnvironmentVariable('PROGRAMDATA')  + ShaderFolderProgramData,
-                 GetEnvironmentVariable('PROGRAMFILES') + ShaderFolderProgramFiles,
-                 TPath.GetDocumentsPath + ShaderFolderDocuments ];
+  //already a path to an existing file
+  If (ExtractFilePath(Name) <> '') and TFile.Exists(Name) then
+    Exit(TPath.GetFullPath(Name));
 
-  for Path in Paths do
-  begin
-    If SearchSubFolders then
+  //the folders depend on these, so they are part of the key
+  Key := LowerCase(Name + '|' + Trim(aPrimary) + '|' + Trim(ShaderFolderPath) + '|' +
+                   Trim(ExecutableFolderPath) + '|' + BoolToStr(aSearchSubFolders, True));
+
+  gShaderFileCacheLock.Enter;
+  Try
+    If gShaderFileCache.TryGetValue(Key, FName) then
     Begin
-      FName := FindFileInDirectoryAndSubfolders(Path, S);
-      if (FName<>'') and TFile.Exists(FName) then
+      If TFile.Exists(FName) then
         Exit(FName);
-    End else
-    Begin
-      FName := TPath.Combine(Path, S);
-      if TFile.Exists(FName) then
-        Exit(FName);
+      gShaderFileCache.Remove(Key);    //moved or deleted: look again
     End;
-  end;
+  Finally
+    gShaderFileCacheLock.Leave;
+  End;
 
+  //each folder itself first - cheap
+  For Dir in vgShaderSearchFolders(aPrimary) do
+  Begin
+    FName := TPath.Combine(Dir, Name);
+    If TFile.Exists(FName) then
+    Begin
+      Result := FName;
+      Break;
+    End;
+  End;
+
+  //then below the configured shader folders only
+  If (Result = '') and aSearchSubFolders and (ExtractFilePath(Name) = '') then
+    For Dir in [Trim(aPrimary), Trim(ShaderFolderPath)] do
+      If (Dir <> '') and TDirectory.Exists(Dir) then
+      Begin
+        Files := TDirectory.GetFiles(Dir, Name, TSearchOption.soAllDirectories);
+        If Length(Files) > 0 then
+        Begin
+          Result := Files[0];
+          Break;
+        End;
+      End;
+
+  If Result = '' then exit;
+
+  gShaderFileCacheLock.Enter;
+  Try
+    gShaderFileCache.AddOrSetValue(Key, Result);
+  Finally
+    gShaderFileCacheLock.Leave;
+  End;
+end;
+
+Function FileExistsInVariousLocations(aFileName:String; const ShaderPath:String = ''; SearchSubFolders:Boolean = False): String;
+begin
+  Result := vgFindShaderFile(aFileName, ShaderPath, SearchSubFolders);
 end;
 
 Function TvgShaderModule.SetEnabled : Boolean;
@@ -25722,8 +25816,13 @@ begin
   // only when enabling, and do not report success without a shader module.
   Result := False;
   If fFileName = '' then exit;
-  FileS := FileExistsInVariousLocations(fFileName, ShaderFolderPath, True);
-  If (FileS = '') or not FileExists(FileS) then exit;
+  FileS := vgFindShaderFile(fFileName);
+  If FileS = '' then
+  Begin
+    CustomAssert(False, System.SysUtils.Format('Shader file %s not found. Searched: %s',
+                 [fFileName, String.Join('; ', vgShaderSearchFolders)]), self);
+    exit;
+  End;
 
   Result := Inherited;
   CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
@@ -34256,6 +34355,9 @@ end;
 
 Initialization
 
+  gShaderFileCache     := TDictionary<String, String>.Create;
+  gShaderFileCacheLock := TCriticalSection.Create;
+
   if not assigned(DescriptorTypeList) then
      DescriptorTypeList      := TvgDescriptorTypeList.Create;
 
@@ -34266,6 +34368,9 @@ Initialization
 //     GraphicPipeTypeList := TvgGraphicPipeTypeList.Create;
 
 Finalization
+   FreeAndNil(gShaderFileCache);
+   FreeAndNil(gShaderFileCacheLock);
+
    If assigned(DescriptorTypeList) then
      FreeAndNil(DescriptorTypeList);
 

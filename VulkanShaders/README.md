@@ -6,24 +6,41 @@ package.
 
 ## Where the package looks for them
 
-`TvgShaderModule` finds a shader file by name with
-`FileExistsInVariousLocations` (`RunTime_Src/Vulkan_Components.pas`), searching
-these folders **and their subfolders**, in order:
+`TvgShaderModule` resolves a shader file name (e.g. `OBJ_vert.spv`) when it is
+enabled, with `vgFindShaderFile` (`RunTime_Src/Vulkan_Components.pas`). It
+looks directly in these folders, in order, each once:
 
 1. `ShaderFolderPath` - default `C:\ProgramData\Datavis\VulkanShaders\`
-2. the application's own folder
-3. the temp folder
-4. `%PROGRAMDATA%\Datavis\VulkanShaders\`
-5. `%PROGRAMFILES%\Datavis\`
-6. `Documents\Datavis\VulkanShaders\`
+2. `ExecutableFolderPath`, when set
+3. the application's own folder
+4. the nearest `VulkanShaders` folder above the application's folder, then
+   above the current directory - so a build inside this checkout (the IDE's
+   `Tests\Test Vulkan\23.0\Win64\Debug`, or `Tests\Win32`) finds this folder
+   with no setup
+5. `%PROGRAMDATA%\Datavis\VulkanShaders\`
+6. `%PROGRAMFILES%\Datavis\`
+7. `Documents\Datavis\VulkanShaders\`
+8. the temp folder
 
-So either copy this folder's contents to `C:\ProgramData\Datavis\VulkanShaders\`:
+Only if none has it are the subfolders of `ShaderFolderPath` searched. The
+temp folder and the application's folder are never searched recursively.
+Found paths are cached (and re-checked to still exist), so the many pipelines
+sharing a shader look it up once; a miss is not cached, so a shader deployed
+later is found. Call `vgClearShaderFileCache` after moving shader files.
+A missing shader is reported with its name and every folder searched
+(`CustomAssert`, so in `C:\ProgramData\Datavis\ErrorLogFile.txt`, and raised in
+`DEBUG` builds). `vgShaderSearchFolders` returns the folder list.
+
+Copies in `ShaderFolderPath` win over this folder: an older copy there
+(e.g. from an earlier `xcopy`) is used instead of the one in the checkout.
+
+To deploy, copy this folder's contents to `C:\ProgramData\Datavis\VulkanShaders\`:
 
 ```
 xcopy /e /i /y VulkanShaders "%PROGRAMDATA%\Datavis\VulkanShaders"
 ```
 
-or point the package at this folder before any shader module is enabled:
+or point the package at another folder before any shader module is enabled:
 
 ```pascal
 ShaderFolderPath := 'D:\Vulkan_Package\VulkanShaders\';   // trailing backslash
