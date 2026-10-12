@@ -84,6 +84,16 @@ files can be opened even if they contain `mtllib` and `usemtl` statements.
 Malformed libraries that are present, and missing textures referenced by a
 loaded material, remain errors.
 
+A missing library or material is not silent: after `LoadScene` the loader's
+`Warnings` (on `TvgSceneLoaderStorer`, so any loader can report) lists each
+one once, with its line and the folder searched, e.g.
+`Material library "Plants 190.mtl" (line 1) not found in D:\Models\ - its
+materials are drawn grey`. Warnings are cleared at the start of each load.
+`vgLoadSceneFile(Scene, FileName, Warnings)` hands back those of the temporary
+loader it frees; `TvgVulkanDataModule.SceneLoadWarnings` holds the last
+`LoadScene`'s. The IDE's *Load Scene File...* shows them in a dialog, and the
+`Tests/Test Vulkan` sample's **Load File...** writes them to its message log.
+
 `TvgOBJObjectStore.Material` retains these properties after the loader is freed:
 
 | MTL records | Material fields |

@@ -97,6 +97,9 @@ type
     Materials: TObjectDictionary<string, TMaterial>;
     Libraries: TList<string>;
     SmoothNormals: TDictionary<string, TpvVector3D>;
+    // What the load got past: libraries and materials it could not find.
+    Warnings: TArray<string>;
+    procedure Warn(const S: string; const Once: string = '');
     constructor Create;
     destructor Destroy; override;
     procedure Error(const S: string);
@@ -175,6 +178,15 @@ begin
   // Length-prefix names to avoid collisions when names contain separators.
   Result := IntToStr(Length(P.ObjectName)) + ':' + P.ObjectName + ':' +
     IntToStr(Length(P.Smooth)) + ':' + P.Smooth + ':' + IntToStr(Vertex);
+end;
+
+procedure TOBJReader.Warn(const S: string; const Once: string = '');
+var W: string;
+begin
+  // each once - or, with Once, the first of those starting with it
+  for W in Warnings do
+    if (W = S) or ((Once <> '') and W.StartsWith(Once)) then Exit;
+  Warnings := Warnings + [S];
 end;
 
 constructor TOBJReader.Create;
@@ -304,7 +316,7 @@ end;
 procedure TOBJReader.ReadOBJ(const Path: string);
 var
   Text, W: TArray<string>;
-  I, J: Integer;
+  I, J, K: Integer;
   V, C: TpvVector3;
   X, Y, Z, Weight: Double;
   ObjectName, Groups, MaterialName, Smooth, Lib: string;
@@ -373,8 +385,25 @@ begin
       // Accept an unquoted filename with spaces when the whole path exists.
       Lib := ExpandFileName(ExtractFilePath(Path) + Join(W, 1));
       if FileExists(Lib) then Libraries.Add(Lib)
-      else for J := 1 to High(W) do
-        Libraries.Add(TPath.GetFullPath(TPath.Combine(ExtractFilePath(Path), W[J])));
+      else
+      begin
+        // Several libraries on one line - or one unquoted name with spaces
+        // that is not there, reported as written.
+        K := 0;
+        for J := 1 to High(W) do
+          if FileExists(TPath.Combine(ExtractFilePath(Path), W[J])) then Inc(K);
+        if K = 0 then
+          Warn(Format('Material library "%s" (line %d) not found in %s - its materials are drawn grey',
+            [Join(W, 1), LineNo, ExtractFilePath(Path)]))
+        else
+          for J := 1 to High(W) do
+          begin
+            Lib := TPath.GetFullPath(TPath.Combine(ExtractFilePath(Path), W[J]));
+            if FileExists(Lib) then Libraries.Add(Lib)
+            else Warn(Format('Material library "%s" (line %d) not found in %s - its materials are drawn grey',
+              [W[J], LineNo, ExtractFilePath(Path)]));
+          end;
+      end;
     end
     else if (W[0] = 'vp') or (W[0] = 'curv') or (W[0] = 'curv2') or
       (W[0] = 'surf') or (W[0] = 'cstype') or (W[0] = 'call') then
@@ -690,7 +719,10 @@ begin
           begin
             Store.fMaterial := M.Data;
             Store.fMaterial.Maps := Copy(M.Data.Maps); // bindings are per store
-          end;
+          end
+          else if P.MaterialName <> '' then
+            Warn(Format('Material "%s" (usemtl, line %d) is in no material library loaded - drawn grey',
+              [P.MaterialName, P.LineNo]), Format('Material "%s" ', [P.MaterialName]));
           Store.SetupVertexAttributes([vdtPosition, vdtColor, vdtNormal, vdtTexCoord]);
           Store.SetupInstanceAttributes([idtObjID]); Store.SetIndexType(itUInt32);
           Store.Topology := P.Kind;
@@ -772,8 +804,9 @@ end;
 
 procedure TvgSceneLoader_OBJ.LoadScene;
 var Reader: TOBJReader; Stores: TObjectList<TvgOBJObjectStore>; Store: TvgOBJObjectStore;
-  PreviousStore: TvgObjectStore;
+  PreviousStore: TvgObjectStore; W: string;
 begin
+  ClearWarnings;
   if not Assigned(fScene) then raise EvgOBJError.Create('OBJ loader requires a Scene');
   if Trim(fFileName) = '' then raise EvgOBJError.Create('OBJ loader requires a FileName');
   Reader := TOBJReader.Create;
@@ -797,6 +830,7 @@ begin
           fCurrentObjectStore := Store;
         end;
       finally fScene.Load_End; end;
+      for W in Reader.Warnings do AddWarning(W);
     finally Stores.Free; end;
   finally Reader.Free; end;
 end;

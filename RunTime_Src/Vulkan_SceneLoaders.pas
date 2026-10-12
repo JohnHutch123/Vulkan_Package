@@ -95,7 +95,15 @@ function  SceneLoaderDialogFilter: string;
   Raises EvgSceneLoaderError with the reason when it can't. }
 procedure vgLoadSceneFile(aScene: TvgScene; const aFileName: string;
                           aLoader: TvgSceneLoaderStorer = nil;
-                          const aLoaderType: string = '');
+                          const aLoaderType: string = ''); Overload;
+
+{ The same, also handing back the loader's Warnings: what the load got past
+  without failing, such as an OBJ material library that was not found.
+  Empty after a clean load. }
+procedure vgLoadSceneFile(aScene: TvgScene; const aFileName: string;
+                          out aWarnings: TArray<string>;
+                          aLoader: TvgSceneLoaderStorer = nil;
+                          const aLoaderType: string = ''); Overload;
 
 resourcestring
   vgSLNoScene       = 'No scene to load into.';
@@ -249,6 +257,15 @@ end;
 procedure vgLoadSceneFile(aScene: TvgScene; const aFileName: string;
                           aLoader: TvgSceneLoaderStorer = nil;
                           const aLoaderType: string = '');
+  Var Warnings : TArray<string>;
+begin
+  vgLoadSceneFile(aScene, aFileName, Warnings, aLoader, aLoaderType);
+end;
+
+procedure vgLoadSceneFile(aScene: TvgScene; const aFileName: string;
+                          out aWarnings: TArray<string>;
+                          aLoader: TvgSceneLoaderStorer = nil;
+                          const aLoaderType: string = '');
   Var Info     : TvgSceneLoaderInfo;
       Loader   : TvgSceneLoaderStorer;
       Owned    : Boolean;
@@ -306,6 +323,7 @@ begin
       Loader.Scene := aScene;
 
     Loader.LoadScene;
+    aWarnings := Copy(Loader.Warnings);   //before an owned loader is freed
   Finally
     If Owned then
       Loader.Free;

@@ -772,6 +772,8 @@ procedure TTestVulkan.LoadFileBtnClick(Sender: TObject);
       BMin,
       BMax   : TpvVector3D;
       Aspect : Double;
+      Warnings : TArray<String>;
+      W      : String;
 begin
   //the scene built by Build Instance, else the data module's
   Scene := fScene;
@@ -785,7 +787,9 @@ begin
   If not OpenDialog1.Execute then exit;
 
   Try
-    vgLoadSceneFile(Scene, OpenDialog1.FileName);   //loader chosen by extension
+    vgLoadSceneFile(Scene, OpenDialog1.FileName, Warnings);   //loader chosen by extension
+    For W in Warnings do
+      MessagesTxt.Lines.Add('Warning: ' + W);
   Except
     On E: Exception do
     Begin

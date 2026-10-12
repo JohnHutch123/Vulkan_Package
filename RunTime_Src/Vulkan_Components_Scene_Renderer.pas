@@ -744,6 +744,12 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
    protected
      fScene             : TvgScene;
      fCurrentObjectStore: TvgObjectStore;
+     fWarnings          : TArray<String>;
+
+     // For descendants: a problem the load got past (a missing material
+     // library, say).  Clear them when a load starts.
+     Procedure AddWarning(const aMessage: String);
+     Procedure ClearWarnings;
 
      // Adds a new texture descriptor named aDescriptorName to
      // fCurrentObjectStore and returns it, ready for AddSharedTexture; nil if
@@ -770,6 +776,11 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
                                      aImageStream    : TStream); Overload;
 
      Property CurrentObjectStore : TvgObjectStore Read fCurrentObjectStore;
+
+     // What the last LoadScene got past without failing - e.g. an OBJ's
+     // material library that was not found, so its materials are grey.
+     // Empty after a clean load.  vgLoadSceneFile can hand them back.
+     Property Warnings : TArray<String> Read fWarnings;
 
 
    published
@@ -3765,6 +3776,16 @@ begin
 end;
 
 { TvgSceneLoaderStorer }
+
+Procedure TvgSceneLoaderStorer.AddWarning(const aMessage: String);
+begin
+  fWarnings := fWarnings + [aMessage];
+end;
+
+Procedure TvgSceneLoaderStorer.ClearWarnings;
+begin
+  fWarnings := nil;
+end;
 
 Function TvgSceneLoaderStorer.PrepareTextureDescriptor(aDescriptorName: String): TvgDescriptorArray_Texture;
    Var R:TvgResourceUse;

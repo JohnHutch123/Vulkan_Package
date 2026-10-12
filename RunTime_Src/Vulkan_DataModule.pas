@@ -148,6 +148,7 @@ type
     fSceneLoader       : TvgSceneLoaderStorer;
     fSceneLoaderType   : string;
     fSceneFileName     : string;
+    fSceneLoadWarnings : TArray<string>;
     fLoadSceneOnEnable : Boolean;
     fToolManager       : TvgToolManager;
     fZoomAllOnLoad     : Boolean;
@@ -240,6 +241,11 @@ type
       Raises EvgSceneLoaderError with the reason when it can't. }
     procedure LoadScene(const aFileName: string = '');
     procedure ClearScene;
+
+    { What the last LoadScene got past without failing (the loader's Warnings),
+      e.g. an OBJ material library that was not found.  Empty after a clean
+      load. }
+    property SceneLoadWarnings : TArray<string> read fSceneLoadWarnings;
 
     { Every component connected under Instance: devices, linkers, windows,
       renderers and scenes. }
@@ -1064,7 +1070,8 @@ begin
   If FileName = '' then
     FileName := fSceneFileName;
 
-  vgLoadSceneFile(fScene, FileName, fSceneLoader, fSceneLoaderType);
+  fSceneLoadWarnings := nil;
+  vgLoadSceneFile(fScene, FileName, fSceneLoadWarnings, fSceneLoader, fSceneLoaderType);
 
   //False (nothing moved) when the viewport or the data's bounds aren't known yet
   If fZoomAllOnLoad and assigned(fToolManager) then

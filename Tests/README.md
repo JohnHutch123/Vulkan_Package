@@ -195,7 +195,14 @@ indices, smooth/flat normals, concave triangulation, lines/points, continuations
 missing/corrupt inputs preserving the scene, and data surviving a temporary
 registry loader. It also checks PNG chunk lengths/dimensions and selects the
 float/double and buffer/image-picking shader variants without activating them.
-Included in RunTests.bat. Uses the repository's VulkanShaders folder; pass an
+Warnings: none for a clean load; a missing library named as written (also an
+unquoted name with spaces) with its material; only the missing one of two
+libraries; a missing material once however often it is used; cleared by the
+next load; and handed back by `vgLoadSceneFile`. Then the shipped
+`Samples/OBJ Files/Plant Monstera 01.obj` with `Plants 190.mtl` (skipped if the
+OBJ is absent): no warnings, its purple and black materials, Ns/Ks/opacity
+from a tab-indented 3ds Max export, the colour in the vertices, and the
+triangle counts. Included in RunTests.bat. Uses the repository's VulkanShaders folder; pass an
 alternative folder as its first argument when building elsewhere.
 
 ## ShaderFileNameTest

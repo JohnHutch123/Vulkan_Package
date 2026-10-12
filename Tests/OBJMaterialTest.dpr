@@ -245,6 +245,80 @@ begin
   Reject('freeform geometry explicitly rejected', Mesh + 'curv 0 1 1 2 3');
 end;
 
+// Libraries and materials that are not found are not errors - the geometry
+// loads grey - but the loader says so in Warnings, and vgLoadSceneFile hands
+// them back.
+procedure TestWarnings;
+var W: TArray<string>;
+  function Has(const Part: string): Boolean;
+  var S: string;
+  begin
+    for S in Loader.Warnings do if Pos(Part, S) > 0 then Exit(True);
+    Result := False;
+  end;
+begin
+  TFile.WriteAllText(MTLPath, 'newmtl Painted'#10'Kd 0.4 0.5 0.6'#10, TEncoding.UTF8);
+  Load('mtllib "materials/model library.mtl"'#10 + Mesh + 'usemtl Painted'#10'f 1 2 3');
+  Check('clean load: no warnings', Length(Loader.Warnings) = 0);
+
+  Load('mtllib Plants 190.mtl'#10 + Mesh + 'usemtl Leaf'#10'f 1 2 3');
+  Check('missing library: one warning, named as written',
+    Has('Material library "Plants 190.mtl" (line 1) not found') and
+    (Length(Loader.Warnings) = 2));
+  Check('...and its material too', Has('Material "Leaf" (usemtl, line'));
+
+  Load('mtllib missing.mtl "materials/model library.mtl"'#10 + Mesh +
+    'usemtl Painted'#10'f 1 2 3'#10'usemtl Absent'#10'f 1 3 4'#10'usemtl Painted'#10'f 2 3 4'#10'usemtl Absent'#10'f 1 2 4');
+  Check('one of two libraries missing: just that one', Has('"missing.mtl"') and not Has('model library'));
+  Check('a missing material reported once however often it is used',
+    Has('Material "Absent"') and (Length(Loader.Warnings) = 2));
+  Check('the found material is not reported', not Has('"Painted"'));
+
+  Load(Mesh + 'usemtl Absent'#10'f 1 2 3');
+  Check('usemtl with no library at all is reported', Has('Material "Absent"'));
+
+  Load(Mesh + 'f 1 2 3');
+  Check('warnings cleared by the next load', Length(Loader.Warnings) = 0);
+
+  TFile.WriteAllText(OBJPath, 'mtllib none.mtl'#10 + Mesh + 'f 1 2 3', TEncoding.UTF8);
+  vgLoadSceneFile(Scene, OBJPath, W);
+  Check('vgLoadSceneFile hands back a temporary loader''s warnings',
+    (Length(W) = 1) and (Pos('"none.mtl"', W[0]) > 0));
+end;
+
+// The shipped Monstera sample (3ds Max export, tab-indented MTL with both
+// d and Tr) loads with its materials.  Skipped where the OBJ is not present.
+procedure TestRealSample;
+var Path: string; W: TArray<string>; A, B: TvgOBJObjectStore;
+begin
+  Path := TPath.GetFullPath(TPath.Combine(ExtractFilePath(ParamStr(0)),
+    '..\..\Samples\OBJ Files\Plant Monstera 01.obj'));
+  if not FileExists(Path) then
+  begin
+    Writeln('  skip Plant Monstera 01.obj not found: ', Path);
+    Exit;
+  end;
+  vgLoadSceneFile(Scene, Path, W);
+  Check('Monstera: no warnings (its MTL is found)', Length(W) = 0);
+  Check('Monstera: one store per material', Scene.SceneData.Count = 2);
+  if Scene.SceneData.Count <> 2 then Exit;
+  A := TvgOBJObjectStore(Scene.SceneData[0]);
+  B := TvgOBJObjectStore(Scene.SceneData[1]);
+  Check('Monstera: materials from "Plants 190.mtl"',
+    SameText(ExtractFileName(A.Material.LibraryFile), 'Plants 190.mtl') and
+    SameText(ExtractFileName(B.Material.LibraryFile), 'Plants 190.mtl'));
+  Check('Monstera: leaf material purple',
+    (A.Material.Name = 'wire_108008136') and Near(A.Material.Diffuse.x, 0.4235) and
+    Near(A.Material.Diffuse.y, 0.0314) and Near(A.Material.Diffuse.z, 0.5333));
+  Check('Monstera: second material black',
+    (B.Material.Name = 'wire_000000000') and Near(B.Material.Diffuse.x, 0) and Near(B.Material.Diffuse.z, 0));
+  Check('Monstera: Ns, Ks and opacity (d 1, Tr 0)',
+    Near(A.Material.Shininess, 32) and Near(A.Material.Specular.x, 0.35) and Near(A.Material.Opacity, 1));
+  Check('Monstera: the diffuse colour reaches the vertices',
+    Near(Attribute(A, 0, 1, 0), 0.4235) and Near(Attribute(A, 0, 1, 2), 0.5333));
+  Check('Monstera: triangle counts', (A.GetObjectIndexCount(0) = 3 * 65508) and (B.GetObjectIndexCount(0) = 3 * 6272));
+end;
+
 var BMP: TBitmap; PNG: TPngImage; JPEG: TJPEGImage; ID: TGUID;
 begin
   ShaderFolderPath := IncludeTrailingPathDelimiter(TPath.GetFullPath(
@@ -265,7 +339,7 @@ begin
     BMP.SaveToFile(TPath.Combine(ExtractFilePath(MTLPath), 'checker map.bmp'));
     PNG.Assign(BMP); PNG.SaveToFile(TPath.Combine(ExtractFilePath(MTLPath), 'checker map.png'));
     JPEG.Assign(BMP); JPEG.SaveToFile(TPath.Combine(ExtractFilePath(MTLPath), 'checker map.jpg'));
-    try TestMaterials; TestGeometry; TestTextureFormatsAndShaders;
+    try TestMaterials; TestGeometry; TestTextureFormatsAndShaders; TestWarnings; TestRealSample;
     except on E: Exception do begin Inc(Failures); Writeln(E.ClassName, ': ', E.Message); end; end;
   finally
     PNG.Free; JPEG.Free; BMP.Free; Loader.Free; Scene.Free;

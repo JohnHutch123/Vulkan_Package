@@ -838,6 +838,14 @@ begin
   End;
 end;
 
+{ What a scene load got past (its loader's Warnings), if anything. }
+procedure ShowSceneLoadWarnings(const aWarnings: TArray<string>);
+begin
+  If Length(aWarnings) > 0 then
+    MessageDlg('The scene loaded, with warnings:' + sLineBreak + sLineBreak +
+               String.Join(sLineBreak, aWarnings), mtWarning, [mbOK], 0);
+end;
+
 procedure LoadSceneInDesigner(aModule: TvgVulkanDataModule; const aDesigner: IDesigner; aAsk: Boolean);
   Var FileName  : string;
       WasActive : Boolean;
@@ -868,6 +876,8 @@ begin
 
   If WasActive or not aModule.SessionActive or not aModule.LoadSceneOnEnable then
     aModule.LoadScene;
+
+  ShowSceneLoadWarnings(aModule.SceneLoadWarnings);
 end;
 
 { TvgSceneLoaderTypeProperty }
@@ -1054,6 +1064,7 @@ procedure TvgSceneEditor.ExecuteVerb(Index: Integer);
   Var Scene    : TvgScene;
       M        : TvgVulkanDataModule;
       FileName : string;
+      Warnings : TArray<string>;
 begin
   Scene := Component as TvgScene;
 
@@ -1070,7 +1081,10 @@ begin
           Begin
             FileName := '';
             If PickSceneFile(FileName) then
-              vgLoadSceneFile(Scene, FileName);   //loader chosen by extension
+            Begin
+              vgLoadSceneFile(Scene, FileName, Warnings);   //loader chosen by extension
+              ShowSceneLoadWarnings(Warnings);
+            End;
           End;
 
       1 : Scene.ClearScene;
