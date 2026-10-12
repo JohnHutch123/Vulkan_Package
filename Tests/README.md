@@ -197,3 +197,10 @@ registry loader. It also checks PNG chunk lengths/dimensions and selects the
 float/double and buffer/image-picking shader variants without activating them.
 Included in RunTests.bat. Uses the repository's VulkanShaders folder; pass an
 alternative folder as its first argument when building elsewhere.
+
+## ShaderFileNameTest
+
+Checks that shader names are retained, replaced and cleared without requiring
+files to exist during scene/store configuration. Verifies all three pipeline
+stage filenames and that missing/empty shader files cannot enable a shader.
+Runs without a Vulkan device; included in RunTests.bat.

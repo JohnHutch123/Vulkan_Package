@@ -25718,18 +25718,18 @@ Function TvgShaderModule.SetEnabled : Boolean;
       FileS      : String;
 
 begin
+  // Names may be assigned before shaders have been deployed. Resolve them
+  // only when enabling, and do not report success without a shader module.
+  Result := False;
+  If fFileName = '' then exit;
+  FileS := FileExistsInVariousLocations(fFileName, ShaderFolderPath, True);
+  If (FileS = '') or not FileExists(FileS) then exit;
+
   Result := Inherited;
   CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
+  If not Result then exit;
 
   fShaderModuleHandle := VK_NULL_HANDLE;
-
-
-  If (fFileName='') then exit;
-  FileS := fFileName;                       //use file name
-
-  FileS := FileExistsInVariousLocations(fFileName, ShaderFolderPath, True);  //search all likely places for the file
-
-  If (FileS='' ) or not FileExists(FileS) then exit;
 
 
   FileStream:=TFileStream.Create(FileS,fmOpenRead or fmShareDenyWrite);
@@ -25771,24 +25771,13 @@ begin
 end;
 
 procedure TvgShaderModule.SetFileName(const Value: String);
-  Var TempS:String;
 begin
-  If CompareText(Value, fFileName)<>0 then
-     SetActiveState(False);
-
-  TempS := '';
-  TempS := FileExistsInVariousLocations(Value, ShaderFolderPath, True);  //search all likely places for the file
-
-  If TempS<>'' then
-  Begin
-     fFileName := Value;
-     exit;
-  End;
-
-  If (TempS<>'') and (csDesigning in ComponentState) then
-     CustomAssert( (TempS<>''),'Filename NOT found',self);
-
-
+  If CompareText(Value, fFileName) = 0 then exit;
+  SetActiveState(False);
+  // Retain the requested name even when its file is not yet available.
+  // Pipeline/scene configuration and DFM loading must not depend on disk
+  // deployment or ShaderFolderPath. SetEnabled performs the file lookup.
+  fFileName := Value;
 end;
 
 procedure TvgShaderModule.SetMainName(const Value: TvkCharString);
