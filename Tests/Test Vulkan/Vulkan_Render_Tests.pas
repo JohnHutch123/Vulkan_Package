@@ -139,6 +139,7 @@ begin
          //  ObjStore.InitializeIndexBuffer(itUInt32);
             ObjStore.BaseVertName := 'TestTriangleWithData';
             ObjStore.BaseFragName := 'TestTriangleWithData';
+            ObjStore.PrebuiltShaderVariants := True;   // Double / Pick variants
 
             ObjStore.SetupVertexAttributes( [vdtPosition, vdtColor]);
             ObjStore.SetUpInstanceAttributes( [idtObjID]);
@@ -172,6 +173,7 @@ begin
 
            ObjStore.BaseVertName := 'TestTextureRect';
            ObjStore.BaseFragName := 'TestTextureRect';
+           ObjStore.PrebuiltShaderVariants := True;   // Double / Pick variants
 
             ObjStore.SetUpVertexAttributes( [vdtPosition, vdtColor, vdtTexCoord]);
             ObjStore.SetUpInstanceAttributes( [idtObjID]);

@@ -115,7 +115,7 @@ type
   end;
 
 procedure TvgOBJObjectStore.ConfigureGraphicPipeline(GP: TvgGraphicPipeline);
-var VertexName, FragmentName: string; Map: TvgOBJTextureMap;
+var Map: TvgOBJTextureMap;
   procedure SetFloat(ID: Integer; const Name: string; Value: Single);
   var I: Integer; Item: TvgShaderSpecialisationItem;
   begin
@@ -128,27 +128,17 @@ var VertexName, FragmentName: string; Map: TvgOBJTextureMap;
     Item.SpecTValue := FloatToStr(Value);
   end;
 begin
+  // Shader names (OBJ / OBJTexture and their Double, Pick and PickImage
+  // variants) come from inherited: BaseVertName, BaseFragName and
+  // PrebuiltShaderVariants are set when the store is built.
   inherited;
-  VertexName := 'OBJ'; FragmentName := 'OBJ';
   for Map in fMaterial.Maps do
     if Map.Kind = 'map_Kd' then
     begin
-      FragmentName := 'OBJTexture';
       SetFloat(3, 'UV_SCALE_U', Map.Scale.x); SetFloat(4, 'UV_SCALE_V', Map.Scale.y);
       SetFloat(5, 'UV_OFFSET_U', Map.Offset.x); SetFloat(6, 'UV_OFFSET_V', Map.Offset.y);
       SetFloat(7, 'MAP_BRIGHTNESS', Map.Brightness); SetFloat(8, 'MAP_CONTRAST', Map.Contrast);
     end;
-  if Assigned(GP.Renderer) then
-  begin
-    if GP.Renderer.UsesDoubleViewProjection then VertexName := 'OBJDouble';
-    if GP.SelectON then
-      case GP.Renderer.SelectMode of
-        smStorageBuffer: FragmentName := FragmentName + 'Pick';
-        smImageBuffer: FragmentName := FragmentName + 'PickImage';
-      end;
-  end;
-  if not GP.BuildShaderNames(VertexName, '', FragmentName) then
-    raise EvgOBJError.Create('Could not assign OBJ shaders');
 end;
 
 function DefaultMaterial: TvgOBJMaterial;
@@ -706,6 +696,7 @@ begin
           Store.Topology := P.Kind;
           HasDiffuseMap := False;
           for Map in Store.fMaterial.Maps do if Map.Kind = 'map_Kd' then HasDiffuseMap := True;
+          Store.PrebuiltShaderVariants := True;
           Store.BaseVertName := 'OBJ';
           Store.BaseFragName := 'OBJ';
           if HasDiffuseMap then Store.BaseFragName := 'OBJTexture';

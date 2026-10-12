@@ -269,6 +269,7 @@ type
     fInDataBounds  : Boolean;
     fDepthTest     : Boolean;
     fColorOverrideON : Boolean;
+    fPrebuiltShaderVariants : Boolean;
 
     // Builds one object from world points for AddPoint/AddLine/AddPolyline.
     function  AddShape(const aPoints: array of TpvVector3D; aClosed: Boolean;
@@ -411,6 +412,14 @@ type
     // (TvgObject.SetColorOverride) reaches a shader that declares it.  Read
     // when the pipeline is built, so set it before the store is connected.
     Property ColorOverrideON : Boolean read fColorOverrideON write fColorOverrideON;
+
+    // True for shaders built ahead of time with VG_DOUBLE / VG_PICK /
+    // VG_PICK_IMAGE variants (VulkanShaders\Shader Compile.bat): the pipeline
+    // then loads BaseVertName + 'Double' when its renderer has a double
+    // view-projection, and BaseFragName + 'Pick' (smStorageBuffer) or
+    // + 'PickImage' (smImageBuffer) when it is selectable.  Default False:
+    // the names are used as they are.  Read when the pipeline is built.
+    Property PrebuiltShaderVariants : Boolean read fPrebuiltShaderVariants write fPrebuiltShaderVariants;
 
     Property Scene: TvgScene read fScene ;
     Property Active: Boolean read GetActive write SetActiveState;
@@ -2711,10 +2720,23 @@ end;
 procedure TvgObjectStore.ConfigureGraphicPipeline(GP: TvgGraphicPipeline);
 var
   SHS: TvgShaderSpecialisationItem;
+  VertName, FragName: String;
 begin
 
-    // Shader files � ObjectStore owns these
-    CustomAssert(GP.BuildShaderNames(fShaderBaseVertName, fShaderBaseGeomName, fShaderBaseFragName),  'Shader file names not assigned', GP);
+    // Shader files � ObjectStore owns these; prebuilt variants per renderer
+    VertName := fShaderBaseVertName;
+    FragName := fShaderBaseFragName;
+    If fPrebuiltShaderVariants and assigned(GP.Renderer) then
+    Begin
+      If (VertName <> '') and GP.Renderer.UsesDoubleViewProjection then
+        VertName := VertName + 'Double';
+      If (FragName <> '') and GP.SelectON then
+        Case GP.Renderer.SelectMode of
+          smStorageBuffer : FragName := FragName + 'Pick';
+          smImageBuffer   : FragName := FragName + 'PickImage';
+        end;
+    End;
+    CustomAssert(GP.BuildShaderNames(VertName, fShaderBaseGeomName, FragName),  'Shader file names not assigned', GP);
 
     GP.UseShaders         := fUseShaders;        // new property, not hardcoded [PS_VERTEX, PS_FRAGMENT]
 

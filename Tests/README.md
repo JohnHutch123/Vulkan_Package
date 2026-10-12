@@ -210,4 +210,9 @@ not the exe folder or TEMP; its subfolders after the folder itself; a cached
 hit re-checked when the file is deleted; a miss not cached;
 `AdditionalShaderFolders` after `ShaderFolderPath`; a new `ShaderFolderPath`
 taking effect at once and `''` finding the package folder again.
+And `TvgObjectStore.PrebuiltShaderVariants`: off, the names are used as given;
+on, a double view-projection adds `Double` to the vertex shader and storage-
+buffer / image picking add `Pick` / `PickImage` to the fragment shader, with
+the base names for a float, unselectable or renderer-less pipeline; and every
+variant `Shader Compile.bat` should build is in `VulkanShaders`.
 Runs without a Vulkan device; included in RunTests.bat.

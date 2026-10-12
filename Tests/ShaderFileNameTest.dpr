@@ -3,7 +3,7 @@ program ShaderFileNameTest;
 
 uses
   System.SysUtils, System.Classes, System.IOUtils,
-  Vulkan_Components, Vulkan_Components_Scene_Renderer;
+  Vulkan_Components, Vulkan_Components_Lookups, Vulkan_Components_Scene_Renderer;
 
 type
   TStoreAccess = class(TvgObjectStore);
@@ -161,8 +161,65 @@ begin
   end;
 end;
 
+procedure RunVariants;
+const
+  // every prebuilt base name a store can load (VulkanShaders\Shader Compile.bat)
+  VERTS : array[0..2] of string = ('TestTriangleWithData', 'TestTextureRect', 'OBJ');
+  FRAGS : array[0..3] of string = ('TestTriangleWithData', 'TestTextureRect', 'OBJ', 'OBJTexture');
+var
+  Store: TvgObjectStore;
+  Pipeline: TvgGraphicPipeline;
+  Engine: TvgRenderEngine;
+  Name, Suffix: string;
+  Missing: string;
+
+  function Names: string;
+  begin
+    Result := Pipeline.VertexS.FileName + ' ' + Pipeline.FragmentS.FileName;
+  end;
+
 begin
-  try Run; RunLookup;
+  Store := TvgObjectStore.Create(nil);
+  Pipeline := TvgGraphicPipeline.Create(nil);
+  Engine := TvgRenderEngine.Create(nil);
+  try
+    Store.BaseVertName := 'TestTextureRect';
+    Store.BaseFragName := 'TestTextureRect';
+    Pipeline.Renderer := Engine;
+    Engine.ShaderUseDouble := True; Engine.SelectMode := smStorageBuffer;
+
+    TStoreAccess(Store).ConfigureGraphicPipeline(Pipeline);
+    Check('variants off: names as given', Names = 'TestTextureRect_vert.spv TestTextureRect_frag.spv');
+
+    Store.PrebuiltShaderVariants := True;
+    TStoreAccess(Store).ConfigureGraphicPipeline(Pipeline);
+    Check('double + storage picking', Names = 'TestTextureRectDouble_vert.spv TestTextureRectPick_frag.spv');
+    Engine.SelectMode := smImageBuffer;
+    TStoreAccess(Store).ConfigureGraphicPipeline(Pipeline);
+    Check('image picking', Names = 'TestTextureRectDouble_vert.spv TestTextureRectPickImage_frag.spv');
+    Engine.ShaderUseDouble := False; Engine.SelectMode := smNone;
+    TStoreAccess(Store).ConfigureGraphicPipeline(Pipeline);
+    Check('float, not selectable: the base names', Names = 'TestTextureRect_vert.spv TestTextureRect_frag.spv');
+    Pipeline.Renderer := nil;
+    TStoreAccess(Store).ConfigureGraphicPipeline(Pipeline);
+    Check('no renderer: the base names', Names = 'TestTextureRect_vert.spv TestTextureRect_frag.spv');
+
+    // Shader Compile.bat built every file a store can ask for.
+    Missing := '';
+    for Name in VERTS do
+      for Suffix in ['', 'Double'] do
+        if vgFindShaderFile(Name + Suffix + '_vert.spv') = '' then Missing := Missing + ' ' + Name + Suffix + '_vert.spv';
+    for Name in FRAGS do
+      for Suffix in ['', 'Pick', 'PickImage'] do
+        if vgFindShaderFile(Name + Suffix + '_frag.spv') = '' then Missing := Missing + ' ' + Name + Suffix + '_frag.spv';
+    Check('every prebuilt variant compiled' + Missing, Missing = '');
+  finally
+    Engine.Free; Pipeline.Free; Store.Free;
+  end;
+end;
+
+begin
+  try Run; RunLookup; RunVariants;
   except on E: Exception do begin Inc(Failures); Writeln(E.ClassName, ': ', E.Message); end; end;
   Writeln('Failures: ', Failures);
   if Failures <> 0 then Halt(1);

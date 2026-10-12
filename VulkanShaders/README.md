@@ -52,19 +52,55 @@ Shaders generated at run time (the PRO `TvgShaderBuilder`) are written to
 
 ## Compiling
 
-`.spv` files are compiled from the GLSL with `glslangValidator` from the Vulkan
-SDK (`%VULKAN_SDK%\Bin\glslangValidator.exe -V shader.vert -o shader_vert.spv`),
-or at run time by `Vulkan_Components_ShaderCompiler`.
+Run `Shader Compile.bat` (set `NOPAUSE=1` to skip its closing pause). It
+compiles every shader in this folder in place with `glslangValidator` and checks
+each with `spirv-val` (both from `%VULKAN_SDK%\Bin`), and reports any that fail.
+Shaders can also be compiled at run time by `Vulkan_Components_ShaderCompiler`.
+
+### Prebuilt shader variants
+
+Each prebuilt shader is a single `.vert` / `.frag` source whose variants are
+`#ifdef` blocks, compiled by the bat to the names a store loads:
+
+| Variant | Define | File | Loaded when |
+|---|---|---|---|
+| vertex | - | `<Name>_vert.spv` | float view-projection |
+| vertex | `VG_DOUBLE` | `<Name>Double_vert.spv` | the renderer's `ShaderUseDouble` |
+| fragment | - | `<Name>_frag.spv` | the pipeline is not selectable |
+| fragment | `VG_PICK` | `<Name>Pick_frag.spv` | `SelectMode = smStorageBuffer` (object IDs to the storage buffer, screen size push constant at offset 0) |
+| fragment | `VG_PICK_IMAGE` | `<Name>PickImage_frag.spv` | `SelectMode = smImageBuffer` (object IDs to the `rg32ui` image) |
+
+A store picks the variant itself when `TvgObjectStore.PrebuiltShaderVariants`
+is True: `BaseVertName` / `BaseFragName` are the `<Name>`, and the pipeline
+gets the suffix matching its renderer. With it False (the default) the names
+are used as they are - for shaders generated for one pipeline.
+
+To add a shader, write its source with the same three switches and add one
+line per stage to the bat:
+
+```
+call :Vert  MyShader  MyShader.vert
+call :Frag  MyShader  MyShader.frag
+```
+
+A fourth argument adds a define of the shader's own, built as a separate set
+(`call :Frag OBJTexture OBJ.frag -DOBJ_TEXTURE`). `call :Plain <Name>` compiles
+a shader with no variants (`TestTriangle`).
+
+Bindings follow the renderer's fixed layout: set 0 binding 0 view-projection,
+binding 1 the object-ID target, binding 2 lights; set 1 is the store's own
+(e.g. its texture at binding 0).
 
 ## OBJ loader
 
 A deployed application needs all `OBJ*.spv` files beside the others. `OBJ.vert` and
 `OBJ.frag` provide unlit diffuse colour/texture display for `TvgSceneLoader_OBJ`.
 Normals and material lighting properties are imported as data but not shaded.
-The loader selects the float/double view-projection and no-selection,
-storage-buffer-selection or image-selection variants automatically.
+Its stores set `PrebuiltShaderVariants`, so the float/double view-projection
+and no-selection, storage-buffer-selection or image-selection variants are
+picked automatically.
 
-`CompileOBJShaders.ps1` rebuilds and validates all eight variants with
-`glslangValidator` and `spirv-val` from the Vulkan SDK (both must be on PATH).
+`OBJ` and `OBJTexture` (`-DOBJ_TEXTURE`, the diffuse map) are built from these
+sources like every prebuilt shader, by `Shader Compile.bat`.
 Diffuse UV transforms and brightness/contrast use specialization constants;
 source UVs remain intact for future shaders using other material maps.

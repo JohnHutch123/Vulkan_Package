@@ -303,6 +303,7 @@ Case TestRead.ItemIndex of
                       //
                      DS.BaseVertName := 'TestTextureRect';
                      DS.BaseFragName := 'TestTextureRect';
+                     DS.PrebuiltShaderVariants := True;   // Double / Pick variants
 
                       DS.SetUpVertexAttributes( [vdtPosition, vdtColor]);
                       DS.SetUpInstanceAttributes( [idtObjID]);
