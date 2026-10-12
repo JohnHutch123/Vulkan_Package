@@ -203,10 +203,11 @@ alternative folder as its first argument when building elsewhere.
 Checks that shader names are retained, replaced and cleared without requiring
 files to exist during scene/store configuration. Verifies all three pipeline
 stage filenames and that missing/empty shader files cannot enable a shader.
-Also covers the shader file lookup (`vgFindShaderFile`): the checkout's
-`VulkanShaders` is found from a build under it, `ShaderFolderPath` is searched
-first and its subfolders only after every folder has missed, a cached hit is
-re-checked when the file is deleted, a miss is not cached, a new
-`ShaderFolderPath` takes effect at once, and TEMP is searched but not its
-subfolders.
+Also covers the shader file lookup (`vgFindShaderFile`): `ShaderFolderPath`
+starts as this package's `VulkanShaders` (found from the exe, and from a
+sibling `Vulkan_Package` checkout as PRO has) and is the only folder searched -
+not the exe folder or TEMP; its subfolders after the folder itself; a cached
+hit re-checked when the file is deleted; a miss not cached;
+`AdditionalShaderFolders` after `ShaderFolderPath`; a new `ShaderFolderPath`
+taking effect at once and `''` finding the package folder again.
 Runs without a Vulkan device; included in RunTests.bat.

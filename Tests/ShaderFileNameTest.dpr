@@ -78,74 +78,86 @@ end;
 
 procedure RunLookup;
 var
-  Root, A, B, Sub, TempSub, Name, Found, OldFolder: string;
+  Repo, Root, A, B, Sub, Sibling, Deep, ExeDir, Name, OldFolder: string;
   ID: TGUID;
   Folders: TArray<string>;
-  I, CountRepo: Integer;
 begin
   OldFolder := ShaderFolderPath;
+  ExeDir := ExtractFileDir(ParamStr(0));
+  Repo := IncludeTrailingPathDelimiter(TPath.GetFullPath(TPath.Combine(ExeDir, '..\..\VulkanShaders')));
   CreateGUID(ID);
   Name := 'LookupTest-' + Copy(GUIDToString(ID), 2, 36) + '_vert.spv';
   Root := TPath.Combine(TPath.GetTempPath, 'vgShaderLookup-' + Copy(GUIDToString(ID), 2, 8));
   A := TPath.Combine(Root, 'A');
   B := TPath.Combine(Root, 'B');
   Sub := TPath.Combine(B, 'nested');
-  TempSub := TPath.Combine(TPath.GetTempPath, 'vgShaderLookupSub-' + Copy(GUIDToString(ID), 2, 8));
-  ForceDirectories(A); ForceDirectories(Sub); ForceDirectories(TempSub);
+  Sibling := TPath.Combine(TPath.Combine(Root, 'Vulkan_Package'), 'VulkanShaders');
+  Deep := TPath.Combine(Root, 'Vulkan_Package_PRO\Tests\TestVulkan\Win64\Debug');
+  ForceDirectories(A); ForceDirectories(Sub); ForceDirectories(Sibling); ForceDirectories(Deep);
+  ForceDirectories(TPath.Combine(Root, 'Vulkan_Package\RunTime_Src'));
+  TFile.WriteAllText(TPath.Combine(Root, 'Vulkan_Package\RunTime_Src\Vulkan_Components.pas'), '');
   try
-    // The repository's shaders are found from a build under the checkout,
-    // whatever ShaderFolderPath says.
-    ShaderFolderPath := A + '\';
-    Found := vgFindShaderFile('OBJ_vert.spv');
-    Check('repo VulkanShaders found above the exe', SameText(ExtractFileName(ExtractFileDir(Found)), 'VulkanShaders'));
-    Check('OBJ_frag.spv found too', vgFindShaderFile('OBJ_frag.spv') <> '');
+    // Out of the box: this package's VulkanShaders, and nothing else.
+    Check('ShaderFolderPath starts as the package''s VulkanShaders', SameText(OldFolder, Repo));
+    Check('vgDefaultShaderFolder finds it from the exe', SameText(vgDefaultShaderFolder, Repo));
+    Check('it is recognised as the package folder', vgIsPackageShaderFolder(Repo));
+    Check('a folder without RunTime_Src beside it is not', not vgIsPackageShaderFolder(A));
     Folders := vgShaderSearchFolders;
-    Check('ShaderFolderPath searched first', SameText(Folders[0], A));
-    CountRepo := 0;
-    for I := 0 to High(Folders) do
-      if SameText(ExtractFileName(Folders[I]), 'VulkanShaders') and
-         TFile.Exists(TPath.Combine(Folders[I], 'OBJ_vert.spv')) then Inc(CountRepo);
-    Check('each folder listed once', CountRepo = 1);
+    Check('the only folder searched', (Length(Folders) = 1) and SameText(IncludeTrailingPathDelimiter(Folders[0]), Repo));
+    Check('OBJ_vert.spv found there', SameText(vgFindShaderFile('OBJ_vert.spv'), Repo + 'OBJ_vert.spv'));
+    Check('a sibling Vulkan_Package checkout is found (PRO)',
+      SameText(vgLocatePackageShaderFolder(Deep), IncludeTrailingPathDelimiter(Sibling)));
+    Check('nothing found where there is no package', vgLocatePackageShaderFolder(TPath.GetTempPath) = '');
 
-    // ShaderFolderPath wins over a copy elsewhere; subfolders of it are searched.
+    // Not the exe folder, not TEMP (ProgramData, Program Files and Documents
+    // went with them).
+    TFile.WriteAllText(TPath.Combine(ExeDir, Name), 'x');
+    TFile.WriteAllText(TPath.Combine(TPath.GetTempPath, Name), 'x');
+    Check('exe folder not searched', vgFindShaderFile(Name) = '');
+    Check('TEMP not searched', vgFindShaderFile(Name) = '');
+    DeleteFile(TPath.Combine(ExeDir, Name));
+    DeleteFile(TPath.Combine(TPath.GetTempPath, Name));
+
+    // Subfolders of ShaderFolderPath, after the folder itself.
     TFile.WriteAllText(TPath.Combine(Sub, Name), 'b');
     ShaderFolderPath := B + '\';
-    Found := vgFindShaderFile(Name);
-    Check('found in a subfolder of ShaderFolderPath', SameText(Found, TPath.Combine(Sub, Name)));
+    Check('found in a subfolder of ShaderFolderPath', SameText(vgFindShaderFile(Name), TPath.Combine(Sub, Name)));
     TFile.WriteAllText(TPath.Combine(B, Name), 'b');
     vgClearShaderFileCache;
     Check('a direct hit beats a subfolder', SameText(vgFindShaderFile(Name), TPath.Combine(B, Name)));
 
-    // The cache follows the file: deleted -> searched again.
+    // The cache follows the file.
     DeleteFile(TPath.Combine(B, Name));
     Check('no subfolder search when not asked', vgFindShaderFile(Name, '', False) = '');
     Check('cached hit re-checked after delete', SameText(vgFindShaderFile(Name), TPath.Combine(Sub, Name)));
     DeleteFile(TPath.Combine(Sub, Name));
-    Check('gone everywhere: not found', vgFindShaderFile(Name) = '');
+    Check('gone: not found', vgFindShaderFile(Name) = '');
     TFile.WriteAllText(TPath.Combine(Sub, Name), 'b');
-    Check('a miss is not cached: deployed later is found', vgFindShaderFile(Name) <> '');
+    Check('a miss is not cached: added later is found', vgFindShaderFile(Name) <> '');
 
-    // Changing ShaderFolderPath changes the answer, cache or not.
+    // AdditionalShaderFolders come after ShaderFolderPath.
     TFile.WriteAllText(TPath.Combine(A, Name), 'a');
+    TFile.WriteAllText(TPath.Combine(B, Name), 'b');
+    AdditionalShaderFolders := [A];
+    Check('ShaderFolderPath beats AdditionalShaderFolders', SameText(vgFindShaderFile(Name), TPath.Combine(B, Name)));
+    DeleteFile(TPath.Combine(B, Name)); DeleteFile(TPath.Combine(Sub, Name));
+    Check('AdditionalShaderFolders searched', SameText(vgFindShaderFile(Name), TPath.Combine(A, Name)));
+    AdditionalShaderFolders := nil;
+
+    // A new ShaderFolderPath takes effect at once; '' finds the package again.
     ShaderFolderPath := A + '\';
     Check('new ShaderFolderPath used', SameText(vgFindShaderFile(Name), TPath.Combine(A, Name)));
+    ShaderFolderPath := '';
+    Check('blank ShaderFolderPath refilled with the package folder',
+      SameText(vgFindShaderFile('OBJ_frag.spv'), Repo + 'OBJ_frag.spv') and SameText(ShaderFolderPath, Repo));
 
-    // TEMP is searched, but never its subfolders (that used to scan all of TEMP).
-    DeleteFile(TPath.Combine(A, Name)); DeleteFile(TPath.Combine(Sub, Name));
-    TFile.WriteAllText(TPath.Combine(TempSub, Name), 't');
-    Check('TEMP subfolders not scanned', vgFindShaderFile(Name) = '');
-    TFile.WriteAllText(TPath.Combine(TPath.GetTempPath, Name), 't');
-    Check('TEMP itself searched', vgFindShaderFile(Name) <> '');
-    DeleteFile(TPath.Combine(TPath.GetTempPath, Name));
-
-    // A shader module enables only when the file resolves; the legacy helper agrees.
     Check('legacy helper uses the same lookup',
-      SameText(FileExistsInVariousLocations('OBJ_vert.spv', ShaderFolderPath, True), vgFindShaderFile('OBJ_vert.spv')));
+      SameText(FileExistsInVariousLocations('OBJ_vert.spv', '', True), vgFindShaderFile('OBJ_vert.spv')));
   finally
     ShaderFolderPath := OldFolder;
+    AdditionalShaderFolders := nil;
     vgClearShaderFileCache;
     TDirectory.Delete(Root, True);
-    TDirectory.Delete(TempSub, True);
   end;
 end;
 

@@ -102,12 +102,19 @@ Var
 
   IgnorecsLoading      : Boolean = False;
 
-  ShaderFolderPath        : String = 'C:\ProgramData\Datavis\VulkanShaders\';   //make sure to add the last backslash
-  ShaderFolderProgramData : String = '\Datavis\VulkanShaders\';                //add to PROGRAMDATA folder for faster search
-  ShaderFolderProgramFiles: String = '\Datavis\';                              //add to PROGRAMDATA folder for faster search
-  ShaderFolderDocuments   : String = '\Datavis\VulkanShaders\';                //add to PROGRAMDATA folder for faster search
+  { The one folder shader files are read from (and generated into): this
+    package's VulkanShaders folder, found when the unit loads (see
+    vgDefaultShaderFolder).  Set it to use another folder; '' finds the
+    package's folder again on the next lookup. }
+  ShaderFolderPath        : String = '';
+  { Searched after ShaderFolderPath - e.g. another package's own shaders.
+    Empty by default. }
+  AdditionalShaderFolders : TArray<String> = nil;
+  { Asked for ShaderFolderPath when vgDefaultShaderFolder finds nothing - the
+    design package sets it to look at the projects open in the IDE. }
+  vgShaderFolderResolver  : function: String = nil;
   TextureFolderPath       : String = 'C:\ProgramData\Datavis\Textures\';        //make sure to add the last backslash
-  ExecutableFolderPath    : String = '';  //optional if Shaders in ShaderFolderPath
+  ExecutableFolderPath    : String = '';  //informational only - not searched for shaders
 
   DebugString             : String ='';
 
@@ -6078,19 +6085,34 @@ TvgBaseComponent = class(TComponent)
                                 aImageFormatProp : TvgImageFormatProps):Boolean;
 
  { Shader file lookup.  vgFindShaderFile returns the full path of aFileName
-   (e.g. 'OBJ_vert.spv'), or '' when it is nowhere to be found.  Folders, in
-   order (each once): aPrimary, ShaderFolderPath, ExecutableFolderPath, the
-   exe's folder, the nearest 'VulkanShaders' folder above the exe and above
-   the current directory (a source checkout), the ProgramData, Program Files
-   and Documents Datavis folders, then TEMP.  With aSearchSubFolders, only
-   aPrimary and ShaderFolderPath are also searched recursively - never TEMP
-   or the exe's folder tree.  Hits are cached (re-checked to still exist);
-   misses are not, so a shader deployed later is found.
-   vgClearShaderFileCache forgets every hit, e.g. after moving shaders. }
+   (e.g. 'OBJ_vert.spv'), or '' when it is not found.  It looks only in
+   aPrimary (when given), ShaderFolderPath and AdditionalShaderFolders -
+   each folder itself first, then (aSearchSubFolders) their subfolders.
+   Nothing else: no ProgramData, Program Files, Documents, TEMP or exe
+   folder.  Hits are cached (re-checked to still exist); misses are not, so
+   a shader added later is found.  vgClearShaderFileCache forgets every hit.
+   vgShaderSearchFolders lists the folders, filling in ShaderFolderPath first
+   when it is ''. }
  Function vgFindShaderFile(const aFileName: String; const aPrimary: String = '';
                            aSearchSubFolders: Boolean = True): String;
  Function vgShaderSearchFolders(const aPrimary: String = ''): TArray<String>;
  Procedure vgClearShaderFileCache;
+
+ { True if aDir is this package's VulkanShaders folder: its sibling
+   RunTime_Src holds Vulkan_Components.pas. }
+ Function vgIsPackageShaderFolder(const aDir: String): Boolean;
+
+ { This package's VulkanShaders folder (with a trailing backslash) at or above
+   aStart - as <dir>\VulkanShaders, or in a sibling checkout as
+   <dir>\Vulkan_Package\VulkanShaders.  '' if there is none. }
+ Function vgLocatePackageShaderFolder(const aStart: String): String;
+
+ { What ShaderFolderPath starts as: the package's VulkanShaders above this
+   module (the BPL, or the exe it is linked into), above the exe, or above
+   the current directory; failing those, a VulkanShaders folder next to the
+   exe (a deployed application).  '' if none - at design time the design
+   package then takes it from the IDE's library path. }
+ Function vgDefaultShaderFolder: String;
 
  { Kept for existing callers: vgFindShaderFile(aFileName, ShaderPath, SearchSubFolders). }
  Function FileExistsInVariousLocations(aFileName:String; const ShaderPath:String = ''; SearchSubFolders:Boolean = False): String;
@@ -25674,53 +25696,81 @@ var
   gShaderFileCache     : TDictionary<String, String> = nil;  //lower-case key -> full path
   gShaderFileCacheLock : TCriticalSection = nil;
 
+Function vgIsPackageShaderFolder(const aDir: String): Boolean;
+  Var D : String;
+begin
+  D      := ExcludeTrailingPathDelimiter(Trim(aDir));
+  Result := (D <> '') and TDirectory.Exists(D) and
+            TFile.Exists(TPath.Combine(TPath.Combine(ExtractFileDir(D), 'RunTime_Src'), 'Vulkan_Components.pas'));
+end;
+
+Function vgLocatePackageShaderFolder(const aStart: String): String;
+  Var D, Parent, C : String;
+      I            : Integer;
+begin
+  Result := '';
+  D := ExcludeTrailingPathDelimiter(Trim(aStart));
+  For I := 1 to 12 do
+  Begin
+    If D = '' then exit;
+
+    C := TPath.Combine(D, 'VulkanShaders');
+    If vgIsPackageShaderFolder(C) then
+      Exit(IncludeTrailingPathDelimiter(C));
+
+    //a sibling checkout, e.g. from D:\Vulkan_Package_PRO\Tests\...
+    C := TPath.Combine(TPath.Combine(D, 'Vulkan_Package'), 'VulkanShaders');
+    If vgIsPackageShaderFolder(C) then
+      Exit(IncludeTrailingPathDelimiter(C));
+
+    Parent := ExtractFileDir(D);
+    If SameText(Parent, D) then exit;
+    D := Parent;
+  End;
+end;
+
+Function vgDefaultShaderFolder: String;
+  Var Deployed : String;
+begin
+  Result := vgLocatePackageShaderFolder(ExtractFileDir(GetModuleName(HInstance)));
+  If Result = '' then
+    Result := vgLocatePackageShaderFolder(ExtractFileDir(ParamStr(0)));
+  If Result = '' then
+    Result := vgLocatePackageShaderFolder(GetCurrentDir);
+  If Result = '' then
+  Begin
+    Deployed := TPath.Combine(ExtractFileDir(ParamStr(0)), 'VulkanShaders');
+    If TDirectory.Exists(Deployed) then
+      Result := IncludeTrailingPathDelimiter(Deployed);
+  End;
+end;
+
 Function vgShaderSearchFolders(const aPrimary: String = ''): TArray<String>;
   Var Folders : TList<String>;
+      S       : String;
 
   Procedure Add(const aDir: String);
-    Var D, S : String;
+    Var D, E : String;
   Begin
-    D := Trim(aDir);
+    D := ExcludeTrailingPathDelimiter(Trim(aDir));
     If D = '' then exit;
-    D := ExcludeTrailingPathDelimiter(D);
-    For S in Folders do
-      If SameText(S, D) then exit;
+    For E in Folders do
+      If SameText(E, D) then exit;
     Folders.Add(D);
   End;
 
-  //a source checkout: <repo>\VulkanShaders above <repo>\Tests\...\Win64\Debug
-  Procedure AddVulkanShadersAbove(const aStart: String);
-    Var D, Parent : String;
-        I         : Integer;
-  Begin
-    D := ExcludeTrailingPathDelimiter(Trim(aStart));
-    For I := 1 to 8 do
-    Begin
-      If D = '' then exit;
-      If TDirectory.Exists(TPath.Combine(D, 'VulkanShaders')) then
-      Begin
-        Add(TPath.Combine(D, 'VulkanShaders'));
-        exit;
-      End;
-      Parent := ExtractFileDir(D);
-      If SameText(Parent, D) then exit;
-      D := Parent;
-    End;
-  End;
-
 begin
+  If Trim(ShaderFolderPath) = '' then
+    ShaderFolderPath := vgDefaultShaderFolder;
+  If (Trim(ShaderFolderPath) = '') and assigned(vgShaderFolderResolver) then
+    ShaderFolderPath := vgShaderFolderResolver;
+
   Folders := TList<String>.Create;
   Try
     Add(aPrimary);
     Add(ShaderFolderPath);
-    Add(ExecutableFolderPath);
-    Add(ExtractFileDir(ParamStr(0)));
-    AddVulkanShadersAbove(ExtractFileDir(ParamStr(0)));
-    AddVulkanShadersAbove(GetCurrentDir);
-    Add(GetEnvironmentVariable('PROGRAMDATA')  + ShaderFolderProgramData);
-    Add(GetEnvironmentVariable('PROGRAMFILES') + ShaderFolderProgramFiles);
-    Add(TPath.GetDocumentsPath + ShaderFolderDocuments);
-    Add(TPath.GetTempPath);
+    For S in AdditionalShaderFolders do
+      Add(S);
     Result := Folders.ToArray;
   Finally
     Folders.Free;
@@ -25741,7 +25791,7 @@ end;
 Function vgFindShaderFile(const aFileName: String; const aPrimary: String = '';
                           aSearchSubFolders: Boolean = True): String;
   Var Name, Key, Dir, FName : String;
-      Files                 : TArray<String>;
+      Folders, Files        : TArray<String>;
 begin
   Result := '';
   Name   := Trim(aFileName);
@@ -25751,9 +25801,11 @@ begin
   If (ExtractFilePath(Name) <> '') and TFile.Exists(Name) then
     Exit(TPath.GetFullPath(Name));
 
-  //the folders depend on these, so they are part of the key
-  Key := LowerCase(Name + '|' + Trim(aPrimary) + '|' + Trim(ShaderFolderPath) + '|' +
-                   Trim(ExecutableFolderPath) + '|' + BoolToStr(aSearchSubFolders, True));
+  Folders := vgShaderSearchFolders(aPrimary);
+  If Length(Folders) = 0 then exit;
+
+  //the answer depends on the folders, so they are part of the key
+  Key := LowerCase(Name + '|' + String.Join(';', Folders) + '|' + BoolToStr(aSearchSubFolders, True));
 
   gShaderFileCacheLock.Enter;
   Try
@@ -25768,7 +25820,7 @@ begin
   End;
 
   //each folder itself first - cheap
-  For Dir in vgShaderSearchFolders(aPrimary) do
+  For Dir in Folders do
   Begin
     FName := TPath.Combine(Dir, Name);
     If TFile.Exists(FName) then
@@ -25778,10 +25830,10 @@ begin
     End;
   End;
 
-  //then below the configured shader folders only
+  //then their subfolders
   If (Result = '') and aSearchSubFolders and (ExtractFilePath(Name) = '') then
-    For Dir in [Trim(aPrimary), Trim(ShaderFolderPath)] do
-      If (Dir <> '') and TDirectory.Exists(Dir) then
+    For Dir in Folders do
+      If TDirectory.Exists(Dir) then
       Begin
         Files := TDirectory.GetFiles(Dir, Name, TSearchOption.soAllDirectories);
         If Length(Files) > 0 then
@@ -34357,6 +34409,9 @@ Initialization
 
   gShaderFileCache     := TDictionary<String, String>.Create;
   gShaderFileCacheLock := TCriticalSection.Create;
+
+  If ShaderFolderPath = '' then
+    ShaderFolderPath := vgDefaultShaderFolder;
 
   if not assigned(DescriptorTypeList) then
      DescriptorTypeList      := TvgDescriptorTypeList.Create;

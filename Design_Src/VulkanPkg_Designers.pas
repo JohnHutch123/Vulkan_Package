@@ -65,6 +65,7 @@ interface
         ToolsAPI,
         Winapi.Windows,
         Vcl.Dialogs,
+        System.Win.Registry,
         Vulkan,
         Vulkan_Components,
         Vulkan_Components_Lookups,
@@ -296,8 +297,77 @@ Begin
 End;
 *)
 
+{ In the IDE the runtime package's BPL lives outside the checkout, so
+  vgDefaultShaderFolder may find nothing.  The package's VulkanShaders is
+  then found from the IDE: above (or beside) a project or file open in it,
+  else from the library path (an entry pointing at RunTime_Src).  Installed
+  as vgShaderFolderResolver, so it is asked again at the first shader lookup
+  once a project is open. }
+function ShaderFolderFromLibraryPath: String; forward;
+
+function ShaderFolderFromIDE: String;
+  Var Services : IOTAModuleServices;
+      Group    : IOTAProjectGroup;
+      I        : Integer;
+begin
+  Result := '';
+  If Supports(BorlandIDEServices, IOTAModuleServices, Services) then
+  Begin
+    Group := Services.MainProjectGroup;
+    If assigned(Group) then
+    Begin
+      Result := vgLocatePackageShaderFolder(ExtractFileDir(Group.FileName));
+      For I := 0 to Group.ProjectCount - 1 do
+        If Result = '' then
+          Result := vgLocatePackageShaderFolder(ExtractFileDir(Group.Projects[I].FileName));
+    End;
+    For I := 0 to Services.ModuleCount - 1 do
+      If Result = '' then
+        Result := vgLocatePackageShaderFolder(ExtractFileDir(Services.Modules[I].FileName));
+  End;
+
+  If Result = '' then
+    Result := ShaderFolderFromLibraryPath;
+end;
+
+function ShaderFolderFromLibraryPath: String;
+  Const
+    PLATFORMS : array[0..2] of String = ('Win32', 'Win64', 'Win64x');
+    VALUES    : array[0..1] of String = ('Search Path', 'Browsing Path');
+  Var Services : IOTAServices;
+      Reg      : TRegistry;
+      P, V, S  : String;
+begin
+  Result := '';
+  If not Supports(BorlandIDEServices, IOTAServices, Services) then exit;
+
+  Reg := TRegistry.Create(KEY_READ);
+  Try
+    Reg.RootKey := HKEY_CURRENT_USER;
+    For P in PLATFORMS do
+      If Reg.OpenKeyReadOnly(Services.GetBaseRegistryKey + '\Library\' + P) then
+      Try
+        For V in VALUES do
+          If Reg.ValueExists(V) then
+            For S in Reg.ReadString(V).Split([';']) do
+              If (Trim(S) <> '') and (Pos('$(', S) = 0) then
+              Begin
+                Result := vgLocatePackageShaderFolder(Trim(S));
+                If Result <> '' then exit;
+              End;
+      Finally
+        Reg.CloseKey;
+      End;
+  Finally
+    Reg.Free;
+  End;
+end;
+
 procedure Register;
 begin
+
+   //not resolved now: no project is open yet while the IDE starts
+   vgShaderFolderResolver := ShaderFolderFromIDE;
 
    RegisterComponents('Vulkan Graphics', [  TvgInstance,
                                             TvgPhysicalDevice,
@@ -986,6 +1056,7 @@ begin
     OpenDialog.Title := 'Select Shader File';
     OpenDialog.Filter := 'Shader Compiled SPIR-V Files (*.spv)|*.spv';
     OpenDialog.Options := [ ofFileMustExist, ofHideReadOnly, ofEnableSizing] ;
+    vgShaderSearchFolders;   //fills in ShaderFolderPath if it is still blank
     OpenDialog.InitialDir := ShaderFolderPath;
     OpenDialog.FileName := GetValue;
     if OpenDialog.Execute then
@@ -1008,6 +1079,9 @@ Initialization
 
 
 Finalization
+  //the runtime package can outlive this one
+  If @vgShaderFolderResolver = @ShaderFolderFromIDE then
+    vgShaderFolderResolver := nil;
   UnregisterAboutBox;
   if SplashScreenImage <> 0 then
     DeleteObject(SplashScreenImage);
