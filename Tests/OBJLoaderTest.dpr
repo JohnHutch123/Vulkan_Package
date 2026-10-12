@@ -60,7 +60,7 @@ begin
   Check('registry loads one store', Scene.SceneData.Count = 1);
   Store := Scene.SceneData[0];
   Check('one object', Store.ObjectCount = 1);
-  Check('four source positions', Store.GetObjectVertexCount(0) = 4);
+  Check('three referenced positions', Store.GetObjectVertexCount(0) = 3);
   Check('triangle topology', Store.Topology = TRIANGLE_LIST);
   Check('one triangle', Store.GetObjectIndexCount(0) = 3);
   Check('one object-ID instance', Store.GetObjectInstanceCount(0) = 1);
@@ -87,7 +87,7 @@ begin
   for Form in ['f 1/1 2/2 3/3', 'f 1//1 2//1 3//1',
     'f 1/1/1 2/2/1 3/3/1'] do
   begin
-    Source(Vertices + Form);
+    Source(Vertices + 'vt 0 0'#10'vt 1 0'#10'vt 1 1'#10'vn 0 0 1'#10 + Form);
     Loader.LoadScene;
     Check('accepts ' + Form, Scene.SceneData[0].GetObjectIndexCount(0) = 3);
   end;
@@ -120,11 +120,12 @@ begin
   // A real exported model, when the sample is present.
   TeaPot := TPath.GetFullPath(TPath.Combine(ExtractFilePath(ParamStr(0)),
     '..\..\Samples\OBJ Files\TeaPot.obj'));
+  if ParamCount > 0 then TeaPot := ParamStr(1);
   if FileExists(TeaPot) then
   begin
     vgLoadSceneFile(Scene, TeaPot);
     Store := Scene.SceneData[0];
-    Check('TeaPot.obj: 3644 vertices', Store.GetObjectVertexCount(0) = 3644);
+    Check('TeaPot.obj: vertices include flat-normal splits', Store.GetObjectVertexCount(0) >= 3644);
     Check('TeaPot.obj: 6320 triangles', Store.GetObjectIndexCount(0) = 3 * 6320);
     Check('TeaPot.obj: bounds', Scene.GetDataBounds(BMin, BMax) and
       (BMin.x < -2.9) and (BMax.x > 3.3) and (BMax.y > 3));

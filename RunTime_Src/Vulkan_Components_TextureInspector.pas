@@ -518,8 +518,16 @@ begin
       begin
         // read length (big-endian) and chunk type
         ReadExactly(AStream, chunkLenBE, 4);
-        chunkLenBE := BEToUInt32(TBytes.Create(Byte(chunkLenBE shr 24), Byte((chunkLenBE shr 16) and $FF), Byte((chunkLenBE shr 8) and $FF), Byte(chunkLenBE and $FF))); // normalize
+        // ReadBuffer put the big-endian bytes into a little-endian integer.
+        // Rebuilding them high-byte-first kept that reversed integer intact.
+        chunkLenBE := ((chunkLenBE and $FF) shl 24) or
+                      ((chunkLenBE and $FF00) shl 8) or
+                      ((chunkLenBE shr 8) and $FF00) or (chunkLenBE shr 24);
         ReadExactly(AStream, chunkType, 4);
+        // Include the CRC in the bounds check, before allocating chunk data.
+        if (chunkLenBE > Cardinal(MaxInt)) or
+           (Int64(chunkLenBE) + 4 > AStream.Size - AStream.Position) then
+          Exit(False);
         readLen := Integer(chunkLenBE);
         if readLen < 0 then Break;
         if readLen > 0 then

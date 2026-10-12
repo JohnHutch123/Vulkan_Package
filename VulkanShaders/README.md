@@ -34,3 +34,16 @@ ShaderFolderPath := 'D:\Vulkan_Package\VulkanShaders\';   // trailing backslash
 `.spv` files are compiled from the GLSL with `glslangValidator` from the Vulkan
 SDK (`%VULKAN_SDK%\Bin\glslangValidator.exe -V shader.vert -o shader_vert.spv`),
 or at run time by `Vulkan_Components_ShaderCompiler`.
+
+## OBJ loader
+
+Copy all `OBJ*.spv` files along with the other public shaders. `OBJ.vert` and
+`OBJ.frag` provide unlit diffuse colour/texture display for `TvgSceneLoader_OBJ`.
+Normals and material lighting properties are imported as data but not shaded.
+The loader selects the float/double view-projection and no-selection,
+storage-buffer-selection or image-selection variants automatically.
+
+`CompileOBJShaders.ps1` rebuilds and validates all eight variants with
+`glslangValidator` and `spirv-val` from the Vulkan SDK (both must be on PATH).
+Diffuse UV transforms and brightness/contrast use specialization constants;
+source UVs remain intact for future shaders using other material maps.

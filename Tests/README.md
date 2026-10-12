@@ -185,3 +185,15 @@ three decimals, and a float32 `mat4` view-projection places them to about
 ## OBJLoaderTest
 
 Loads temporary OBJ files through the real loader and registry without a Vulkan device. Checks positions, bounds, indexed triangle winding, quad triangulation, negative indices, optional face attribute syntax, whitespace/comments, locale-independent decimals, homogeneous vertices, `v x y z r g b` vertex colours, the real `Samples/OBJ Files/TeaPot.obj` (skipped if absent), reload replacement, malformed input preserving the scene, missing files and rejected saving. Included in RunTests.bat.
+
+## OBJMaterialTest
+
+Loads temporary OBJ/MTL files and generated BMP/PNG/JPEG textures without a
+Vulkan device. Checks scene-owned lighting/material data, relative texture paths,
+bindings and retained image sources, UV seams, separate negative attribute
+indices, smooth/flat normals, concave triangulation, lines/points, continuations,
+missing/corrupt inputs preserving the scene, and data surviving a temporary
+registry loader. It also checks PNG chunk lengths/dimensions and selects the
+float/double and buffer/image-picking shader variants without activating them.
+Included in RunTests.bat. Uses the repository's VulkanShaders folder; pass an
+alternative folder as its first argument when building elsewhere.
