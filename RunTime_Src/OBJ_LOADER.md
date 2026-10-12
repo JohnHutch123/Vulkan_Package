@@ -68,6 +68,31 @@ auto-scaling. Two-dimensional source UVs are kept in vertex data; the texture
 shader applies each diffuse map's scale/offset and flips V for image sampling.
 The optional third `vt` component is not used by this 2D texture layout.
 Empty files or files containing only coordinate definitions are errors.
+
+### Vertex layout and tangent frames
+
+Every store's vertices hold, in shader input order: position (location 0),
+colour (1), normal (2), UV (3), tangent (4), bitangent (5); the per-instance
+object ID follows at location 6. `OBJ.vert` declares the same layout.
+
+The tangent frame is generated for normal-mapped lighting, which the unlit
+OBJ shaders do not do yet:
+
+- Per triangle, the UV derivatives give a tangent along +U and a bitangent
+  along +V of the file's own UVs (V up: the OpenGL normal-map convention,
+  which OBJ/MTL exporters use). Each vertex sums those of its triangles, so
+  the frame is shared and smoothed like the vertex itself - split at UV seams
+  and normal boundaries.
+- The tangent is made perpendicular to the (unit) vertex normal by
+  Gram-Schmidt, and the bitangent rebuilt as normal x tangent, reversed where
+  the UVs are mirrored. Tangent, bitangent and normal are orthonormal at every
+  vertex.
+- Where there are no usable UVs - none in the file, or degenerate on every
+  triangle around the vertex - and for lines and points, the tangent is any
+  unit vector perpendicular to the normal.
+
+A diffuse map's `-s`/`-o` scale and offset are applied at sampling and do not
+change the frame; a negative scale mirrors the map relative to it.
 Free-form curves/surfaces (`vp`, `curv`, `curv2`, `surf`, `cstype`) and `call`
 are explicitly rejected. Other unsupported OBJ rendering hints are ignored.
 

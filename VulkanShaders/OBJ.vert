@@ -1,5 +1,7 @@
 #version 450
-// Public OBJ loader layout: position, colour, normal, UV, per-instance ID.
+// Public OBJ loader layout: position, colour, normal, UV, tangent, bitangent,
+// per-instance ID.  The normal and tangent frame are retained for lighting
+// and normal maps; this unlit shader does not use them yet.
 // Variants (Shader Compile.bat): -DVG_DOUBLE for a double view-projection.
 #ifdef VG_DOUBLE
 #extension GL_ARB_gpu_shader_fp64 : require
@@ -9,9 +11,11 @@ layout(set = 0, binding = 0, std140) uniform ViewProjection { mat4 matrix; } vp;
 #endif
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec4 inColor;
-layout(location = 2) in vec3 inNormal; // retained for future lighting
+layout(location = 2) in vec3 inNormal;
 layout(location = 3) in vec2 inUV;
-layout(location = 4) in uvec2 inObjectID;
+layout(location = 4) in vec3 inTangent;     // along +U, unit, perpendicular to the normal
+layout(location = 5) in vec3 inBiTangent;   // along +V (normal x tangent, mirrored with the UVs)
+layout(location = 6) in uvec2 inObjectID;
 layout(location = 0) out vec4 color;
 layout(location = 1) out vec2 uv;
 layout(location = 2) flat out uvec2 objectID;

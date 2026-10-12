@@ -663,6 +663,86 @@ var
   I, J, FaceID, VertexIndex: Integer;
   HasDiffuseMap: Boolean;
   Map: TvgOBJTextureMap;
+  // The current store's finished vertices and indices, for its tangents.
+  VPos, VNrm, VUV: TList<TpvVector3>;
+  VIdx: TList<Integer>;
+
+  // Tangent frames for the current store, written once it is complete.
+  // Per triangle the UV derivatives give a tangent (along +U) and bitangent
+  // (along +V, the file's own V - OpenGL normal-map convention); each vertex
+  // sums those of its triangles.  The tangent is then made perpendicular to
+  // the vertex normal (Gram-Schmidt) and the bitangent rebuilt as
+  // normal x tangent, flipped where the UVs are mirrored, so the frame is
+  // orthonormal.  A vertex with no usable UVs (none, or degenerate on all
+  // its triangles) - and every line or point - gets any unit tangent
+  // perpendicular to its normal.
+  procedure WriteTangents;
+  var
+    Tan, Bit: TArray<TpvVector3D>;
+    A, B, CI, K: Integer;
+    E1, E2, NV, TV, BV: TpvVector3D;
+    DU1, DV1, DU2, DV2, Det, R, Len: Double;
+    function V3(const V: TpvVector3): TpvVector3D;
+    begin Result := TpvVector3D.Create(V.x, V.y, V.z); end;
+    function Cross(const X, Y: TpvVector3D): TpvVector3D;
+    begin
+      Result := TpvVector3D.Create(X.y * Y.z - X.z * Y.y, X.z * Y.x - X.x * Y.z, X.x * Y.y - X.y * Y.x);
+    end;
+    function Dot(const X, Y: TpvVector3D): Double;
+    begin Result := X.x * Y.x + X.y * Y.y + X.z * Y.z; end;
+    procedure AddTo(I: Integer; const T, U: TpvVector3D);
+    begin
+      Tan[I] := TpvVector3D.Create(Tan[I].x + T.x, Tan[I].y + T.y, Tan[I].z + T.z);
+      Bit[I] := TpvVector3D.Create(Bit[I].x + U.x, Bit[I].y + U.y, Bit[I].z + U.z);
+    end;
+  begin
+    if (Store = nil) or (VPos.Count = 0) then Exit;
+    SetLength(Tan, VPos.Count); SetLength(Bit, VPos.Count);   // zeroed
+    if Store.Topology = TRIANGLE_LIST then
+    begin
+      K := 0;
+      while K + 2 < VIdx.Count do
+      begin
+        A := VIdx[K]; B := VIdx[K + 1]; CI := VIdx[K + 2]; Inc(K, 3);
+        E1 := TpvVector3D.Create(VPos[B].x - VPos[A].x, VPos[B].y - VPos[A].y, VPos[B].z - VPos[A].z);
+        E2 := TpvVector3D.Create(VPos[CI].x - VPos[A].x, VPos[CI].y - VPos[A].y, VPos[CI].z - VPos[A].z);
+        DU1 := VUV[B].x - VUV[A].x; DV1 := VUV[B].y - VUV[A].y;
+        DU2 := VUV[CI].x - VUV[A].x; DV2 := VUV[CI].y - VUV[A].y;
+        Det := DU1 * DV2 - DU2 * DV1;
+        if Abs(Det) < 1e-12 then Continue;   // no UV mapping on this triangle
+        R := 1 / Det;
+        TV := TpvVector3D.Create((E1.x * DV2 - E2.x * DV1) * R, (E1.y * DV2 - E2.y * DV1) * R,
+                                 (E1.z * DV2 - E2.z * DV1) * R);
+        BV := TpvVector3D.Create((E2.x * DU1 - E1.x * DU2) * R, (E2.y * DU1 - E1.y * DU2) * R,
+                                 (E2.z * DU1 - E1.z * DU2) * R);
+        AddTo(A, TV, BV); AddTo(B, TV, BV); AddTo(CI, TV, BV);
+      end;
+    end;
+    for K := 0 to VPos.Count - 1 do
+    begin
+      NV := V3(VNrm[K]);
+      Len := Sqrt(Dot(NV, NV));   // a file's vn need not be unit length
+      if Len > 1e-12 then NV := TpvVector3D.Create(NV.x / Len, NV.y / Len, NV.z / Len)
+      else NV := TpvVector3D.Create(0, 0, 1);
+      TV := Tan[K];
+      R := Dot(NV, TV);
+      TV := TpvVector3D.Create(TV.x - NV.x * R, TV.y - NV.y * R, TV.z - NV.z * R);
+      Len := Sqrt(Dot(TV, TV));
+      if Len < 1e-9 then
+      begin
+        // any perpendicular: across whichever axis is least like the normal
+        if Abs(NV.x) < 0.9 then TV := Cross(NV, TpvVector3D.Create(1, 0, 0))
+        else TV := Cross(NV, TpvVector3D.Create(0, 1, 0));
+        Len := Sqrt(Dot(TV, TV));
+      end;
+      TV := TpvVector3D.Create(TV.x / Len, TV.y / Len, TV.z / Len);
+      BV := Cross(NV, TV);
+      if Dot(BV, Bit[K]) < 0 then BV := TpvVector3D.Create(-BV.x, -BV.y, -BV.z);   // mirrored UVs
+      Store.SetObjectVertexTangent(0, K, TV.x, TV.y, TV.z);
+      Store.SetObjectVertexBiTangent(0, K, BV.x, BV.y, BV.z);
+    end;
+  end;
+
   procedure AddCorner(CornerIndex: Integer);
   begin
     C := P.Corners[CornerIndex];
@@ -696,12 +776,16 @@ var
       // shader applies its transform and the image-origin V flip at sampling.
       Obj.SetVertexTexCoord(UV.x, UV.y);
       Vertices.Add(Key, VertexIndex);
+      VPos.Add(Position); VNrm.Add(Normal); VUV.Add(UV);
     end;
     Obj.AddIndex(VertexIndex);
+    VIdx.Add(VertexIndex);
   end;
 begin
   Result := TObjectList<TvgOBJObjectStore>.Create;
   Vertices := TDictionary<string, Integer>.Create;
+  VPos := TList<TpvVector3>.Create; VNrm := TList<TpvVector3>.Create;
+  VUV := TList<TpvVector3>.Create; VIdx := TList<Integer>.Create;
   try
     try
       Prev := nil; Store := nil; Obj := nil;
@@ -711,6 +795,8 @@ begin
         if (Prev = nil) or (Prev.ObjectName <> P.ObjectName) or (Prev.Groups <> P.Groups) or
           (Prev.MaterialName <> P.MaterialName) or (Prev.Kind <> P.Kind) then
         begin
+          WriteTangents;   // the previous store's
+          VPos.Clear; VNrm.Clear; VUV.Clear; VIdx.Clear;
           Store := TvgOBJObjectStore.Create(nil); Result.Add(Store);
           Store.fObjectName := P.ObjectName; Store.fGroupNames := P.Groups;
           Store.fMaterial := DefaultMaterial;
@@ -723,7 +809,8 @@ begin
           else if P.MaterialName <> '' then
             Warn(Format('Material "%s" (usemtl, line %d) is in no material library loaded - drawn grey',
               [P.MaterialName, P.LineNo]), Format('Material "%s" ', [P.MaterialName]));
-          Store.SetupVertexAttributes([vdtPosition, vdtColor, vdtNormal, vdtTexCoord]);
+          Store.SetupVertexAttributes([vdtPosition, vdtColor, vdtNormal, vdtTexCoord,
+                                       vdtTangent, vdtBiTangent]);
           Store.SetupInstanceAttributes([idtObjID]); Store.SetIndexType(itUInt32);
           Store.Topology := P.Kind;
           HasDiffuseMap := False;
@@ -742,8 +829,11 @@ begin
         else for I := 0 to High(P.Corners) do AddCorner(I);
         Prev := P;
       end;
+      WriteTangents;   // the last store's
     except Result.Free; raise; end;
-  finally Vertices.Free; end;
+  finally
+    Vertices.Free; VPos.Free; VNrm.Free; VUV.Free; VIdx.Free;
+  end;
 end;
 
 procedure TvgSceneLoader_OBJ.LoadTextures(aStore: TvgOBJObjectStore);

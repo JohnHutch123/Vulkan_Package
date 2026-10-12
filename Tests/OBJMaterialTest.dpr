@@ -286,6 +286,107 @@ begin
     (Length(W) = 1) and (Pos('"none.mtl"', W[0]) > 0));
 end;
 
+// Tangent (location 4) and bitangent (5) of a vertex, its normal (2).
+function Vec(Store: TvgObjectStore; Vertex, Location: Integer): TpvVector3D;
+begin
+  Result := TpvVector3D.Create(Attribute(Store, Vertex, Location, 0),
+    Attribute(Store, Vertex, Location, 1), Attribute(Store, Vertex, Location, 2));
+end;
+
+function NearV(const V: TpvVector3D; X, Y, Z: Double): Boolean;
+begin Result := (Abs(V.x - X) < 1e-4) and (Abs(V.y - Y) < 1e-4) and (Abs(V.z - Z) < 1e-4); end;
+
+function DotV(const A, B: TpvVector3D): Double;
+begin Result := A.x * B.x + A.y * B.y + A.z * B.z; end;
+
+// Every vertex: unit tangent and bitangent, both perpendicular to the unit
+// normal and to each other.
+function FramesOrthonormal(Store: TvgObjectStore): Boolean;
+var I, Stride: Integer; N, T, B: TpvVector3D; D: TvgObjectData;
+  Offsets: array[0..5] of Integer; A: TVkVertexInputAttributeDescription;
+  function Read(Vertex, Location: Integer): TpvVector3D;
+  var V: array[0..2] of Single;
+  begin
+    Move(D.Vertices[Vertex * Stride + Offsets[Location]], V, SizeOf(V));
+    Result := TpvVector3D.Create(V[0], V[1], V[2]);
+  end;
+begin
+  // the vertex data once - GetObjectData copies it (Vec would per call)
+  D := Store.GetObjectData(0);
+  Stride := Integer(Store.GetStride(0));
+  for A in Store.GetAttributeDescriptions do
+    if (A.binding = 0) and (A.location <= 5) then Offsets[A.location] := Integer(A.offset);
+  for I := 0 to Store.GetObjectVertexCount(0) - 1 do
+  begin
+    N := Read(I, 2); T := Read(I, 4); B := Read(I, 5);
+    if (Abs(DotV(T, T) - 1) > 1e-3) or (Abs(DotV(B, B) - 1) > 1e-3) or
+       (Abs(DotV(T, N)) > 1e-3) or (Abs(DotV(B, N)) > 1e-3) or (Abs(DotV(T, B)) > 1e-3) then
+    begin
+      Writeln(Format('       vertex %d: N %.4f %.4f %.4f  T %.4f %.4f %.4f  B %.4f %.4f %.4f',
+        [I, N.x, N.y, N.z, T.x, T.y, T.z, B.x, B.y, B.z]));
+      Exit(False);
+    end;
+  end;
+  Result := True;
+end;
+
+// Tangent frames: +U and +V of the file's UVs, orthonormal with the normal.
+procedure TestTangents;
+const
+  QuadUV = 'vt 0 0'#10'vt 1 0'#10'vt 1 1'#10'vt 0 1'#10;
+var S: TvgObjectStore; I: Integer; OK: Boolean; A: TVkVertexInputAttributeDescription;
+  T, B: TpvVector3D;
+begin
+  Load(Mesh + QuadUV + 'vn 0 0 1'#10'f 1/1/1 2/2/1 3/3/1 4/4/1');
+  S := Scene.SceneData[0];
+  OK := True;
+  for I := 0 to S.GetObjectVertexCount(0) - 1 do
+    OK := OK and NearV(Vec(S, I, 4), 1, 0, 0) and NearV(Vec(S, I, 5), 0, 1, 0);
+  Check('tangent along +U, bitangent along +V', OK);
+
+  Load(Mesh + 'vt 1 0'#10'vt 0 0'#10'vt 0 1'#10'vt 1 1'#10'vn 0 0 1'#10'f 1/1/1 2/2/1 3/3/1 4/4/1');
+  S := Scene.SceneData[0];
+  OK := True;
+  for I := 0 to S.GetObjectVertexCount(0) - 1 do
+    OK := OK and NearV(Vec(S, I, 4), -1, 0, 0) and NearV(Vec(S, I, 5), 0, 1, 0);
+  Check('mirrored U: tangent flips, bitangent still along +V', OK);
+
+  // U running up the quad and V back along it: a quarter turn
+  Load(Mesh + 'vt 0 0'#10'vt 0 -1'#10'vt 1 -1'#10'vt 1 0'#10'vn 0 0 1'#10'f 1/1/1 2/2/1 3/3/1 4/4/1');
+  S := Scene.SceneData[0];
+  Check('rotated UVs rotate the frame',
+    NearV(Vec(S, 0, 4), 0, 1, 0) and NearV(Vec(S, 0, 5), -1, 0, 0));
+
+  Load(Mesh + QuadUV + 'vn 0 0 5'#10'f 1/1/1 2/2/1 3/3/1 4/4/1');
+  S := Scene.SceneData[0];
+  Check('a non-unit vn still gives a unit frame',
+    NearV(Vec(S, 0, 4), 1, 0, 0) and NearV(Vec(S, 0, 5), 0, 1, 0) and FramesOrthonormal(S));
+
+  Load(Mesh + 'vn 0.6 0 0.8'#10'f 1//1 2//1 3//1');
+  S := Scene.SceneData[0];
+  Check('no UVs: any unit tangent perpendicular to the normal', FramesOrthonormal(S));
+
+  Load(Mesh + 'l 1 2 3 4'#10'p 1');
+  Check('lines and points get frames too',
+    FramesOrthonormal(Scene.SceneData[0]) and FramesOrthonormal(Scene.SceneData[1]));
+
+  // Smooth normals on a bent strip: the tangent bends with the normal.
+  Load('v 0 0 0'#10'v 1 0 0'#10'v 1 1 0'#10'v 0 1 0'#10'v 2 0 1'#10'v 2 1 1'#10 +
+    'vt 0 0'#10'vt 1 0'#10'vt 1 1'#10'vt 0 1'#10'vt 2 0'#10'vt 2 1'#10 +
+    's 1'#10'f 1/1 2/2 3/3 4/4'#10'f 2/2 5/5 6/6 3/3');
+  S := Scene.SceneData[0];
+  Check('smooth-shaded strip: frames orthonormal', FramesOrthonormal(S));
+  T := Vec(S, 1, 4); B := Vec(S, 1, 5);
+  Check('...the shared edge''s tangent leans between the two faces',
+    (T.x > 0.5) and (T.z > 0.1) and NearV(B, 0, 1, 0));
+
+  // The object ID comes after the frame, where OBJ_vert reads it.
+  OK := False;
+  for A in S.GetAttributeDescriptions do
+    if A.binding = 1 then OK := A.location = 6;
+  Check('object ID at location 6 (OBJ.vert)', OK);
+end;
+
 // The shipped Monstera sample (3ds Max export, tab-indented MTL with both
 // d and Tr) loads with its materials.  Skipped where the OBJ is not present.
 procedure TestRealSample;
@@ -317,6 +418,8 @@ begin
   Check('Monstera: the diffuse colour reaches the vertices',
     Near(Attribute(A, 0, 1, 0), 0.4235) and Near(Attribute(A, 0, 1, 2), 0.5333));
   Check('Monstera: triangle counts', (A.GetObjectIndexCount(0) = 3 * 65508) and (B.GetObjectIndexCount(0) = 3 * 6272));
+  Check('Monstera: every tangent frame orthonormal (leaf)', FramesOrthonormal(A));
+  Check('Monstera: every tangent frame orthonormal (second)', FramesOrthonormal(B));
 end;
 
 var BMP: TBitmap; PNG: TPngImage; JPEG: TJPEGImage; ID: TGUID;
@@ -339,7 +442,7 @@ begin
     BMP.SaveToFile(TPath.Combine(ExtractFilePath(MTLPath), 'checker map.bmp'));
     PNG.Assign(BMP); PNG.SaveToFile(TPath.Combine(ExtractFilePath(MTLPath), 'checker map.png'));
     JPEG.Assign(BMP); JPEG.SaveToFile(TPath.Combine(ExtractFilePath(MTLPath), 'checker map.jpg'));
-    try TestMaterials; TestGeometry; TestTextureFormatsAndShaders; TestWarnings; TestRealSample;
+    try TestMaterials; TestGeometry; TestTextureFormatsAndShaders; TestWarnings; TestTangents; TestRealSample;
     except on E: Exception do begin Inc(Failures); Writeln(E.ClassName, ': ', E.Message); end; end;
   finally
     PNG.Free; JPEG.Free; BMP.Free; Loader.Free; Scene.Free;
