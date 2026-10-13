@@ -6,7 +6,7 @@ uses
   Vcl.Graphics, Vcl.Imaging.pngimage, Vcl.Imaging.jpeg, Vulkan, PasVulkan.Math.Double,
   Vulkan_Components, Vulkan_Components_Lookups, Vulkan_Components_DataStore,
   Vulkan_Components_Descriptors, Vulkan_Components_Scene_Renderer,
-  Vulkan_Components_Light, Vulkan_Components_TextureInspector,
+  Vulkan_Components_Light, Vulkan_Components_TextureInspector, Vulkan_Components_Camera,
   Vulkan_Loader_OBJ, Vulkan_SceneLoaders;
 
 const
@@ -198,6 +198,63 @@ begin
     TStoreAccess(S).ConfigureGraphicPipeline(Pipeline);
     Check('image-picking shader variant', Pipeline.FragmentS.FileName = 'OBJTexturePickImage_frag.spv');
   finally Pipeline.Free; Engine.Free; end;
+end;
+
+// A loaded store turned into an instanced one: one copy of the vertices, one
+// matrix per copy, and the OBJInst vertex shader that reads the matrices.
+procedure TestInstancing;
+var S: TvgOBJObjectStore; Pipeline: TvgGraphicPipeline; Engine: TvgRenderEngine;
+  A: TVkVertexInputAttributeDescription; Locations: set of Byte;
+  ID1, ID2, Before1, Before2: Cardinal; D: TvgObjectData; M: TvgMatrix4x4S;
+  Offset: Integer; Box: TvgAABB;
+begin
+  Load(Mesh + 'f 1 2 3 4');
+  S := TvgOBJObjectStore(Scene.SceneData[0]);
+  S.GetObjectInstanceObjID(0, 0, Before1, Before2);
+  S.ChangeInstanceAttributes([idtObjID, idtMatrix]);
+  S.GetObjectInstanceObjID(0, 0, ID1, ID2);
+  Check('instancing: object ID kept through the new layout', (ID1 = Before1) and (ID2 = Before2));
+  Check('instancing: one instance, vertices untouched',
+    (S.GetObjectInstanceCount(0) = 1) and (S.GetObjectVertexCount(0) = 4));
+
+  Locations := [];
+  for A in S.GetAttributeDescriptions do
+    if A.binding = 1 then Include(Locations, Byte(A.location));
+  Check('instancing: object ID at 6, matrix columns at 7..10', Locations = [6, 7, 8, 9, 10]);
+
+  // Every new instance starts as identity - zero would collapse it to the origin.
+  D := S.GetObjectData(0);
+  Offset := 0;
+  for A in S.GetAttributeDescriptions do
+    if (A.binding = 1) and (A.location = 7) then Offset := Integer(A.offset);
+  Move(D.Instances[Offset], M, SizeOf(M));
+  Check('instancing: existing instance gets an identity matrix', CompareMem(@M, @TvgMatrix4x4S.Identity, SizeOf(M)));
+  S.AddObjectInstance(0);
+  D := S.GetObjectData(0);
+  Move(D.Instances[Integer(S.GetStride(1)) + Offset], M, SizeOf(M));
+  Check('instancing: added instance gets an identity matrix', CompareMem(@M, @TvgMatrix4x4S.Identity, SizeOf(M)));
+
+  // Two copies of the unit quad, at x+10 and y+20: the bound covers both.
+  M := TvgMatrix4x4S.Identity; M.RawComponents[3, 0] := 10;
+  S.SetObjectInstanceMatrix(0, 0, M);
+  M := TvgMatrix4x4S.Identity; M.RawComponents[3, 1] := 20;
+  S.SetObjectInstanceMatrix(0, 1, M);
+  Box := S.GetObjectWorldBounds(0);
+  Check('instancing: world bound is the union of the copies', Box.Valid and
+    Near(Box.Min.x, 0) and Near(Box.Max.x, 11) and Near(Box.Min.y, 0) and Near(Box.Max.y, 21));
+
+  Pipeline := TvgGraphicPipeline.Create(nil); Engine := TvgRenderEngine.Create(nil);
+  try
+    Pipeline.Renderer := Engine;
+    Engine.ShaderUseDouble := False; Engine.SelectMode := smNone;
+    TStoreAccess(S).ConfigureGraphicPipeline(Pipeline);
+    Check('instancing: float shader variant', (Pipeline.VertexS.FileName = 'OBJInst_vert.spv') and (Pipeline.FragmentS.FileName = 'OBJ_frag.spv'));
+    Engine.ShaderUseDouble := True; Engine.SelectMode := smImageBuffer;
+    TStoreAccess(S).ConfigureGraphicPipeline(Pipeline);
+    Check('instancing: double/picking shader variant', (Pipeline.VertexS.FileName = 'OBJInstDouble_vert.spv') and (Pipeline.FragmentS.FileName = 'OBJPickImage_frag.spv'));
+  finally Pipeline.Free; Engine.Free; end;
+  Check('instancing: OBJInst shaders shipped', FileExists(ShaderFolderPath + 'OBJInst_vert.spv') and
+    FileExists(ShaderFolderPath + 'OBJInstDouble_vert.spv'));
 end;
 
 procedure TestGeometry;
@@ -442,7 +499,7 @@ begin
     BMP.SaveToFile(TPath.Combine(ExtractFilePath(MTLPath), 'checker map.bmp'));
     PNG.Assign(BMP); PNG.SaveToFile(TPath.Combine(ExtractFilePath(MTLPath), 'checker map.png'));
     JPEG.Assign(BMP); JPEG.SaveToFile(TPath.Combine(ExtractFilePath(MTLPath), 'checker map.jpg'));
-    try TestMaterials; TestGeometry; TestTextureFormatsAndShaders; TestWarnings; TestTangents; TestRealSample;
+    try TestMaterials; TestGeometry; TestTextureFormatsAndShaders; TestWarnings; TestTangents; TestInstancing; TestRealSample;
     except on E: Exception do begin Inc(Failures); Writeln(E.ClassName, ': ', E.Message); end; end;
   finally
     PNG.Free; JPEG.Free; BMP.Free; Loader.Free; Scene.Free;

@@ -267,6 +267,12 @@ type
       CALLER MUST HOLD FCriticalSection. }
     function  GetInstanceMatrix(AGlobalInstanceIndex: Integer): TpvMatrix4x4;
 
+    { Gives the zeroed instances AStart..AStart+ACount-1 (global indices) the
+      defaults zero is wrong for: an identity idtMatrix, so a new instance is
+      drawn where its vertices are rather than collapsed onto the origin.
+      CALLER MUST HOLD FCriticalSection. }
+    procedure DefaultInstances(AStart, ACount: Integer);
+
     { Rebuilds WorldBounds from LocalBounds and the object's instance
       matrices, and clears BoundsDirty.  Does nothing for cmManual, whose
       WorldBounds belongs to the application.
@@ -387,6 +393,12 @@ type
     // Configuration (call before adding data)
     function SetupVertexAttributes(ATypes: TVertexDataTypes)    : TvgVulkanDataStore;
     function SetupInstanceAttributes(ATypes: TInstanceDataTypes): TvgVulkanDataStore;
+    { SetupInstanceAttributes for a store that already holds instances, e.g.
+      one a loader built: every instance keeps the attributes both layouts
+      share; a new idtMatrix starts as identity and any other new attribute
+      as zero.  Only before the store has GPU buffers - the buffers and the
+      pipeline's vertex input are both built from the layout. }
+    procedure ChangeInstanceAttributes(ATypes: TInstanceDataTypes);
     procedure SetIndexType(AType: TIndexType);
 
     // Object management
@@ -1012,6 +1024,73 @@ begin
   finally
     FCriticalSection.Leave;
   end;
+end;
+
+procedure TvgVulkanDataStore.ChangeInstanceAttributes(ATypes: TInstanceDataTypes);
+var
+  OldTypes   : TInstanceDataTypes;
+  OldOffsets : array[TInstanceDataType] of Cardinal;
+  OldStride  : Integer;
+  OldData    : TBytes;
+  IType      : TInstanceDataType;
+  I          : Integer;
+  Obj        : TvgVulkanObjectRecord;
+begin
+  FCriticalSection.Enter;
+  try
+    if fBuffersCreated then
+      raise EVulkanDataStoreException.Create('Cannot change instance attributes once GPU buffers exist');
+    if ATypes = FInstanceTypes then Exit;
+
+    OldTypes  := FInstanceTypes;
+    OldStride := Integer(FInstanceStride);
+    OldData   := FInstanceData;
+    for IType := Low(TInstanceDataType) to High(TInstanceDataType) do
+      OldOffsets[IType] := FInstanceOffsets[IType];
+
+    FInstanceTypes := ATypes;
+    ComputeLayout;
+
+    // Same capacity, new stride: every instance - waste included, so the
+    // object ranges stay as they are - copied attribute by attribute.
+    FInstanceData := nil;
+    SetLength(FInstanceData, FInstanceCapacity * Integer(FInstanceStride));
+    if Length(FInstanceData) > 0 then
+      FillChar(FInstanceData[0], Length(FInstanceData), 0);
+    for I := 0 to FInstanceCount - 1 do
+      for IType := Low(TInstanceDataType) to High(TInstanceDataType) do
+        if (IType in OldTypes) and (IType in ATypes) then
+          Move(OldData[I * OldStride + Integer(OldOffsets[IType])],
+               FInstanceData[I * Integer(FInstanceStride) + Integer(FInstanceOffsets[IType])],
+               GetInstanceSize(IType));
+    if not (idtMatrix in OldTypes) then
+      DefaultInstances(0, FInstanceCount);
+
+    // The matrices are part of every instanced object's world bound.
+    for I := 0 to FDataObjects.Count - 1 do
+      if FDataObjects[I].HasInstances then
+      begin
+        Obj := FDataObjects[I];
+        Obj.BoundsDirty := True;
+        FDataObjects[I] := Obj;
+      end;
+
+    SetDataDirty;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+procedure TvgVulkanDataStore.DefaultInstances(AStart, ACount: Integer);
+var
+  I : Integer;
+  M : TpvMatrix4x4;
+begin
+  if not (idtMatrix in FInstanceTypes) then Exit;
+  M := TpvMatrix4x4.Identity;
+  for I := AStart to AStart + ACount - 1 do
+    Move(M, FInstanceData[I * Integer(FInstanceStride) + Integer(FInstanceOffsets[idtMatrix])],
+         SizeOf(M));
 end;
 
 procedure TvgVulkanDataStore.SetIndexType(AType: TIndexType);
@@ -2135,6 +2214,7 @@ begin
         GlobalIndex := NewStart + I;
         FillChar(FInstanceData[GlobalIndex * Integer(FInstanceStride)], FInstanceStride, 0);
       end;
+      DefaultInstances(NewStart, ACount);
     end;
     
     SetDataDirty;
@@ -2222,6 +2302,7 @@ begin
       raise EVulkanDataStoreException.Create('Object was not created with instance support');
 
     GrowObjectRange(Obj, sbInstance, 1);
+    DefaultInstances(Obj.InstanceStart + Obj.InstanceCount - 1, 1);
     // Instance count feeds the world bound, so it has to be rebuilt.
     Obj.BoundsDirty := True;
     FDataObjects[ObjectIndex] := Obj;

@@ -66,6 +66,7 @@ Each prebuilt shader is a single `.vert` / `.frag` source whose variants are
 |---|---|---|---|
 | vertex | - | `<Name>_vert.spv` | float view-projection |
 | vertex | `VG_DOUBLE` | `<Name>Double_vert.spv` | the renderer's `ShaderUseDouble` |
+| vertex | `VG_INSTANCED` | `<Name>Inst_vert.spv`, `<Name>InstDouble_vert.spv` | the store's instances carry `idtMatrix` (`call :VertInst`) |
 | fragment | - | `<Name>_frag.spv` | the pipeline is not selectable |
 | fragment | `VG_PICK` | `<Name>Pick_frag.spv` | `SelectMode = smStorageBuffer` (object IDs to the storage buffer, screen size push constant at offset 0) |
 | fragment | `VG_PICK_IMAGE` | `<Name>PickImage_frag.spv` | `SelectMode = smImageBuffer` (object IDs to the `rg32ui` image) |
@@ -83,6 +84,11 @@ call :Vert  MyShader  MyShader.vert
 call :Frag  MyShader  MyShader.frag
 ```
 
+A shader that can draw instanced copies declares `in mat4 inInstanceMatrix`
+under `#ifdef VG_INSTANCED`, at the first location after its other instance
+attributes (the DataStore lays them out in `TInstanceDataType` order, the
+matrix taking four locations), and uses `call :VertInst` instead of `:Vert`.
+
 A fourth argument adds a define of the shader's own, built as a separate set
 (`call :Frag OBJTexture OBJ.frag -DOBJ_TEXTURE`). `call :Plain <Name>` compiles
 a shader with no variants (`TestTriangle`).
@@ -98,7 +104,9 @@ A deployed application needs all `OBJ*.spv` files beside the others. `OBJ.vert` 
 Normals and material lighting properties are imported as data but not shaded.
 Its stores set `PrebuiltShaderVariants`, so the float/double view-projection
 and no-selection, storage-buffer-selection or image-selection variants are
-picked automatically.
+picked automatically. A store given an instance matrix
+(`ChangeInstanceAttributes([idtObjID, idtMatrix])`) loads `OBJInst` /
+`OBJInstDouble`, whose matrix is at locations 7..10.
 
 `OBJ` and `OBJTexture` (`-DOBJ_TEXTURE`, the diffuse map) are built from these
 sources like every prebuilt shader, by `Shader Compile.bat`.

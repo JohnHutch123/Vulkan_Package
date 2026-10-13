@@ -168,6 +168,28 @@ setup from builds in (or beside) the checkout; a deployed application ships
 **all `OBJ*.spv` files** in a `VulkanShaders` folder beside the exe, as described in [the shader guide](../VulkanShaders/README.md).
 The previous `EditLines` pair is no longer used by this loader.
 
+## Drawing many copies (instancing)
+
+A loaded store can draw its mesh many times, one 4x4 matrix per copy, without
+copying any vertices. Before the store has GPU buffers:
+
+```pascal
+Store := TvgOBJObjectStore(Scene.SceneData[I]);   // each store of the model
+Store.ChangeInstanceAttributes([idtObjID, idtMatrix]);
+Store.GetObjectInstanceObjID(0, 0, ID1, ID2);
+// instance 0 is the loaded one; add the rest
+Copy := Store.AddObjectInstance(0);
+Store.SetObjectInstanceObjID(0, Copy, ID1, ID2); // new instances start at ID 0
+Store.SetObjectInstanceMatrix(0, Copy, M);       // TvgMatrix4x4S, [column, row]
+```
+
+Existing and new instances start with an identity matrix, and the existing
+object ID is kept. The store then loads the `OBJInst` vertex shader (matrix at
+locations 7..10) and culls against the union of the copies. Give every store
+of a model the same matrices so its parts stay together. The matrix moves
+positions only; normals and tangents are not yet transformed, which the unlit
+shaders do not need.
+
 ## Errors and tests
 
 Loading replaces the scene. OBJ/MTL reading, texture-source loading and CPU geometry

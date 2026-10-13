@@ -6,6 +6,9 @@
 :: names a store loads with PrebuiltShaderVariants:
 ::   Vert  <Name>_vert.spv            float view-projection
 ::         <Name>Double_vert.spv      -DVG_DOUBLE     (renderer ShaderUseDouble)
+::   VertInst  as Vert, and also
+::         <Name>Inst_vert.spv        -DVG_INSTANCED  (instances carry idtMatrix)
+::         <Name>InstDouble_vert.spv  -DVG_INSTANCED -DVG_DOUBLE
 ::   Frag  <Name>_frag.spv            no picking
 ::         <Name>Pick_frag.spv        -DVG_PICK       (SelectMode smStorageBuffer)
 ::         <Name>PickImage_frag.spv   -DVG_PICK_IMAGE (SelectMode smImageBuffer)
@@ -30,7 +33,7 @@ call :Vert  TestTriangleWithData   TestTriangleWithData.vert
 call :Frag  TestTriangleWithData   TestTriangleWithData.frag
 call :Vert  TestTextureRect        TestTextureRect.vert
 call :Frag  TestTextureRect        TestTextureRect.frag
-call :Vert  OBJ                    OBJ.vert
+call :VertInst OBJ                 OBJ.vert
 call :Frag  OBJ                    OBJ.frag
 call :Frag  OBJTexture             OBJ.frag                   -DOBJ_TEXTURE
 
@@ -49,6 +52,12 @@ call :Build "%~2" "%~1_vert.spv"       %3
 call :Build "%~2" "%~1Double_vert.spv" %3 -DVG_DOUBLE
 exit /b
 
+:VertInst
+call :Vert  "%~1" "%~2" %3
+call :Build "%~2" "%~1Inst_vert.spv"       %3 -DVG_INSTANCED
+call :Build "%~2" "%~1InstDouble_vert.spv" %3 -DVG_INSTANCED -DVG_DOUBLE
+exit /b
+
 :Frag
 call :Build "%~2" "%~1_frag.spv"          %3
 call :Build "%~2" "%~1Pick_frag.spv"      %3 -DVG_PICK
@@ -57,10 +66,10 @@ exit /b
 
 :: source, output, defines
 :Build
-"%GLSLANG%" -V %3 %4 "%HERE%%~1" -o "%HERE%%~2" >nul
+"%GLSLANG%" -V %3 %4 %5 "%HERE%%~1" -o "%HERE%%~2" >nul
 if errorlevel 1 (
   echo FAILED   %~2
-  "%GLSLANG%" -V %3 %4 "%HERE%%~1" -o "%HERE%%~2"
+  "%GLSLANG%" -V %3 %4 %5 "%HERE%%~1" -o "%HERE%%~2"
   set /a FAILED+=1
   exit /b
 )

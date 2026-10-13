@@ -417,7 +417,9 @@ type
     // VG_PICK_IMAGE variants (VulkanShaders\Shader Compile.bat): the pipeline
     // then loads BaseVertName + 'Double' when its renderer has a double
     // view-projection, and BaseFragName + 'Pick' (smStorageBuffer) or
-    // + 'PickImage' (smImageBuffer) when it is selectable.  Default False:
+    // + 'PickImage' (smImageBuffer) when it is selectable.  A store whose
+    // instances carry idtMatrix loads BaseVertName + 'Inst' (VG_INSTANCED)
+    // first, so OBJ becomes OBJInst or OBJInstDouble.  Default False:
     // the names are used as they are.  Read when the pipeline is built.
     Property PrebuiltShaderVariants : Boolean read fPrebuiltShaderVariants write fPrebuiltShaderVariants;
 
@@ -2739,6 +2741,8 @@ begin
     FragName := fShaderBaseFragName;
     If fPrebuiltShaderVariants and assigned(GP.Renderer) then
     Begin
+      If (VertName <> '') and IsInstanceTypeSet(idtMatrix) then
+        VertName := VertName + 'Inst';
       If (VertName <> '') and GP.Renderer.UsesDoubleViewProjection then
         VertName := VertName + 'Double';
       If (FragName <> '') and GP.SelectON then
