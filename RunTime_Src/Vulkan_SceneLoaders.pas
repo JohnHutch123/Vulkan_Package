@@ -105,8 +105,30 @@ procedure vgLoadSceneFile(aScene: TvgScene; const aFileName: string;
                           aLoader: TvgSceneLoaderStorer = nil;
                           const aLoaderType: string = ''); Overload;
 
+{ Adds aFileName's contents to aScene, keeping what is already there, and
+  returns the stores it added - for a TvgInstanceSet, say.
+
+  The file is loaded into a private staging scene (with aScene's
+  WorldOrigin) by the same loaders as vgLoadSceneFile, so any registered
+  format works and no loader needs to know; its stores are then moved into
+  aScene with AddDataStoreLive.  Only the geometry is added: the file's
+  lights (a warning says how many) and cameras are not, and nor is a glTF
+  layer/hierarchy model - vgLoadSceneFile builds none either.  A load that
+  fails raises with aScene untouched.  A given aLoader must have no Scene:
+  pointing a loader at another scene clears the one it had. }
+function vgAppendSceneFile(aScene: TvgScene; const aFileName: string;
+                           aLoader: TvgSceneLoaderStorer = nil;
+                           const aLoaderType: string = ''): TArray<TvgObjectStore>; Overload;
+function vgAppendSceneFile(aScene: TvgScene; const aFileName: string;
+                           out aWarnings: TArray<string>;
+                           aLoader: TvgSceneLoaderStorer = nil;
+                           const aLoaderType: string = ''): TArray<TvgObjectStore>; Overload;
+
 resourcestring
   vgSLNoScene       = 'No scene to load into.';
+  vgSLLoaderHasScene = 'A loader given to vgAppendSceneFile must have no Scene: pointing it at another clears the one it has.';
+  vgSLLightsSkipped = '%d light(s) in the file were not added: appending adds geometry only.';
+  vgSLNotReady      = 'The scene is not ready to take more data.';
   vgSLNoFile        = 'No scene file given.';
   vgSLFileMissing   = 'Scene file not found: %s';
   vgSLNoLoaderType  = 'No scene loader is registered with the name "%s".';
@@ -114,6 +136,9 @@ resourcestring
   vgSLNoFileProp    = '%s has no published string property "%s" to take the file name.';
 
 implementation
+
+uses
+  Vulkan_Components_Lookups;
 
 var
   gLoaders : TList<TvgSceneLoaderInfo> = nil;
@@ -327,6 +352,68 @@ begin
   Finally
     If Owned then
       Loader.Free;
+  End;
+end;
+
+function vgAppendSceneFile(aScene: TvgScene; const aFileName: string;
+                           aLoader: TvgSceneLoaderStorer = nil;
+                           const aLoaderType: string = ''): TArray<TvgObjectStore>;
+  Var Warnings : TArray<string>;
+begin
+  Result := vgAppendSceneFile(aScene, aFileName, Warnings, aLoader, aLoaderType);
+end;
+
+function vgAppendSceneFile(aScene: TvgScene; const aFileName: string;
+                           out aWarnings: TArray<string>;
+                           aLoader: TvgSceneLoaderStorer = nil;
+                           const aLoaderType: string = ''): TArray<TvgObjectStore>;
+  Var Staging : TvgScene;
+      Stores  : TArray<TvgObjectStore>;
+      S       : TvgObjectStore;
+      I       : Integer;
+begin
+  Result := nil;
+  If not assigned(aScene) then
+    raise EvgSceneLoaderError.Create(vgSLNoScene);
+  If assigned(aLoader) and assigned(aLoader.Scene) then
+    raise EvgSceneLoaderError.Create(vgSLLoaderHasScene);
+  //AddDataStoreLive takes stores only from a scene loaded or loading
+  If not (aScene.SceneState in [SS_READY, SS_LOADING]) then
+    raise EvgSceneLoaderError.Create(vgSLNotReady);
+
+  Staging := TvgScene.Create(nil);
+  Try
+    //positions arrive relative to the origin of the scene they will join
+    Staging.WorldOrigin := aScene.WorldOrigin;
+
+    vgLoadSceneFile(Staging, aFileName, aWarnings, aLoader, aLoaderType);
+
+    If Staging.Lights.Count > 0 then
+      aWarnings := aWarnings + [Format(vgSLLightsSkipped, [Staging.Lights.Count])];
+
+    SetLength(Stores, Staging.SceneData.Count);
+    For I := 0 to High(Stores) do
+      Stores[I] := Staging.SceneData[I];
+
+    For I := 0 to High(Stores) do
+    Begin
+      S := Stores[I];
+      Staging.ExtractDataStore(S);
+      If not aScene.AddDataStoreLive(S) then
+      Begin
+        //refused (checked for above, so unexpected): this one is the
+        //caller's to free; the rest go with the staging scene
+        S.Free;
+        raise EvgSceneLoaderError.Create(vgSLNotReady);
+      End;
+      Result := Result + [S];
+    End;
+  Finally
+    //A caller's loader must not keep the staging scene.  Last: letting go
+    //clears the scene it had, so only once the stores have left it.
+    If assigned(aLoader) and (aLoader.Scene = Staging) then
+      aLoader.Scene := nil;
+    Staging.Free;
   End;
 end;
 

@@ -223,8 +223,21 @@ AlignToSlope. A `TvgInstanceSet` over two stores: model bounds and base pivot,
 the same copies in both with each store's own object ID, no vertex copying,
 the world bound over every copy, fewer copies, none (drawn as nothing) and
 back with the ID kept, a freed store leaving the set, and a prebuilt shader
-with no `Inst` variant refused. Runs Y up, then the flat scatter Z up.
+with no `Inst` variant refused. Runs Y up, then the flat scatter Z up, with
+a Y-up model stood up by `ModelUp` and its base pivot along that axis.
 Included in RunTests.bat.
+
+## AppendSceneTest
+
+`vgAppendSceneFile` without a device, on OBJ files. A file appended to a
+scene that already has a store: the store is returned, both are in the scene
+and the new one belongs to it, the first keeps its vertices, the new geometry
+is where the file put it, object IDs are set and distinct, and the material's
+texture descriptor came across. Appending again adds another set. A bad file
+raises and leaves the scene as it was. A loader already on a scene is refused
+(pointing it elsewhere would clear that scene); a given loader with none is
+used and let go. Appended stores take instanced copies, and the scene frees
+them with its own. Included in RunTests.bat.
 
 ## ShaderFileNameTest
 

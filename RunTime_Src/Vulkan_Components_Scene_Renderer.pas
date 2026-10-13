@@ -533,6 +533,7 @@ type
     // destructor so the scene is not left holding a dangling pointer.
     // False when the store is not in this scene.
     Function DetachDataStore(aDataStore: TvgObjectStore): Boolean;
+    Function DoDetachDataStore(aDataStore: TvgObjectStore; aKeepData: Boolean): Boolean;
 
     Function SetDisabled :Boolean; Override;
     Function SetEnabled  :Boolean; Override;
@@ -593,6 +594,14 @@ type
    { Takes a store out of the scene and frees it, waiting first for any
      frame that is drawing it.  The tool manager lets go of its objects. }
    Procedure RemoveDataStore(aDataStore: TvgObjectStore);
+
+   { Takes a store out of the scene WITHOUT freeing it or its data, for
+     another scene's AddDataStore / AddDataStoreLive - vgAppendSceneFile
+     moves a staging scene's stores this way.  Its pipelines and GPU buffers
+     are dropped, to be built by the next scene; its vertices, objects and
+     texture descriptors stay.  The caller owns it until another scene adds
+     it.  False when the store is not in this scene. }
+   Function ExtractDataStore(aDataStore: TvgObjectStore): Boolean;
 
    { To call after changing a store's data: every renderer re-records its
      frames and repaints, and OnDataChanged fires.  The TvgObject and
@@ -2949,6 +2958,16 @@ begin
 end;
 
 Function TvgScene.DetachDataStore(aDataStore: TvgObjectStore): Boolean;
+begin
+  Result := DoDetachDataStore(aDataStore, False);
+end;
+
+Function TvgScene.ExtractDataStore(aDataStore: TvgObjectStore): Boolean;
+begin
+  Result := DoDetachDataStore(aDataStore, True);
+end;
+
+Function TvgScene.DoDetachDataStore(aDataStore: TvgObjectStore; aKeepData: Boolean): Boolean;
   Var I  : Integer;
       TM : TvgToolManager;
 begin
@@ -2984,11 +3003,24 @@ begin
       If assigned(fRendererList.Items[I]) then
         aDataStore.DisConnectDataFromSceneandRenderer(fRendererList.Items[I]);
 
-  aDataStore.ClearData;
+  If aKeepData then
+    // Its pipelines went with the renderers above; the buffers too unless
+    // it had none.  The CPU data and objects stay for the next scene.
+    aDataStore.DeleteVulkanDataBuffers
+  else
+    aDataStore.ClearData;
   aDataStore.Active := False;
   ForgetEditStore(aDataStore);
 
   fSceneData.Extract(aDataStore);   // out of the owning list, not freed
+
+  If aKeepData then
+  Begin
+    // Belongs to no scene until another adds it, so its destructor does not
+    // come back here.
+    aDataStore.fScene     := nil;
+    aDataStore.fBaseScene := nil;
+  End;
 
   NotifyDataChanged(nil);
   Result := True;
