@@ -305,7 +305,7 @@ object TestVulkan: TTestVulkan
     Top = 40
     Width = 697
     Height = 553
-    ClearColor = clBlack
+    ClearColor = clWhite
     VulkanLink = vgVulkanDataModule1.vgLinker1
   end
   object OpenDialog1: TOpenDialog

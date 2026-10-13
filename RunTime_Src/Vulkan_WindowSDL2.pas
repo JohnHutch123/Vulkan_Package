@@ -89,6 +89,7 @@ type
     procedure SetCaption(const Value: string);
     procedure SetWidth(const Value: Integer);
     procedure SetHeight(const Value: Integer);
+    procedure SetClearColor(const Value: TAlphaColor);
 
   protected
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
@@ -155,7 +156,7 @@ type
     property Height     : Integer read fHeight    write SetHeight default 600;
     property Resizable  : Boolean read fResizable write fResizable default True;
 
-    property ClearColor : TAlphaColor read fClearColor write fClearColor default TAlphaColors.Black;
+    property ClearColor : TAlphaColor read fClearColor write SetClearColor default TAlphaColors.Black;
     property CrossHairCursor : Boolean read fCrossHairCursor write fCrossHairCursor default False;
 
     property OnClose    : TvgSDL2CloseEvent read fOnClose  write fOnClose;
@@ -525,6 +526,16 @@ end;
 function TvgSDL2Window.GetHandleAllocated: Boolean;
 begin
   Result := Assigned(fSDLWindow);
+end;
+
+procedure TvgSDL2Window.SetClearColor(const Value: TAlphaColor);
+begin
+  if fClearColor = Value then exit;
+  fClearColor := Value;
+
+  //live: the render pass and background-dependent stores follow it
+  if assigned(fLinker) then
+    fLinker.BackgroundColorChanged;
 end;
 
 procedure TvgSDL2Window.SetCaption(const Value: string);

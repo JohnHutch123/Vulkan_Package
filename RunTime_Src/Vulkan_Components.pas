@@ -4955,6 +4955,12 @@ TvgBaseComponent = class(TComponent)
     //blitted; a dirty scene (including camera) is re-rendered; HUD is then
     //composited and the swapchain image is presented.
 
+    Procedure BackgroundColorChanged;
+    //The window's clear colour changed (a window's ClearColor setter calls
+    //it): the render pass clears with the new one, the renderer's scene's
+    //stores are told (TvgBaseObjectStore.BackgroundColorChanged), and every
+    //frame is redrawn.  Main thread.
+
     Procedure AddMsgToList(aMsg:String);
 
 
@@ -5503,6 +5509,10 @@ TvgBaseComponent = class(TComponent)
 
     Function LockData( aWaitFor : Boolean=False):Boolean;
     Function UnLockData:Boolean;
+
+    Procedure BackgroundColorChanged(const aColor: TVkClearValue);                                                   Virtual;
+    //The linker's window clear colour is now aColor (TvgLinker.BackgroundColorChanged).
+    //For a store whose colours depend on the background.  Main thread; base does nothing.
 
 
     Procedure UploadAllData(aPool:TvgCommandBufferPool;aFrameIndex:Integer);                                      Virtual ; Abstract;
@@ -24528,6 +24538,40 @@ begin
   TriggerWindowRepaint;
 end;
 
+procedure TvgLinker.BackgroundColorChanged;
+var
+  C     : TVkClearValue;
+  Scene : TvgBaseScene;
+  I     : Integer;
+begin
+  if (csDestroying in ComponentState) then exit;
+  if not assigned(WindowIntf) then exit;
+
+  //Frames are recorded each frame from the render pass's clear values, set
+  //when it was built: refresh them in place (same attachments, same length).
+  If assigned(fRenderer) and assigned(fRenderer.fRenderPass) and
+     (Length(fRenderer.fRenderPass.fClearColArray) > 0) then
+    fRenderer.fRenderPass.SetUpClearColorArray;
+
+  FillChar(C, SizeOf(C), 0);
+  WindowIntf.vgWindowBackgroundColor(C);
+
+  If assigned(fRenderer) then
+  Begin
+    Scene := fRenderer.BaseScene;
+    If assigned(Scene) then
+      For I := 0 to Scene.GetObjectStoreCount - 1 do
+        If assigned(Scene.ObjectStore[I]) then
+          Scene.ObjectStore[I].BackgroundColorChanged(C);
+  End;
+
+  If fState = vgcsActive then
+  Begin
+    FlagALLFrameRebuild;
+    TriggerWindowRepaint;
+  End;
+end;
+
 procedure TvgLinker.SetHUDEnabled(const Value: Boolean);
 begin
   if fHUDEnabled = Value then
@@ -28936,6 +28980,10 @@ end;
 function TvgBaseObjectStore.UnLockData: Boolean;
 begin
   Result := True;
+end;
+
+procedure TvgBaseObjectStore.BackgroundColorChanged(const aColor: TVkClearValue);
+begin
 end;
 
 procedure TvgBaseObjectStore.UpdateGraphicPipelines;

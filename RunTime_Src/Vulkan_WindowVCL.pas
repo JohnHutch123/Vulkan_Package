@@ -701,7 +701,12 @@ end;
 
 procedure TvgWindowVCL.SetClearColor(const Value: TColor);
 begin
+  if fClearColor = Value then exit;
   fClearColor := Value;
+
+  //live: the render pass and background-dependent stores follow it
+  if assigned(fLinker) then
+    fLinker.BackgroundColorChanged;
 end;
 
 procedure TvgWindowVCL.SetDesigning;
