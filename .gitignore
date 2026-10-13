@@ -102,3 +102,6 @@ Samples/OBJ Files/*mustang*
 # Archives (downloaded sample packs and the like)
 *.rar
 *.zip
+
+# Shaders TvgDelaunayDisplay (PRO) generates into this folder at run time
+VulkanShaders/Delaunay*.spv
