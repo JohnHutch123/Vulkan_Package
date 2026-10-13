@@ -57,22 +57,22 @@ var M: TvgMatrix4x4S; Pivot: TpvVector3D;
 begin
   Writeln('--- placement matrix (Y up) ---');
   Pivot := V3(0.5, 0, 0.5);
-  M := vgPlacementMatrix(Pivot, V3(10, 3, -4), V3(0, 0, 0), 0, 1, vgWorldUp);
+  M := vgPlacementMatrix(Pivot, V3(10, 3, -4), V3(0, 0, 0), V3(0, 0, 0), 0, 1, vgWorldUp);
   Check('pivot lands on the position', NearV(Transform(M, Pivot), 10, 3, -4));
   Check('no turn, no scale: a plain move', NearV(Transform(M, V3(1.5, 1, 0.5)), 11, 4, -4));
 
   // +90 degrees about +Y (right handed): +X goes to -Z.
-  M := vgPlacementMatrix(V3(0, 0, 0), V3(0, 0, 0), V3(0, 0, 0), 90, 1, vgWorldUp);
+  M := vgPlacementMatrix(V3(0, 0, 0), V3(0, 0, 0), V3(0, 0, 0), V3(0, 0, 0), 90, 1, vgWorldUp);
   Check('spin about up: +X turns to -Z', NearV(Transform(M, V3(1, 0, 0)), 0, 0, -1));
   Check('spin about up: up stays up', NearV(Transform(M, V3(0, 1, 0)), 0, 1, 0));
 
-  M := vgPlacementMatrix(V3(0, 0, 0), V3(0, 0, 0), V3(0, 0, 0), 0, 2.5, vgWorldUp);
+  M := vgPlacementMatrix(V3(0, 0, 0), V3(0, 0, 0), V3(0, 0, 0), V3(0, 0, 0), 0, 2.5, vgWorldUp);
   Check('scale about the pivot', NearV(Transform(M, V3(1, 1, 1)), 2.5, 2.5, 2.5));
 
-  M := vgPlacementMatrix(V3(0, 0, 0), V3(0, 0, 0), V3(0, 0, 0), 0, 1, V3(1, 0, 0));
+  M := vgPlacementMatrix(V3(0, 0, 0), V3(0, 0, 0), V3(0, 0, 0), V3(0, 0, 0), 0, 1, V3(1, 0, 0));
   Check('tilt: the model''s up becomes the given up', NearV(Transform(M, V3(0, 1, 0)), 1, 0, 0));
 
-  M := vgPlacementMatrix(V3(0, 0, 0), V3(0, 0, 0), V3(1, 0, 0), 90, 1, vgWorldUp);
+  M := vgPlacementMatrix(V3(0, 0, 0), V3(0, 0, 0), V3(0, 0, 0), V3(1, 0, 0), 90, 1, vgWorldUp);
   Check('spin about another axis: +Y about +X goes to +Z', NearV(Transform(M, V3(0, 1, 0)), 0, 0, 1));
 end;
 
@@ -175,7 +175,7 @@ begin
 
     SetLength(M, 3);
     for J := 0 to 2 do
-      M[J] := vgPlacementMatrix(Set_.BasePivot, V3(10 * J, 0, 0), V3(0, 0, 0), 0, 1, vgWorldUp);
+      M[J] := vgPlacementMatrix(Set_.BasePivot, V3(10 * J, 0, 0), V3(0, 0, 0), V3(0, 0, 0), 0, 1, vgWorldUp);
     Set_.SetMatrices(M);
     Check('stores made instanced', A.IsInstanceTypeSet(idtMatrix) and B.IsInstanceTypeSet(idtMatrix));
     Check('three copies in each store', (A.GetObjectInstanceCount(0) = 3) and (B.GetObjectInstanceCount(0) = 3));
@@ -226,7 +226,7 @@ end;
 
 procedure TestZUp;
 var S: TvgScatterSettings; A: TvgMatrixArray; I: Integer; P, Q: TpvVector3D; AllOK: Boolean;
-  Flat: IvgSurfaceSampler;
+  Flat: IvgSurfaceSampler; M: TvgMatrix4x4S; Store: TvgObjectStore; Set_: TvgInstanceSet;
 begin
   Writeln('--- scatter (Z up) ---');
   if not vgSetAxisConvention(acZUp) then
@@ -246,6 +246,31 @@ begin
       if not (Near(P.z, 3) and NearV(Q, 0, 0, 1)) then AllOK := False;
     end;
     Check('Z up: every copy at z = 3, upright along +Z', AllOK);
+
+    // A model authored Y up (most OBJ exports) stood up in a Z-up world.
+    M := vgPlacementMatrix(V3(0, 0, 0), V3(0, 0, 0), V3(0, 1, 0), V3(0, 0, 0), 0, 1, vgWorldUp);
+    Check('model Y up: its +Y becomes +Z', NearV(Transform(M, V3(0, 1, 0)), 0, 0, 1));
+    M := vgPlacementMatrix(V3(0, 0, 0), V3(0, 0, 0), V3(0, 1, 0), V3(0, 0, 0), 90, 1, vgWorldUp);
+    Check('model Y up: then the spin is about world up (+X to +Y)', NearV(Transform(M, V3(1, 0, 0)), 0, 1, 0));
+    S.ModelUp := V3(0, 1, 0);
+    A := vgScatterMatrices(S, Flat, V3(0, 0, 0));
+    AllOK := Length(A) = 100;
+    for I := 0 to High(A) do
+    begin
+      P := Transform(A[I], V3(0, 0, 0));
+      Q := Transform(A[I], V3(0, 1, 0)) - P;
+      if not (Near(P.z, 3) and NearV(Q, 0, 0, 1)) then AllOK := False;
+    end;
+    Check('scatter with ModelUp +Y: every copy stood up along +Z', AllOK);
+
+    Store := MakeStore(0);
+    Set_ := TvgInstanceSet.Create([Store]);
+    try
+      Check('base pivot along the model''s +Y', NearV(Set_.BasePivot(V3(0, 1, 0)), 0.5, 0, 0));
+      Check('base pivot along -Y: the other side', NearV(Set_.BasePivot(V3(0, -1, 0)), 0.5, 1, 0));
+    finally
+      Set_.Free; Store.Free;
+    end;
   finally
     vgSetAxisConvention(acYUp);
   end;

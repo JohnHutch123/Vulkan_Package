@@ -60,7 +60,9 @@ type
     RegionMin,                    // the horizontal box points are drawn from;
     RegionMax    : TpvVector3D;   //   the up components are ignored
     HeightOffset : Double;        // added along vgWorldUp after sampling
-    SpinAxis     : TpvVector3D;   // turn axis in the model's frame; zero = vgWorldUp
+    ModelUp      : TpvVector3D;   // the model's own up as authored (an OBJ is
+                                  //   often +Y); zero = vgWorldUp
+    SpinAxis     : TpvVector3D;   // turn axis once upright, world frame; zero = vgWorldUp
     SpinMin,
     SpinMax      : Double;        // degrees
     ScaleMin,
@@ -75,9 +77,10 @@ type
   TvgMatrixArray = TArray<TvgMatrix4x4S>;
 
   // The matrix that puts a model's aPivot at aPosition: scaled by aScale,
-  // turned aSpinDegrees about aSpinAxis (the model's own frame), then tilted
-  // so the model's up is aUp.  Columns as GLSL reads them: RawComponents[c, r].
-  function vgPlacementMatrix(const aPivot, aPosition: TpvVector3D;
+  // stood up (its aModelUp turned onto vgWorldUp), turned aSpinDegrees about
+  // aSpinAxis, then tilted so its up is aUp.  A zero aModelUp or aSpinAxis
+  // means vgWorldUp.  Columns as GLSL reads them: RawComponents[c, r].
+  function vgPlacementMatrix(const aPivot, aPosition, aModelUp: TpvVector3D;
     const aSpinAxis: TpvVector3D; aSpinDegrees, aScale: Double;
     const aUp: TpvVector3D): TvgMatrix4x4S;
 
@@ -127,7 +130,9 @@ type
     function ModelBounds: TvgAABB;
     // Where the model stands: the middle of ModelBounds across, its bottom
     // along vgWorldUp.  The pivot vgScatterMatrices sets on the surface.
-    function BasePivot: TpvVector3D;
+    // aModelUp as in TvgScatterSettings: the bottom is along it.
+    function BasePivot: TpvVector3D; overload;
+    function BasePivot(const aModelUp: TpvVector3D): TpvVector3D; overload;
 
     // Every store is made instanced (vgMakeStoreInstanced), then every live
     // instanced object gets exactly these copies, each carrying the object
@@ -195,7 +200,7 @@ begin
   Result := Rotation(Axis, ArcTan2(Sin_, Cos_));
 end;
 
-function vgPlacementMatrix(const aPivot, aPosition: TpvVector3D;
+function vgPlacementMatrix(const aPivot, aPosition, aModelUp: TpvVector3D;
   const aSpinAxis: TpvVector3D; aSpinDegrees, aScale: Double;
   const aUp: TpvVector3D): TvgMatrix4x4S;
 var Up, Axis, T: TpvVector3D; L: TMat3; R, C: Integer;
@@ -204,6 +209,8 @@ begin
   Axis := aSpinAxis;
   if Axis.Length < 1E-12 then Axis := Up;
   L := Rotation(Axis, DegToRad(aSpinDegrees));
+  if aModelUp.Length > 1E-12 then
+    L := Mul(L, FromTo(aModelUp.Normalize, Up));
   if aUp.Length > 1E-12 then
     L := Mul(FromTo(Up, aUp.Normalize), L);
   for R := 0 to 2 do for C := 0 to 2 do L[R, C] := L[R, C] * aScale;
@@ -359,7 +366,7 @@ begin
         Tilt := Up.Lerp(Normal.Normalize, EnsureRange(aSettings.AlignToSlope, 0, 1));
 
       Placed.Add(vgPlacementMatrix(aPivot, Surface + Up * aSettings.HeightOffset,
-        aSettings.SpinAxis, Rnd.Range(aSettings.SpinMin, aSettings.SpinMax),
+        aSettings.ModelUp, aSettings.SpinAxis, Rnd.Range(aSettings.SpinMin, aSettings.SpinMax),
         Rnd.Range(aSettings.ScaleMin, aSettings.ScaleMax), Tilt));
       Remember(U, V);
     end;
@@ -513,15 +520,25 @@ begin
 end;
 
 function TvgInstanceSet.BasePivot: TpvVector3D;
-var B: TvgAABB; Mid, Up: TpvVector3D; Bottom: Double;
+begin
+  Result := BasePivot(TpvVector3D.Create(0, 0, 0));
+end;
+
+function TvgInstanceSet.BasePivot(const aModelUp: TpvVector3D): TpvVector3D;
+var B: TvgAABB; Lo, Hi, Mid, Up: TpvVector3D; Bottom: Double;
 begin
   B := ModelBounds;
   if not B.Valid then Exit(TpvVector3D.Create(0, 0, 0));
-  Up  := vgWorldUp;
-  Mid := (TpvVector3D(B.Min) + TpvVector3D(B.Max)) * 0.5;
-  // vgWorldUp is a positive axis in both conventions, so Min is the bottom.
-  Bottom := vgUpComponent(TpvVector3D(B.Min));
-  Result := Mid + Up * (Bottom - vgUpComponent(Mid));
+  Up := aModelUp;
+  if Up.Length < 1E-12 then Up := vgWorldUp;
+  Up := Up.Normalize;
+  Lo := TpvVector3D(B.Min); Hi := TpvVector3D(B.Max);
+  Mid := (Lo + Hi) * 0.5;
+  // The box's lowest point along Up: each component from whichever side
+  // Up points away from, so a negative or slanted axis works too.
+  Bottom := Min(Lo.x * Up.x, Hi.x * Up.x) + Min(Lo.y * Up.y, Hi.y * Up.y) +
+            Min(Lo.z * Up.z, Hi.z * Up.z);
+  Result := Mid + Up * (Bottom - Mid.Dot(Up));
 end;
 
 procedure TvgInstanceSet.SetMatrices(const aMatrices: TvgMatrixArray);

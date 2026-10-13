@@ -177,8 +177,12 @@ stores, live or not:
 ```pascal
 Copies := TvgInstanceSet.Create(Stores);   // every store of the model
 Settings := TvgScatterSettings.Default(500, RegionMin, RegionMax);
-Copies.SetMatrices(vgScatterMatrices(Settings, Surface, Copies.BasePivot));
+Settings.ModelUp := TpvVector3D.Create(0, 1, 0);   // authored Y up; zero = world up
+Copies.SetMatrices(vgScatterMatrices(Settings, Surface, Copies.BasePivot(Settings.ModelUp)));
 ```
+
+OBJ coordinates are kept as written, so a Y-up export in a Z-up world lies on
+its side until `ModelUp` stands it up.
 
 `Surface` is any `IvgSurfaceSampler` - `TvgFlatSurface` for a fixed height.
 Each store is converted with `vgMakeStoreInstanced` and every object gets the
