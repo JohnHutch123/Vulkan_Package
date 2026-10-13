@@ -170,8 +170,20 @@ The previous `EditLines` pair is no longer used by this loader.
 
 ## Drawing many copies (instancing)
 
-A loaded store can draw its mesh many times, one 4x4 matrix per copy, without
-copying any vertices. Before the store has GPU buffers:
+A loaded model can draw its meshes many times, one 4x4 matrix per copy,
+without copying any vertices. `Vulkan_Instancing` does it for any loader's
+stores, live or not:
+
+```pascal
+Copies := TvgInstanceSet.Create(Stores);   // every store of the model
+Settings := TvgScatterSettings.Default(500, RegionMin, RegionMax);
+Copies.SetMatrices(vgScatterMatrices(Settings, Surface, Copies.BasePivot));
+```
+
+`Surface` is any `IvgSurfaceSampler` - `TvgFlatSurface` for a fixed height.
+Each store is converted with `vgMakeStoreInstanced` and every object gets the
+same copies, carrying its own object ID. By hand, before the store has GPU
+buffers:
 
 ```pascal
 Store := TvgOBJObjectStore(Scene.SceneData[I]);   // each store of the model

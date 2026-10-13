@@ -494,6 +494,9 @@ type
       vertex cut off by SetObjectVertexCount are the caller's to fix. }
     procedure SetObjectVertexCount(ObjectIndex, ACount: Integer);
     procedure SetObjectIndexCount(ObjectIndex, ACount: Integer);
+    { The same for an instanced object's copies.  New instances are zeroed,
+      with an identity idtMatrix; at 0 the object draws nothing. }
+    procedure SetObjectInstanceCount(ObjectIndex, ACount: Integer);
 
     { A copy of everything an object holds - vertices, instances, indices -
       and the reverse: SetObjectData makes the object exactly that, growing
@@ -1631,7 +1634,11 @@ end;
 class function TvgVulkanDataStore.RecordIsSkipped(const aObj: TvgVulkanObjectRecord): Boolean;
 begin
   //A deleted object has no ranges; its record only keeps its index taken.
-  Result := aObj.Deleted or aObj.Hidden or (aObj.VertexCount <= 0);
+  //An instanced object cut to no copies (SetObjectInstanceCount 0) draws
+  //nothing - not the one copy Max(1, InstanceCount) would read past its end.
+  //One that never had an instance range is left to VulkanDraw, which warns.
+  Result := aObj.Deleted or aObj.Hidden or (aObj.VertexCount <= 0) or
+            (aObj.HasInstances and (aObj.InstanceStart >= 0) and (aObj.InstanceCount <= 0));
 end;
 
 function TvgVulkanDataStore.ShouldSkipObject(ObjectIndex: Integer): Boolean;
@@ -1856,6 +1863,43 @@ begin
       FDataObjects[ObjectIndex] := Obj;
       RebuildObjectBoundsLocked(ObjectIndex);
     end;
+
+    SetDataDirty;
+    AutoCompact;
+  finally
+    FCriticalSection.Leave;
+  end;
+
+  EnsureGPUCapacity;   // outside the lock - it may wait for frames in flight
+end;
+
+procedure TvgVulkanDataStore.SetObjectInstanceCount(ObjectIndex, ACount: Integer);
+var
+  Obj     : TvgVulkanObjectRecord;
+  Current : Integer;
+begin
+  FCriticalSection.Enter;
+  try
+    Obj := CheckLiveObject(ObjectIndex);
+    if not Obj.HasInstances then
+      raise EVulkanDataStoreException.Create('Object was not created with instance support');
+    if ACount < 0 then
+      raise EVulkanDataStoreException.CreateFmt('SetObjectInstanceCount: negative count %d', [ACount]);
+
+    Current := Obj.InstanceCount;
+    if (ACount = Current) and (Obj.InstanceStart >= 0) then Exit;
+
+    if ACount > Current then
+    begin
+      GrowObjectRange(Obj, sbInstance, ACount - Current);
+      DefaultInstances(Obj.InstanceStart + Current, ACount - Current);
+    end
+    else
+      ShrinkObjectRange(Obj, sbInstance, ACount);
+
+    // Instance count feeds the world bound, so it has to be rebuilt.
+    Obj.BoundsDirty := True;
+    FDataObjects[ObjectIndex] := Obj;
 
     SetDataDirty;
     AutoCompact;

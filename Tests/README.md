@@ -206,8 +206,25 @@ triangle counts, and an orthonormal tangent frame at every vertex. Tangent
 frames: tangent along +U and bitangent along +V, mirrored and rotated UVs, a
 non-unit `vn`, no UVs, lines and points, a smooth-shaded bend whose shared
 tangent leans between its faces, and the object ID at location 6 where
-`OBJ.vert` reads it. Included in RunTests.bat. Uses the repository's VulkanShaders folder; pass an
+`OBJ.vert` reads it. Instancing: a loaded store given an instance matrix keeps
+its object ID, gives existing and added copies an identity matrix, culls
+against the union of its copies and selects `OBJInst` / `OBJInstDouble`.
+Included in RunTests.bat. Uses the repository's VulkanShaders folder; pass an
 alternative folder as its first argument when building elsewhere.
+
+## InstancingTest
+
+`Vulkan_Instancing` without a device. The placement matrix: pivot onto the
+position, a turn about up and about another axis, scale, tilt to a given up.
+The scatter: the same seed gives the same matrices, every copy on the surface
+inside the region, upright within the scale range, points a sampler rejects
+drawn again, minimum spacing kept, level surfaces stay upright with
+AlignToSlope. A `TvgInstanceSet` over two stores: model bounds and base pivot,
+the same copies in both with each store's own object ID, no vertex copying,
+the world bound over every copy, fewer copies, none (drawn as nothing) and
+back with the ID kept, a freed store leaving the set, and a prebuilt shader
+with no `Inst` variant refused. Runs Y up, then the flat scatter Z up.
+Included in RunTests.bat.
 
 ## ShaderFileNameTest
 
