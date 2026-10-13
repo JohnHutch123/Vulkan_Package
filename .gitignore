@@ -98,4 +98,7 @@ VulkanPkg_*Icons*.res
 # Large downloaded sample models (not for the repo)
 Samples/OBJ Files/*Mustang*
 Samples/OBJ Files/*mustang*
-Samples/OBJ Files/96-uploads_files_2720101_textures-2.zip
+
+# Archives (downloaded sample packs and the like)
+*.rar
+*.zip
