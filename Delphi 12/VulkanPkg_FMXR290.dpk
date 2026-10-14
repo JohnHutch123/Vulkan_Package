@@ -30,6 +30,10 @@ package VulkanPkg_FMXR290;
 
 requires
   rtl,
-  fmx;
+  fmx,
+  VulkanPkgR290;
+
+contains
+  Vulkan_WindowFMX in '..\RunTime_Src\Vulkan_WindowFMX.pas';
 
 end.

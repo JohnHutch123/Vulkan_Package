@@ -166,7 +166,14 @@ begin
 end;
 {$ENDIF}
 
-{$IFDEF POSIX}
+{$IF defined(ANDROID) or defined(IOS)}
+// No glslangValidator, and no running other programs, on a phone: shaders
+// must be compiled ahead of time and shipped as .spv.
+function ExecAndCapture(const CmdLine: string; var Output: string): Integer;
+begin
+  raise Exception.Create('Shaders cannot be compiled at run time on this platform; ship prebuilt SPIR-V (.spv)');
+end;
+{$ELSEIF defined(POSIX)}
 function ExecAndCapture(const CmdLine: string; var Output: string): Integer;
 var
   Pipe: Pointer;
@@ -194,7 +201,7 @@ begin
     raise;
   end;
 end;
-{$ENDIF}
+{$IFEND}
 
 function CompileGLSLToSPIRV(const GLSLSource : String;
                             ShaderKind       : shaderc_shader_kind;

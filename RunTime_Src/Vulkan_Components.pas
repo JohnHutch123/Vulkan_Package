@@ -258,7 +258,7 @@ type
   Protected
 
     fObjHigh,
-    fObjLow         : Longword;       //Object ID (pointer) for use if Selection is ON  set in Create
+    fObjLow         : UInt32 ;       //Object ID (pointer) for use if Selection is ON  set in Create
     fFlags          : TvgObjectStateFlags;
 
     // Virtual so a descendant can act on it: TvgObject stops its store
@@ -6127,8 +6127,8 @@ TvgBaseComponent = class(TComponent)
  { Kept for existing callers: vgFindShaderFile(aFileName, ShaderPath, SearchSubFolders). }
  Function FileExistsInVariousLocations(aFileName:String; const ShaderPath:String = ''; SearchSubFolders:Boolean = False): String;
 
-  procedure Split64BitTo32Bit(Value: UInt64; out LowPart, HighPart: LongWord);
-  function Combine32BitTo64Bit(LowPart, HighPart: LongWord): UInt64;
+  procedure Split64BitTo32Bit(Value: UInt64; out LowPart, HighPart: UInt32);
+  function Combine32BitTo64Bit(LowPart, HighPart: UInt32): UInt64;
 
   { False for a TvgBaseComponent still inside its constructor: an opInsert
     for it is ignored, and repeated by its AfterConstruction. }
@@ -6146,13 +6146,13 @@ Var
    DescriptorTypeList      : TvgDescriptorTypeList   = Nil;
    PushConstantTypeList    : TvgPushConstantTypeList = Nil;
 
-procedure Split64BitTo32Bit(Value: UInt64; out LowPart, HighPart: LongWord);
+procedure Split64BitTo32Bit(Value: UInt64; out LowPart, HighPart: UInt32);
 begin
   LowPart  := Cardinal(Value and $FFFFFFFF);
   HighPart := Cardinal(Value shr 32);
 end;
 
-function Combine32BitTo64Bit(LowPart, HighPart: LongWord): UInt64;
+function Combine32BitTo64Bit(LowPart, HighPart: UInt32): UInt64;
 begin
   Result := Int64(HighPart) shl 32 or LowPart;   //low is R high is G
 end;
@@ -11217,8 +11217,10 @@ begin
   CustomAssert(assigned(fPhysicalDevice.fInstance.VulkanInstance) , 'Vulkan Instance creation failed.',Self);
 
     {$if defined(Android)}
-      CustomAssert(fWindow<>0 , 'Window not connected',Self);
-      fVulkanSurface :=  TpvVulkanSurface.CreateAndroid(fInstance.VulkanInstance, fWindow);
+      fWindowIntf.SurfaceWinPlatformCallback(fWindow);
+      CustomAssert(assigned(fWindow) , 'Native window is not defined.',Self);
+      If not assigned(fWindow) then Exit(False);   //release-safe guard
+      fVulkanSurface :=  TpvVulkanSurface.CreateAndroid(fPhysicalDevice.fInstance.VulkanInstance, fWindow);
     {$ifend}
     {$if defined(Wayland) and defined(Unix)}
       CustomAssert(assigned(fVulkanWindow) , 'Window not connected',Self);
@@ -11277,8 +11279,13 @@ begin
   If assigned(fVulkanSurface) then
      FreeAndNil( fVulkanSurface);
 
+{$if defined(Win32) or defined(Win64)}
   fWinInstance:=0;
   fModInstance:=0;
+{$ifend}
+{$if defined(Android)}
+  fWindow:=nil;
+{$ifend}
 
   Result := Inherited;
   CustomAssert(Result,Format('%s : inherited state change failed',[self.ClassName]),self);
@@ -11310,7 +11317,9 @@ begin
      Begin
 
           {$if defined(Android)}
-            CustomAssert(fWindow<>0 , 'Window not connected',Self);
+            fWindowIntf.SurfaceWinPlatformCallback(fWindow);
+            CustomAssert(assigned(fWindow) , 'Native window is not defined.',Self);
+            If not assigned(fWindow) then Exit(False);   //release-safe guard
             fVulkanSurface :=  TpvVulkanSurface.CreateAndroid(fPhysicalDevice.fInstance.VulkanInstance, fWindow);
           {$ifend}
           {$if defined(Wayland) and defined(Unix)}
@@ -12557,7 +12566,7 @@ begin
                                                   false,
                                                   false,
                                                   TpvVulkanExclusiveFullScreenMode.Default,
-                                                  @fSurface.fWinInstance);
+                                                  {$if defined(Win32) or defined(Win64)}@fSurface.fWinInstance{$else}nil{$ifend});
 
    Result:= (fVulkanSwapChain <> Nil);
 

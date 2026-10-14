@@ -1,0 +1,28 @@
+diff --git a/externals/pasmp/src/PasMP.pas b/externals/pasmp/src/PasMP.pas
+index daf044f..91d1b10 100644
+--- a/externals/pasmp/src/PasMP.pas
++++ b/externals/pasmp/src/PasMP.pas
+@@ -123,6 +123,10 @@ unit PasMP;
+  {$realcompatibility off}
+  {$localsymbols on}
+  {$define LITTLE_ENDIAN}
++ {$if defined(CPU64BITS) and not defined(CPU64)}
++  // Delphi ARM64 (Android64, iOS, macOS ARM) defines CPU64BITS, not CPU64
++  {$define CPU64}
++ {$ifend}
+  {$ifndef CPU64}
+   {$define CPU32}
+  {$endif}
+@@ -14186,7 +14190,12 @@ constructor TPasMPWorkerSystemThread.Create(const AJobWorkerThread:TPasMPJobWork
+ begin
+  fJobWorkerThread:=AJobWorkerThread;
+  if AJobWorkerThread.fPasMPInstance.fWorkerThreadStackSize>0 then begin
++{$if defined(fpc) or defined(MSWINDOWS)}
+   inherited Create(false,AJobWorkerThread.fPasMPInstance.fWorkerThreadStackSize);
++{$else}
++  // Delphi has the stack size constructor on Windows only
++  inherited Create(false);
++{$ifend}
+  end else begin
+   inherited Create(false);
+  end;

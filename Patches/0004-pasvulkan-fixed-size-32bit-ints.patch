@@ -1,0 +1,18 @@
+diff --git a/src/Vulkan.pas b/src/Vulkan.pas
+index 28dac5e7e..67b85c899 100644
+--- a/src/Vulkan.pas
++++ b/src/Vulkan.pas
+@@ -114,11 +114,11 @@ type PPVkInt8=^PVkInt8;
+ 
+      PPVkInt32=^PVkInt32;
+      PVkInt32=^TVkInt32;
+-     TVkInt32={$ifdef FPC}Int32{$else}LongInt{$endif};
++     TVkInt32=Int32;   //not LongInt: 64-bit on Delphi Android64, iOS and Linux
+ 
+      PPVkUInt32=^PVkUInt32;
+      PVkUInt32=^TVkUInt32;
+-     TVkUInt32={$ifdef FPC}UInt32{$else}LongWord{$endif};
++     TVkUInt32=UInt32; //not LongWord: 64-bit on Delphi Android64, iOS and Linux
+ 
+      PPVkInt64=^PVkInt64;
+      PVkInt64=^TVkInt64;

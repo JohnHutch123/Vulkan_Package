@@ -199,6 +199,8 @@
         </DelphiCompile>
         <DCCReference Include="rtl.dcp" />
         <DCCReference Include="fmx.dcp" />
+        <DCCReference Include="VulkanPkgR290.dcp" />
+        <DCCReference Include="..\RunTime_Src\Vulkan_WindowFMX.pas" />
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
