@@ -1,0 +1,75 @@
+diff --git a/externals/pasdblstrutils/src/PasDblStrUtils.pas b/externals/pasdblstrutils/src/PasDblStrUtils.pas
+index b61e594..312b3ca 100644
+--- a/externals/pasdblstrutils/src/PasDblStrUtils.pas
++++ b/externals/pasdblstrutils/src/PasDblStrUtils.pas
+@@ -414,7 +414,12 @@ type PPasDblStrUtilsInt8=^TPasDblStrUtilsInt8;
+      TPasDblStrUtilsPointer=Pointer;
+ 
+      PPasDblStrUtilsRoundingMode=^TPasDblStrUtilsRoundingMode;
++{$if defined(EXTERNALLINKER) and not defined(fpc)}
++     // Delphi's LLVM targets (Android, iOS, Linux) have no x87 FPU types
++     TPasDblStrUtilsRoundingMode=TRoundingMode;
++{$else}
+      TPasDblStrUtilsRoundingMode=type TFPURoundingMode;
++{$ifend}
+ 
+      TPasDblStrUtilsOutputMode=(
+       omStandard,
+@@ -6891,30 +6896,45 @@ type TDoubleValue=record
+  {$warnings off}
+  procedure FastDoubleToRadix(v:TPasDblStrUtilsDouble;Radix:TPasDblStrUtilsInt32;var Buffer:TPasDblStrUtilsString;var Len,DecimalPoint:TPasDblStrUtilsInt32);
+  const Base36:array[0..35] of TPasDblStrUtilsChar='0123456789abcdefghijklmnopqrstuvwxyz';
++{$if defined(EXTERNALLINKER) and not defined(fpc)}
++       // Delphi's LLVM targets: no x87 types, and no precision control
++       DtoAFPUExceptionMask:TArithmeticExceptionMask=[exInvalidOp,exDenormalized,exZeroDivide,exOverflow,exUnderflow,exPrecision];
++       DtoAFPURoundingMode:TRoundingMode=rmNEAREST;
++{$else}
+        DtoAFPUExceptionMask:TFPUExceptionMask=[exInvalidOp,exDenormalized,exZeroDivide,exOverflow,exUnderflow,exPrecision];
+        DtoAFPUPrecisionMode:TFPUPrecisionMode=pmDOUBLE;
+        DtoAFPURoundingMode:TFPURoundingMode=rmNEAREST;
++{$ifend}
+  var IntPart,FracPart,Old,Epsilon:TPasDblStrUtilsDouble;
+      Digit,i,j:TPasDblStrUtilsInt32;
+      TempBuffer:TPasDblStrUtilsString;
++{$if defined(EXTERNALLINKER) and not defined(fpc)}
++     OldFPUExceptionMask:TArithmeticExceptionMask;
++     OldFPURoundingMode:TRoundingMode;
++{$else}
+      OldFPUExceptionMask:TFPUExceptionMask;
+      OldFPUPrecisionMode:TFPUPrecisionMode;
+      OldFPURoundingMode:TFPURoundingMode;
++{$ifend}
+      IntPart64:TPasDblStrUtilsInt64;
+  begin
+   if (Radix<2) or (Radix>36) then begin
+    result:='';
+   end else begin
+    OldFPUExceptionMask:=GetExceptionMask;
++{$if not (defined(EXTERNALLINKER) and not defined(fpc))}
+    OldFPUPrecisionMode:=GetPrecisionMode;
++{$ifend}
+    OldFPURoundingMode:=GetRoundMode;
+    try
+     if OldFPUExceptionMask<>DtoAFPUExceptionMask then begin
+      SetExceptionMask(DtoAFPUExceptionMask);
+     end;
++{$if not (defined(EXTERNALLINKER) and not defined(fpc))}
+     if OldFPUPrecisionMode<>DtoAFPUPrecisionMode then begin
+      SetPrecisionMode(DtoAFPUPrecisionMode);
+     end;
++{$ifend}
+     if OldFPURoundingMode<>DtoAFPURoundingMode then begin
+      SetRoundMode(DtoAFPURoundingMode);
+     end;
+@@ -6983,9 +7003,11 @@ type TDoubleValue=record
+     if OldFPUExceptionMask<>DtoAFPUExceptionMask then begin
+      SetExceptionMask(OldFPUExceptionMask);
+     end;
++{$if not (defined(EXTERNALLINKER) and not defined(fpc))}
+     if OldFPUPrecisionMode<>DtoAFPUPrecisionMode then begin
+      SetPrecisionMode(OldFPUPrecisionMode);
+     end;
++{$ifend}
+     if OldFPURoundingMode<>DtoAFPURoundingMode then begin
+      SetRoundMode(OldFPURoundingMode);
+     end;

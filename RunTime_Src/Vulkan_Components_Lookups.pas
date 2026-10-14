@@ -1674,8 +1674,8 @@ Type
       Function GetVKTransform(Value:TVgSurfaceTransformFlagBitsKHRSet):TVkSurfaceTransformFlagsKHR;
       Function GetVGTransform(Value:TVkSurfaceTransformFlagsKHR):TVgSurfaceTransformFlagBitsKHRSet;
 
-  procedure SplitPointer(const Value: Pointer; var LowPart, HighPart: LongWord);
-  function JoinPointer(const LowPart, HighPart: LongWord): Pointer;
+  procedure SplitPointer(const Value: Pointer; var LowPart, HighPart: UInt32);
+  function JoinPointer(const LowPart, HighPart: UInt32): Pointer;
 
   function GetPixelSizeInBytes(const aFormat: TVkFormat): Integer;
 
@@ -1951,24 +1951,24 @@ end;
     End;
   End;
 
-  procedure SplitPointer(const Value: Pointer; var LowPart, HighPart: LongWord);
+  procedure SplitPointer(const Value: Pointer; var LowPart, HighPart: UInt32);
     Var I64:Int64;
         PtrSize : Integer;
   begin
     PtrSize:=SizeOf(Pointer);
     If PtrSize=32 then
     Begin
-      LowPart  := Longword(Value) ;
+      LowPart  := UInt32(Value) ;
       HighPart := 0;
     End else
     Begin
       I64 := Int64(Value);
-      LowPart  := LongWord(I64);             // Get the lower 32 bits
-      HighPart := LongWord(I64 shr 32);      // Get the upper 32 bits
+      LowPart  := UInt32(I64);             // Get the lower 32 bits
+      HighPart := UInt32(I64 shr 32);      // Get the upper 32 bits
     end;
   end;
 
-  function JoinPointer(const LowPart, HighPart: LongWord): Pointer;
+  function JoinPointer(const LowPart, HighPart: UInt32): Pointer;
     Var I:Int64;
         PtrSize : Integer;
   begin

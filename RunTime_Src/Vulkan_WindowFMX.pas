@@ -16,8 +16,22 @@
   (and so to its tool manager), with the same capture and screen-edge wrap
   as TvgWindowVCL.  Keys the linker does not use go on to the form.
 
-  Android, iOS, macOS: not done yet.  The platform callbacks return nothing,
-  so no surface is made.
+  Android: an android.view.SurfaceView, kept over the control by the form's
+  TAndroidZOrderManager (as FMX's own native controls are) and placed above
+  the form's own SurfaceView (setZOrderMediaOverlay).  Android makes and
+  destroys the view's surface itself - when the view is attached, and each
+  time the app goes to the background and back.  So:
+  - the session can only start once the surface exists: start it from
+    OnNativeReady (or once NativeReady is True), not from FormCreate;
+  - when the surface goes, this window's linker is stopped (its surface and
+    swap chain freed) and, if it was running, started again when the surface
+    comes back.
+  Touch: one finger is a left-button drag (orbit), two fingers pinch to
+  zoom (as the mouse wheel).  Shaders cannot be compiled on the device:
+  ship prebuilt .spv.
+
+  iOS, macOS: not done yet.  The platform callbacks return nothing, so no
+  surface is made.
 
   Limits that come with a native child window:
   - it is always drawn above the form's FMX controls (popups, menus and
@@ -41,6 +55,12 @@ uses
   Winapi.Messages,
   Winapi.MultiMon,
 {$ENDIF}
+{$IFDEF ANDROID}
+  System.Messaging,
+  Androidapi.JNIBridge,
+  Androidapi.JNI.GraphicsContentViewText,
+  Androidapi.NativeWindow,
+{$ENDIF}
   FMX.Types,
   FMX.Controls,
   FMX.Graphics,
@@ -59,6 +79,7 @@ type
     fVulkanActive : Boolean;
     fClearColor   : TAlphaColor;
     fMouseCapture : Boolean;
+    fOnNativeReady : TNotifyEvent;
 
 {$IFDEF MSWINDOWS}
     fWnd          : HWND;
@@ -88,6 +109,40 @@ type
     procedure DoNativeMouseMove(aWParam: WPARAM; aLParam: LPARAM);
     function  WndProc(aMsg: UINT; aWParam: WPARAM; aLParam: LPARAM): LRESULT;
 {$ENDIF}
+
+{$IFDEF ANDROID}
+  var
+    fLayout          : JViewGroup;      //what the z-order manager places
+    fChildrenLayout  : JViewGroup;
+    fSurfaceView     : JSurfaceView;
+    fSurfaceCallback : JSurfaceHolder_Callback;
+    fTouchListener   : JView_OnTouchListener;
+    [Weak] fViewForm : TCommonCustomForm;   //the form fLayout is linked into
+    fNativeWindow    : Androidapi.NativeWindow.PANativeWindow;  //while the surface exists
+    fSurfaceWidth,
+    fSurfaceHeight   : Integer;
+    fResumeActive    : Boolean;         //restart the linker when the surface returns
+    fRepaintQueued   : Boolean;
+
+    // Touch: one finger drags with the left button, two pinch (wheel)
+    fTouchDown       : Boolean;
+    fPinching        : Boolean;
+    fPinchDistance   : Single;
+    fPinchRemainder  : Single;
+
+    function  ViewForm: TCommonCustomForm;
+    procedure CreateNativeView;
+    procedure DestroyNativeView;
+    procedure UpdateNativeBounds;
+    procedure BeforeDestroyFormHandle(const Sender: TObject; const M: TMessage);
+
+    procedure SurfaceCreated(const aHolder: JSurfaceHolder);
+    procedure SurfaceChanged(aWidth, aHeight: Integer);
+    procedure SurfaceDestroyed;
+    function  Touch(const aEvent: JMotionEvent): Boolean;
+{$ENDIF}
+
+    procedure NativeReadyChanged;
 
     function  GetClearColor: TAlphaColor;
     procedure SetClearColor(const Value: TAlphaColor);
@@ -125,25 +180,25 @@ type
 
 {$if defined(Android)}
     procedure SurfaceWinPlatformCallback(var aWindow: PVkAndroidANativeWindow);
-{$ifend}
+{$endif}
 {$if defined(Wayland) and defined(Unix)}
     procedure SurfaceWinPlatformCallback(var aDisplay: PVkWaylandDisplay; var aSurface: PVkWaylandSurface);
-{$ifend}
+{$endif}
 {$if defined(Win32) or defined(Win64)}
     procedure SurfaceWinPlatformCallback(var aWinInstance: TVkHWND; var aModInstance: TVkHINSTANCE);
-{$ifend}
+{$endif}
 {$if defined(XCB) and defined(Unix)}
     procedure SurfaceWinPlatformCallback(var aConnection: PVkXCBConnection; var aWindow: TVkXCBWindow);
-{$ifend}
+{$endif}
 {$if defined(XLIB) and defined(Unix)}
     procedure SurfaceWinPlatformCallback(var aDisplay: PVkXLIBDisplay; var aWindow: TVkXLIBWindow);
-{$ifend}
+{$endif}
 {$if defined(MoltenVK_IOS) and defined(Darwin)}
     procedure SurfaceWinPlatformCallback(var aView: PVkVoid);
-{$ifend}
+{$endif}
 {$if defined(MoltenVK_MacOS) and defined(Darwin)}
     procedure SurfaceWinPlatformCallback(var aView: PVkVoid);
-{$ifend}
+{$endif}
 
     // True once the native window exists (the counterpart of HandleAllocated)
     property NativeReady : Boolean read GetNativeReady;
@@ -155,6 +210,12 @@ type
 
     // When True a drag keeps the mouse until the last button is released
     property MouseCapture : Boolean read fMouseCapture write fMouseCapture default True;
+
+    // The native window has just been made (NativeReady became True).  On
+    // Android the surface appears some time after the form is shown, and
+    // again after the app returns from the background: start the session
+    // from here.
+    property OnNativeReady : TNotifyEvent read fOnNativeReady write fOnNativeReady;
 
     property Align;
     property Anchors;
@@ -243,6 +304,109 @@ begin
 end;
 {$ENDIF}
 
+{$IFDEF ANDROID}
+uses
+  System.Math,
+  System.Generics.Collections,
+  Androidapi.JNI.JavaTypes,
+  Androidapi.JNI.Widget,
+  Androidapi.Helpers,
+  Androidapi.NativeWindowJni,
+  FMX.Platform.Android,
+  FMX.Platform.UI.Android,
+  FMX.ZOrder.Android;
+
+const
+  // Pinch distance, in pixels, that counts as one wheel notch
+  cPinchPixelsPerNotch = 40;
+  cWheelNotch          = 120;
+
+type
+  // Java callbacks.  They arrive on the Android UI thread, which is the
+  // thread FMX runs on, so they may call the window directly.
+  TvgSurfaceCallback = class(TJavaLocal, JSurfaceHolder_Callback)
+  private
+    [Weak] fOwner : TvgWindowFMX;
+  public
+    constructor Create(aOwner: TvgWindowFMX);
+    procedure surfaceChanged(holder: JSurfaceHolder; format: Integer; width: Integer; height: Integer); cdecl;
+    procedure surfaceCreated(holder: JSurfaceHolder); cdecl;
+    procedure surfaceDestroyed(holder: JSurfaceHolder); cdecl;
+  end;
+
+  TvgTouchListener = class(TJavaLocal, JView_OnTouchListener)
+  private
+    [Weak] fOwner : TvgWindowFMX;
+  public
+    constructor Create(aOwner: TvgWindowFMX);
+    function onTouch(v: JView; event: JMotionEvent): Boolean; cdecl;
+  end;
+
+var
+  // Windows still alive, so a queued repaint can tell its window has gone
+  gLiveWindows : TList<TvgWindowFMX> = nil;
+
+constructor TvgSurfaceCallback.Create(aOwner: TvgWindowFMX);
+begin
+  inherited Create;
+  fOwner := aOwner;
+end;
+
+procedure TvgSurfaceCallback.surfaceChanged(holder: JSurfaceHolder; format, width, height: Integer);
+begin
+  if Assigned(fOwner) then
+  try
+    fOwner.SurfaceChanged(width, height);
+  except
+    Application.HandleException(fOwner);
+  end;
+end;
+
+procedure TvgSurfaceCallback.surfaceCreated(holder: JSurfaceHolder);
+begin
+  if Assigned(fOwner) then
+  try
+    fOwner.SurfaceCreated(holder);
+  except
+    Application.HandleException(fOwner);
+  end;
+end;
+
+procedure TvgSurfaceCallback.surfaceDestroyed(holder: JSurfaceHolder);
+begin
+  //Android frees the surface as soon as this returns: everything made on it
+  //must be gone by then
+  if Assigned(fOwner) then
+  try
+    fOwner.SurfaceDestroyed;
+  except
+    Application.HandleException(fOwner);
+  end;
+end;
+
+constructor TvgTouchListener.Create(aOwner: TvgWindowFMX);
+begin
+  inherited Create;
+  fOwner := aOwner;
+end;
+
+function TvgTouchListener.onTouch(v: JView; event: JMotionEvent): Boolean;
+begin
+  Result := False;
+  if Assigned(fOwner) then
+  try
+    Result := fOwner.Touch(event);
+  except
+    Application.HandleException(fOwner);
+  end;
+end;
+
+function vgPinchDistance(const aEvent: JMotionEvent): Single;
+begin
+  Result := Hypot(aEvent.getX(1) - aEvent.getX(0), aEvent.getY(1) - aEvent.getY(0));
+end;
+{$ENDIF}
+
 { TvgWindowFMX }
 
 constructor TvgWindowFMX.Create(AOwner: TComponent);
@@ -254,12 +418,29 @@ begin
   HitTest       := True;
   Width         := 200;
   Height        := 150;
+
+{$IFDEF ANDROID}
+  if not Assigned(gLiveWindows) then
+    gLiveWindows := TList<TvgWindowFMX>.Create;
+  gLiveWindows.Add(Self);
+  TMessageManager.DefaultManager.SubscribeToMessage(TBeforeDestroyFormHandle, BeforeDestroyFormHandle);
+{$ENDIF}
 end;
 
 destructor TvgWindowFMX.Destroy;
 begin
 {$IFDEF MSWINDOWS}
   DestroyNativeWindow;
+{$ENDIF}
+{$IFDEF ANDROID}
+  TMessageManager.DefaultManager.Unsubscribe(TBeforeDestroyFormHandle, BeforeDestroyFormHandle);
+  DestroyNativeView;
+  if Assigned(gLiveWindows) then
+  begin
+    gLiveWindows.Remove(Self);
+    if gLiveWindows.Count = 0 then
+      FreeAndNil(gLiveWindows);
+  end;
 {$ENDIF}
 
   if Assigned(fLinker) then
@@ -342,6 +523,7 @@ begin
     fLinker.NeedSurfaceRebuild := True;
     fLinker.FlagSwapChainRebuild;
   end;
+  NativeReadyChanged;
 end;
 
 procedure TvgWindowFMX.NativeWindowDestroyed;
@@ -651,10 +833,239 @@ end;
 
 {$ENDIF}
 
+{$IFDEF ANDROID}
+
+function TvgWindowFMX.ViewForm: TCommonCustomForm;
+begin
+  Result := nil;
+  if Assigned(Root) and (Root.GetObject is TCommonCustomForm) then
+    Result := TCommonCustomForm(Root.GetObject);
+end;
+
+procedure TvgWindowFMX.CreateNativeView;
+var
+  F      : TCommonCustomForm;
+  Params : JRelativeLayout_LayoutParams;
+begin
+  if Assigned(fSurfaceView) then exit;
+  if csDesigning in ComponentState then exit;
+
+  F := ViewForm;
+  if not Assigned(F) or not Assigned(F.Handle) then exit;   //no form, or its view not made yet
+
+  //as TAndroidNativeView: a layout holding the view, which the form's
+  //z-order manager places over the control
+  fLayout := TJRelativeLayout.JavaClass.init(TAndroidHelper.Context);
+
+  fSurfaceView := TJSurfaceView.JavaClass.init(TAndroidHelper.Activity);
+  //the form draws on a SurfaceView too; this puts ours above it
+  fSurfaceView.setZOrderMediaOverlay(True);
+
+  fSurfaceCallback := TvgSurfaceCallback.Create(Self);
+  fSurfaceView.getHolder.addCallback(fSurfaceCallback);
+  fTouchListener := TvgTouchListener.Create(Self);
+  fSurfaceView.setOnTouchListener(fTouchListener);
+
+  Params := TJRelativeLayout_LayoutParams.JavaClass.init(TJViewGroup_LayoutParams.JavaClass.MATCH_PARENT,
+                                                         TJViewGroup_LayoutParams.JavaClass.MATCH_PARENT);
+  fLayout.addView(fSurfaceView, Params);
+
+  fChildrenLayout := TJRelativeLayout.JavaClass.init(TAndroidHelper.Context);
+  fChildrenLayout.setFocusable(False);
+  Params := TJRelativeLayout_LayoutParams.JavaClass.init(TJViewGroup_LayoutParams.JavaClass.MATCH_PARENT,
+                                                         TJViewGroup_LayoutParams.JavaClass.MATCH_PARENT);
+  fLayout.addView(fChildrenLayout, Params);
+
+  fViewForm := F;
+  WindowHandleToPlatform(F.Handle).ZOrderManager.AddOrSetLink(Self, fLayout, fChildrenLayout);
+  UpdateNativeBounds;
+  //the surface follows, in SurfaceCreated, once Android has laid the view out
+end;
+
+procedure TvgWindowFMX.DestroyNativeView;
+begin
+  if not Assigned(fSurfaceView) then exit;
+
+  //removing the view destroys its surface (SurfaceDestroyed); make sure the
+  //session is off it even if Android does not call back
+  SurfaceDestroyed;
+
+  if Assigned(fViewForm) and Assigned(fViewForm.Handle) then
+    WindowHandleToPlatform(fViewForm.Handle).ZOrderManager.RemoveLink(Self);
+  fViewForm := nil;
+
+  fSurfaceView.setOnTouchListener(nil);
+  fSurfaceView.getHolder.removeCallback(fSurfaceCallback);
+  fSurfaceView     := nil;
+  fSurfaceCallback := nil;
+  fTouchListener   := nil;
+  fChildrenLayout  := nil;
+  fLayout          := nil;
+  fResumeActive    := False;
+end;
+
+procedure TvgWindowFMX.UpdateNativeBounds;
+begin
+  if not Assigned(fLayout) then exit;
+
+  //as TAndroidNativeView.UpdateVisible
+  if not Visible or not ParentedVisible or (ViewForm <> fViewForm) then
+    fLayout.setVisibility(TJView.JavaClass.GONE)
+  else if Assigned(fViewForm) and Assigned(fViewForm.Handle) then
+    WindowHandleToPlatform(fViewForm.Handle).ZOrderManager.UpdateOrderAndBounds(Self);
+end;
+
+procedure TvgWindowFMX.BeforeDestroyFormHandle(const Sender: TObject; const M: TMessage);
+begin
+  //the form's views are going: ours with them.  Paint makes new ones on the
+  //form's next view.
+  if (M is TBeforeDestroyFormHandle) and (TBeforeDestroyFormHandle(M).Value = fViewForm) then
+    DestroyNativeView;
+end;
+
+procedure TvgWindowFMX.SurfaceCreated(const aHolder: JSurfaceHolder);
+var
+  S : JSurface;
+begin
+  if Assigned(fNativeWindow) then exit;
+
+  S := aHolder.getSurface;
+  if not Assigned(S) then exit;
+  fNativeWindow := ANativeWindow_fromSurface(TJNIResolver.GetJNIEnv, (S as ILocalObject).GetObjectID);
+  if not Assigned(fNativeWindow) then exit;
+
+  fSurfaceWidth  := ANativeWindow_getWidth(fNativeWindow);
+  fSurfaceHeight := ANativeWindow_getHeight(fNativeWindow);
+
+  if Assigned(fLinker) then
+  begin
+    fLinker.WindowReady        := True;
+    fLinker.NeedSurfaceRebuild := True;
+    fLinker.FlagSwapChainRebuild;
+
+    //back from the background: the linker was running on the old surface
+    if fResumeActive then
+    begin
+      fResumeActive := False;
+      if Assigned(fLinker.ScreenDevice) and Assigned(fLinker.ScreenDevice.Instance) and
+         fLinker.ScreenDevice.Instance.Active and not fLinker.Active then
+        fLinker.Active := True;
+    end;
+  end;
+
+  NativeReadyChanged;
+end;
+
+procedure TvgWindowFMX.SurfaceChanged(aWidth, aHeight: Integer);
+begin
+  fSurfaceWidth  := aWidth;
+  fSurfaceHeight := aHeight;
+  if Assigned(fLinker) and fLinker.Active then
+  begin
+    fLinker.FlagSwapChainRebuild;
+    fLinker.TriggerWindowRepaint;
+  end;
+end;
+
+procedure TvgWindowFMX.SurfaceDestroyed;
+begin
+  if not Assigned(fNativeWindow) then exit;
+
+  //as TvgSDL2Window.DestroySDLWindow: stopping this window's linker frees
+  //its surface and swap chain; the instance and device keep running, so it
+  //can start again on the next surface
+  if Assigned(fLinker) then
+  begin
+    if fLinker.Active then
+    begin
+      fResumeActive := True;
+      fLinker.Active := False;
+    end;
+    fLinker.WindowReady        := False;
+    fLinker.NeedSurfaceRebuild := False;
+  end;
+  fVulkanActive := False;
+
+  ANativeWindow_release(fNativeWindow);
+  fNativeWindow := nil;
+  fTouchDown    := False;
+  fPinching     := False;
+end;
+
+function TvgWindowFMX.Touch(const aEvent: JMotionEvent): Boolean;
+var
+  Action : Integer;
+  D      : Single;
+  Notches: Integer;
+begin
+  Result := True;   //the view takes every touch on it
+  if not Assigned(fLinker) then exit;
+
+  Action := aEvent.getActionMasked;
+
+  if Action = TJMotionEvent.JavaClass.ACTION_DOWN then
+  begin
+    fTouchDown := True;
+    fPinching  := False;
+    fLinker.MouseMove([], Round(aEvent.getX), Round(aEvent.getY));
+    fLinker.MouseDown(vgmbLeft, [ssLeft], Round(aEvent.getX), Round(aEvent.getY));
+  end
+  else if Action = TJMotionEvent.JavaClass.ACTION_POINTER_DOWN then
+  begin
+    //a second finger: end the drag, start pinching
+    if fTouchDown then
+      fLinker.MouseUp(vgmbLeft, [], Round(aEvent.getX(0)), Round(aEvent.getY(0)));
+    fTouchDown := False;
+    if aEvent.getPointerCount >= 2 then
+    begin
+      fPinching       := True;
+      fPinchDistance  := vgPinchDistance(aEvent);
+      fPinchRemainder := 0;
+    end;
+  end
+  else if Action = TJMotionEvent.JavaClass.ACTION_MOVE then
+  begin
+    if fPinching and (aEvent.getPointerCount >= 2) then
+    begin
+      D := vgPinchDistance(aEvent);
+      fPinchRemainder := fPinchRemainder + (D - fPinchDistance);
+      fPinchDistance  := D;
+      Notches := Trunc(fPinchRemainder / cPinchPixelsPerNotch);
+      if Notches <> 0 then
+      begin
+        fPinchRemainder := fPinchRemainder - Notches * cPinchPixelsPerNotch;
+        fLinker.MouseWheel([], Notches * cWheelNotch);   //spread fingers: wheel forward
+      end;
+    end
+    else if fTouchDown then
+      fLinker.MouseMove([ssLeft], Round(aEvent.getX), Round(aEvent.getY));
+  end
+  else if Action = TJMotionEvent.JavaClass.ACTION_POINTER_UP then
+    fPinching := False      //the drag does not resume with the finger left
+  else if (Action = TJMotionEvent.JavaClass.ACTION_UP) or
+          (Action = TJMotionEvent.JavaClass.ACTION_CANCEL) then
+  begin
+    if fTouchDown then
+      fLinker.MouseUp(vgmbLeft, [], Round(aEvent.getX), Round(aEvent.getY));
+    fTouchDown := False;
+    fPinching  := False;
+  end;
+end;
+
+{$ENDIF}
+
+procedure TvgWindowFMX.NativeReadyChanged;
+begin
+  if NativeReady and Assigned(fOnNativeReady) then
+    fOnNativeReady(Self);
+end;
+
 function TvgWindowFMX.GetNativeReady: Boolean;
 begin
-{$IFDEF MSWINDOWS}
+{$IF defined(MSWINDOWS)}
   Result := (fWnd <> 0) and IsWindow(fWnd);
+{$ELSEIF defined(ANDROID)}
+  Result := Assigned(fNativeWindow);
 {$ELSE}
   Result := False;
 {$ENDIF}
@@ -671,6 +1082,14 @@ begin
   if not (csDesigning in ComponentState) then
   begin
     CreateNativeWindow;
+    UpdateNativeBounds;
+  end;
+{$ENDIF}
+{$IFDEF ANDROID}
+  //the form is drawing: make sure our view exists and is in place
+  if not (csDesigning in ComponentState) then
+  begin
+    CreateNativeView;
     UpdateNativeBounds;
   end;
 {$ENDIF}
@@ -695,15 +1114,15 @@ end;
 procedure TvgWindowFMX.Resize;
 begin
   inherited;
-{$IFDEF MSWINDOWS}
-  UpdateNativeBounds;     //WM_SIZE flags the swap chain rebuild
+{$IF defined(MSWINDOWS) or defined(ANDROID)}
+  UpdateNativeBounds;     //WM_SIZE / surfaceChanged flag the swap chain rebuild
 {$ENDIF}
 end;
 
 procedure TvgWindowFMX.DoAbsoluteChanged;
 begin
   inherited;
-{$IFDEF MSWINDOWS}
+{$IF defined(MSWINDOWS) or defined(ANDROID)}
   UpdateNativeBounds;
 {$ENDIF}
 end;
@@ -711,7 +1130,7 @@ end;
 procedure TvgWindowFMX.VisibleChanged;
 begin
   inherited;
-{$IFDEF MSWINDOWS}
+{$IF defined(MSWINDOWS) or defined(ANDROID)}
   UpdateNativeBounds;
 {$ENDIF}
 end;
@@ -719,7 +1138,7 @@ end;
 procedure TvgWindowFMX.AncestorVisibleChanged(const Visible: Boolean);
 begin
   inherited;
-{$IFDEF MSWINDOWS}
+{$IF defined(MSWINDOWS) or defined(ANDROID)}
   UpdateNativeBounds;
 {$ENDIF}
 end;
@@ -733,6 +1152,13 @@ begin
   //window and its session then, just hidden until the control is placed.
   if (fWnd <> 0) and (FormWnd <> 0) and (Winapi.Windows.GetParent(fWnd) <> FormWnd) then
     DestroyNativeWindow
+  else
+    UpdateNativeBounds;
+{$ENDIF}
+{$IFDEF ANDROID}
+  //the same, with the view linked into the form's z-order manager
+  if Assigned(fSurfaceView) and (ViewForm <> nil) and (ViewForm <> fViewForm) then
+    DestroyNativeView
   else
     UpdateNativeBounds;
 {$ENDIF}
@@ -777,6 +1203,10 @@ begin
 {$IFDEF MSWINDOWS}
   if Value then
     CreateNativeWindow;
+{$ENDIF}
+{$IFDEF ANDROID}
+  if Value then
+    CreateNativeView;     //the surface itself follows later (OnNativeReady)
 {$ENDIF}
   if not NativeReady then exit;
 
@@ -902,6 +1332,13 @@ begin
     WinHeight := R.Height;
   end;
 {$ENDIF}
+{$IFDEF ANDROID}
+  if NativeReady then
+  begin
+    WinWidth  := Max(fSurfaceWidth, 0);    //pixels, from surfaceChanged
+    WinHeight := Max(fSurfaceHeight, 0);
+  end;
+{$ENDIF}
 end;
 
 procedure TvgWindowFMX.vgWindowInvalidate(DoPaint: Boolean);
@@ -911,6 +1348,28 @@ begin
   Winapi.Windows.InvalidateRect(fWnd, nil, False);
   if DoPaint then
     UpdateWindow(fWnd);
+{$ENDIF}
+{$IFDEF ANDROID}
+  //no paint message: a repaint is a new frame from the linker
+  if not NativeReady then exit;
+  if DoPaint then
+  begin
+    if Assigned(fLinker) and fLinker.Active then
+      fLinker.TriggerWindowRepaint;
+    exit;
+  end;
+
+  //later, once, as an invalidated VCL window would
+  if fRepaintQueued then exit;
+  fRepaintQueued := True;
+  TThread.ForceQueue(nil,
+    procedure
+    begin
+      if not Assigned(gLiveWindows) or not gLiveWindows.Contains(Self) then exit;  //freed meanwhile
+      fRepaintQueued := False;
+      if NativeReady and Assigned(fLinker) and fLinker.Active then
+        fLinker.TriggerWindowRepaint;
+    end);
 {$ENDIF}
 end;
 
@@ -941,9 +1400,10 @@ end;
 {$if defined(Android)}
 procedure TvgWindowFMX.SurfaceWinPlatformCallback(var aWindow: PVkAndroidANativeWindow);
 begin
-  aWindow := nil;     //not done yet
+  //nil until Android has made the view's surface (OnNativeReady)
+  aWindow := PVkAndroidANativeWindow(fNativeWindow);
 end;
-{$ifend}
+{$endif}
 
 {$if defined(Wayland) and defined(Unix)}
 procedure TvgWindowFMX.SurfaceWinPlatformCallback(var aDisplay: PVkWaylandDisplay; var aSurface: PVkWaylandSurface);
@@ -951,7 +1411,7 @@ begin
   aDisplay := nil;
   aSurface := nil;
 end;
-{$ifend}
+{$endif}
 
 {$if defined(Win32) or defined(Win64)}
 procedure TvgWindowFMX.SurfaceWinPlatformCallback(var aWinInstance: TVkHWND; var aModInstance: TVkHINSTANCE);
@@ -968,7 +1428,7 @@ begin
     aModInstance := 0;
   end;
 end;
-{$ifend}
+{$endif}
 
 {$if defined(XCB) and defined(Unix)}
 procedure TvgWindowFMX.SurfaceWinPlatformCallback(var aConnection: PVkXCBConnection; var aWindow: TVkXCBWindow);
@@ -976,7 +1436,7 @@ begin
   aConnection := nil;
   aWindow     := 0;
 end;
-{$ifend}
+{$endif}
 
 {$if defined(XLIB) and defined(Unix)}
 procedure TvgWindowFMX.SurfaceWinPlatformCallback(var aDisplay: PVkXLIBDisplay; var aWindow: TVkXLIBWindow);
@@ -984,21 +1444,21 @@ begin
   aDisplay := nil;
   aWindow  := 0;
 end;
-{$ifend}
+{$endif}
 
 {$if defined(MoltenVK_IOS) and defined(Darwin)}
 procedure TvgWindowFMX.SurfaceWinPlatformCallback(var aView: PVkVoid);
 begin
   aView := nil;       //not done yet
 end;
-{$ifend}
+{$endif}
 
 {$if defined(MoltenVK_MacOS) and defined(Darwin)}
 procedure TvgWindowFMX.SurfaceWinPlatformCallback(var aView: PVkVoid);
 begin
   aView := nil;       //not done yet
 end;
-{$ifend}
+{$endif}
 
 initialization
   RegisterFmxClasses([TvgWindowFMX]);

@@ -1,0 +1,22 @@
+diff --git a/src/PasVulkan.CrashReport.pas b/src/PasVulkan.CrashReport.pas
+index 956f29c3d..940c88b98 100644
+--- a/src/PasVulkan.CrashReport.pas
++++ b/src/PasVulkan.CrashReport.pas
+@@ -701,10 +701,14 @@ type TpvCrashReportDlInfo=record
+       SymbolAddress:TpvPointer;
+      end;
+ 
+-function dladdr(aAddress:TpvPointer;var aInfo:TpvCrashReportDlInfo):TpvInt32; cdecl; external 'dl' name 'dladdr';
++// FreePascal links 'dl' as -ldl; Delphi's linker wants the library's path,
++// as its own Posix.Base gives it.
++const PasVulkanCrashReportLibDL={$if defined(fpc)}'dl'{$elseif defined(Android) and defined(CPU64BITS)}'/system/lib64/libdl.so'{$elseif defined(Android)}'/system/lib/libdl.so'{$else}'libdl.so'{$ifend};
+ 
+-function dlopen(aFileName:PAnsiChar;aFlags:TpvInt32):TpvPointer; cdecl; external 'dl' name 'dlopen';
+-function dlsym(aHandle:TpvPointer;aName:PAnsiChar):TpvPointer; cdecl; external 'dl' name 'dlsym';
++function dladdr(aAddress:TpvPointer;var aInfo:TpvCrashReportDlInfo):TpvInt32; cdecl; external PasVulkanCrashReportLibDL name 'dladdr';
++
++function dlopen(aFileName:PAnsiChar;aFlags:TpvInt32):TpvPointer; cdecl; external PasVulkanCrashReportLibDL name 'dlopen';
++function dlsym(aHandle:TpvPointer;aName:PAnsiChar):TpvPointer; cdecl; external PasVulkanCrashReportLibDL name 'dlsym';
+ 
+ // The unwinder every compiled language on a unix already shares, which walks
+ // the frame descriptions in .eh_frame instead of a chain of saved frame

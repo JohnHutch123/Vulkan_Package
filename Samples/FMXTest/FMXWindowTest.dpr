@@ -49,8 +49,10 @@ type
     fToolManager : TvgToolManager;
     fStarted     : Boolean;
     fAutoTimer   : TTimer;
+    fWantStart   : Boolean;
 
     procedure AutoTimer(Sender: TObject);
+    procedure WindowNativeReady(Sender: TObject);
     function  AddButton(const aText: string; aClick: TNotifyEvent): TButton;
     procedure StartClick(Sender: TObject);
     procedure HideClick(Sender: TObject);
@@ -97,6 +99,12 @@ begin
   fWindow.Parent     := fRight;
   fWindow.Align      := TAlignLayout.Client;
   fWindow.ClearColor := TAlphaColors.Navy;
+  fWindow.OnNativeReady := WindowNativeReady;
+
+{$IFDEF ANDROID}
+  //deployed to assets\internal: the app's documents folder
+  ShaderFolderPath := IncludeTrailingPathDelimiter(TPath.Combine(TPath.GetDocumentsPath, 'VulkanShaders'));
+{$ENDIF}
 
   // /auto presses Start once the form is up (for unattended checks)
   if FindCmdLineSwitch('auto', ['/'], True) then
@@ -111,6 +119,17 @@ procedure TTestForm.AutoTimer(Sender: TObject);
 begin
   fAutoTimer.Enabled := False;
   StartClick(nil);
+end;
+
+procedure TTestForm.WindowNativeReady(Sender: TObject);
+begin
+  //Android makes the surface some time after the form shows: a Start pressed
+  //before then, or (on a phone) none at all, starts here
+{$IFDEF ANDROID}
+  fWantStart := True;
+{$ENDIF}
+  if fWantStart then
+    StartClick(nil);
 end;
 
 function TTestForm.AddButton(const aText: string; aClick: TNotifyEvent): TButton;
@@ -193,17 +212,34 @@ end;
 procedure TTestForm.StartClick(Sender: TObject);
 var
   F : string;
+{$IFNDEF ANDROID}
   I : Integer;
+{$ENDIF}
 begin
   if fStarted then exit;
+
+  //no surface yet (Android lays the view out first): start when it comes
+  if not fWindow.NativeReady then
+  begin
+    fWantStart   := True;
+    fStatus.Text := 'Waiting for the native surface...';
+{$IFDEF MSWINDOWS}
+    fWindow.Repaint;     //Paint makes the window
+{$ENDIF}
+    exit;
+  end;
   fStarted := True;
 
+{$IFDEF ANDROID}
+  F := TPath.Combine(TPath.GetDocumentsPath, 'TeaPot.obj');   //deployed to assets\internal
+{$ELSE}
   F := '';
   for I := 1 to ParamCount do
     if not ParamStr(I).StartsWith('/') then
       F := ParamStr(I);
   if F = '' then
     F :=TPath.GetFullPath(TPath.Combine(ExtractFilePath(ParamStr(0)), '..\OBJ Files\TeaPot.obj'));
+{$ENDIF}
 
   try
     BuildSession;

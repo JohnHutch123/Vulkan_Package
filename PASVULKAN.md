@@ -57,4 +57,21 @@ The runtime units use only six PasVulkan units directly: `Vulkan`, `PasVulkan.Ty
    R280 first. Use `/t:Rebuild /p:Platform=Win32|Win64` after `rsvars.bat`.
 2. A **W1033 "implicitly imported"** warning on `VulkanPkgR280.dpk` means PasVulkan started pulling in
    another unit. Find out why before adding it to `contains`: fix 3 was found this way.
+   The one expected exception is `PasVulkan.Android` on Android64, which `PasVulkan.Framework` uses only there.
 3. Restore the project `.res` files the builds rewrite (`git checkout -- "Delphi */*.res"`).
+
+## Android64
+
+`VulkanPkgR280` and `VulkanPkg_FMXR280` also build for **Android64** with Delphi 11, with four more local
+patches (`Patches/0004`–`0007`, see `Patches/README.md`):
+
+- `Vulkan.pas`: `TVkInt32`/`TVkUInt32` were `LongInt`/`LongWord`, which are 64-bit on Delphi's 64-bit POSIX
+  targets, so Vulkan structs had the wrong layout there.
+- `PasVulkan.CrashReport`: `external 'dl'` is FreePascal's spelling; Delphi's linker needs the library path.
+- `externals/pasmp`: ARM64 is 64-bit (`CPU64` from `CPU64BITS`), and Delphi's `TThread` takes a stack size
+  only on Windows.
+- `externals/pasdblstrutils`: the x87 FPU types do not exist on Delphi's LLVM targets.
+
+None of them changes anything on Windows. Delphi 12's `VulkanPkgR290` still requires `vcl`, so it cannot be
+built for Android until that is dropped. Delphi 13 here has no Android platform installed. On the device, shaders
+cannot be compiled at run time (`Vulkan_Components_ShaderCompiler` raises): ship prebuilt `.spv`.
