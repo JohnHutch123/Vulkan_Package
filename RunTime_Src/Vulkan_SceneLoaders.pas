@@ -153,10 +153,15 @@ end;
 { TvgSceneLoaderInfo }
 
 function TvgSceneLoaderInfo.HandlesFile(const aFileName: string): Boolean;
-  Var Ext : string;
+  Var Name, Ext : string;
 begin
-  Ext := LowerCase(ExtractFileExt(aFileName));
-  Result := (Ext <> '') and (Pos(';' + Ext + ';', ';' + LowerCase(Extensions) + ';') > 0);
+  //By the end of the name, so a compound extension ('.wrl.gz') matches
+  //where ExtractFileExt would only see '.gz'.
+  Result := False;
+  Name := LowerCase(ExtractFileName(aFileName));
+  For Ext in LowerCase(Extensions).Split([';']) do
+    If (Ext <> '') and (Length(Name) > Length(Ext)) and Name.EndsWith(Ext) then
+      Exit(True);
 end;
 
 function TvgSceneLoaderInfo.DialogFilter: string;
@@ -394,6 +399,10 @@ begin
     SetLength(Stores, Staging.SceneData.Count);
     For I := 0 to High(Stores) do
       Stores[I] := Staging.SceneData[I];
+
+    //What goes with the stores - level-of-detail groups - while their
+    //objects are still in the staging scene.
+    Staging.MoveExtensionsTo(aScene);
 
     For I := 0 to High(Stores) do
     Begin

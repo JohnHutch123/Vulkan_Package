@@ -111,6 +111,24 @@ type
      Planes :  array [0..5] of TpvVector4D;
   end;
 
+  { What level-of-detail bands are measured against, for the frame being
+    recorded: published with the cull volume, from the same camera, and in
+    the same space - local to TvgScene.WorldOrigin.  See TvgLodBand.
+
+      Eye        - the camera position.
+      PixelScale - turns a size into pixels on screen.  Perspective:
+                   pixels = size * PixelScale / distance.  Orthographic
+                   (Ortho True): pixels = size * PixelScale.
+      Bias       - the renderer's LodBias: distances are multiplied by it
+                   (orthographic sizes divided by it), so above 1 coarser
+                   levels come in sooner, and 0 always draws the finest. }
+  TvgLodView = Record
+     Eye        : TpvVector3D;
+     PixelScale : Double;
+     Ortho      : Boolean;
+     Bias       : Double;
+  end;
+
   { Axis-aligned bounding box, used to cull an object without touching its
     geometry.  Whatever space the box is built in is the space it must be
     tested in; for frustum culling that means world space.

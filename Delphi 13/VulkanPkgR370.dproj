@@ -159,6 +159,8 @@
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_Compute.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Loader_OBJ.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Instancing.pas"/>
+        <DCCReference Include="..\RunTime_Src\Vulkan_LOD.pas"/>
+        <DCCReference Include="..\RunTime_Src\Vulkan_MeshUtils.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_SceneLoaders.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_Light.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_TextureInspector.pas"/>

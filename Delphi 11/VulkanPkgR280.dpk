@@ -76,6 +76,8 @@ contains
   Vulkan_Components_Compute in '..\RunTime_Src\Vulkan_Components_Compute.pas',
   Vulkan_Loader_OBJ in '..\RunTime_Src\Vulkan_Loader_OBJ.pas',
   Vulkan_Instancing in '..\RunTime_Src\Vulkan_Instancing.pas',
+  Vulkan_LOD in '..\RunTime_Src\Vulkan_LOD.pas',
+  Vulkan_MeshUtils in '..\RunTime_Src\Vulkan_MeshUtils.pas',
   Vulkan_SceneLoaders in '..\RunTime_Src\Vulkan_SceneLoaders.pas',
   Vulkan_Components_Light in '..\RunTime_Src\Vulkan_Components_Light.pas',
   Vulkan_Components_TextureInspector in '..\RunTime_Src\Vulkan_Components_TextureInspector.pas';
