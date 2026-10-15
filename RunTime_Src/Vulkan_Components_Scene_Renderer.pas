@@ -236,6 +236,15 @@ type
     { False, aColor untouched, for none. }
     function  GetColorOverride(out aColor: TpvVector4): Boolean;
 
+    { The band of distance or screen size the object is drawn in
+      (TvgVulkanDataStore.SetObjectLod) - one level of a level-of-detail
+      group, usually set by Vulkan_LOD.TvgLodGroup.  Not an edit: works on a
+      locked or frozen object.  Notifies once per change.  Nothing happens
+      for an object not in a store.  GetLod is lmNone for none. }
+    procedure SetLod(const aBand: TvgLodBand);
+    procedure ClearLod;
+    function  GetLod: TvgLodBand;
+
     Property VertexCount : Integer read GetVertexCount;
 
     // Properties
@@ -435,6 +444,27 @@ type
   // as a whole.
   TvgSceneDataChanged = procedure(Sender: TvgScene; aDataStore: TvgObjectStore) of object;
 
+  { What a unit keeps on a scene about the scene's objects - Vulkan_LOD's
+    level-of-detail groups.  Added with TvgScene.AddExtension, the scene
+    owns it and frees it with itself.  It is told when one of the scene's
+    objects leaves, when the scene is cleared, and when its stores are about
+    to move to another scene.  Main thread. }
+  TvgSceneExtension = class
+  private
+    fScene : TvgScene;
+  public
+    // aObject has left the scene: deleted, or its store removed or
+    // extracted.  Drop every reference to it.
+    procedure ObjectGone(aObject: TvgObject); virtual;
+    // Every store has gone (ClearScene, so Load_Begin too).
+    procedure SceneCleared; virtual;
+    // Every store of this scene is about to be moved into aTarget
+    // (vgAppendSceneFile), before any of them leaves: carry over what goes
+    // with them.  The objects then leave this scene (ObjectGone).
+    procedure MoveTo(aTarget: TvgScene); virtual;
+    property Scene : TvgScene read fScene;
+  end;
+
   { TvgScene: WorldOrigin
 
     Vertex data is float32 and cannot hold survey coordinates: at six digits
@@ -478,6 +508,7 @@ type
     fCameras     : TvgCameraManager;
     fWorldOrigin : TpvVector3D;
     fLights      : TList<TvgLight>;
+    fExtensions  : TObjectList<TvgSceneExtension>;
 
     fOnMouseOver : TvgSceneMouseOverObject;
     fOnDataChanged : TvgSceneDataChanged;
@@ -719,6 +750,15 @@ type
 
    // See the note above TvgScene.  Refused while the scene holds data.
    Property WorldOrigin : TpvVector3D read fWorldOrigin write SetWorldOrigin;
+
+   { Takes ownership of aExtension (see TvgSceneExtension); nil or one
+     already here is ignored.  FindExtension: the first of class aClass (or
+     a descendant), nil for none.  Main thread. }
+   Procedure AddExtension(aExtension: TvgSceneExtension);
+   Function  FindExtension(aClass: TClass): TvgSceneExtension;
+   { Every extension's MoveTo(aTarget) - vgAppendSceneFile calls it before
+     moving this scene's stores into aTarget. }
+   Procedure MoveExtensionsTo(aTarget: TvgScene);
 
    Property OnMouseOver  : TvgSceneMouseOverObject read fOnMouseOver write SetOnMouseOver;
 
@@ -1650,6 +1690,39 @@ end;
 procedure TvgObject.ClearColorOverride;
 begin
   SetColorOverride(TpvVector4.Create(0, 0, 0, 0));
+end;
+
+procedure TvgObject.SetLod(const aBand: TvgLodBand);
+var
+  Before : TvgLodBand;
+begin
+  if not Assigned(fDataStore) or (fObjIndex < 0) or
+     fDataStore.IsObjectDeleted(fObjIndex) then
+    Exit;
+
+  Before := fDataStore.GetObjectLod(fObjIndex);
+  // Field by field: the padding after Metric is not always zeroed.
+  if (Before.Metric = aBand.Metric) and (Before.Centre.x = aBand.Centre.x) and
+     (Before.Centre.y = aBand.Centre.y) and (Before.Centre.z = aBand.Centre.z) and
+     (Before.Radius = aBand.Radius) and (Before.Min = aBand.Min) and
+     (Before.Max = aBand.Max) then
+    Exit;
+  fDataStore.SetObjectLod(fObjIndex, aBand);
+  NotifyEdited;   // recorded again with the new band
+end;
+
+procedure TvgObject.ClearLod;
+begin
+  SetLod(Default(TvgLodBand));
+end;
+
+function TvgObject.GetLod: TvgLodBand;
+begin
+  if Assigned(fDataStore) and (fObjIndex >= 0) and
+     not fDataStore.IsObjectDeleted(fObjIndex) then
+    Result := fDataStore.GetObjectLod(fObjIndex)
+  else
+    Result := Default(TvgLodBand);
 end;
 
 function TvgObject.GetColorOverride(out aColor: TpvVector4): Boolean;
@@ -3086,9 +3159,53 @@ begin
 end;
 
 Procedure TvgScene.UnregisterObject(aObject: TvgObject);
+  Var I : Integer;
 begin
   If assigned(aObject) and assigned(fLiveObjects) then
     fLiveObjects.Remove(Pointer(aObject));
+  If assigned(aObject) and assigned(fExtensions) then
+    For I := 0 to fExtensions.Count - 1 do
+      fExtensions[I].ObjectGone(aObject);
+end;
+
+{ TvgSceneExtension }
+
+procedure TvgSceneExtension.ObjectGone(aObject: TvgObject);
+begin
+end;
+
+procedure TvgSceneExtension.SceneCleared;
+begin
+end;
+
+procedure TvgSceneExtension.MoveTo(aTarget: TvgScene);
+begin
+end;
+
+Procedure TvgScene.AddExtension(aExtension: TvgSceneExtension);
+begin
+  If not assigned(aExtension) or not assigned(fExtensions) then exit;
+  If fExtensions.IndexOf(aExtension) >= 0 then exit;
+  aExtension.fScene := Self;
+  fExtensions.Add(aExtension);
+end;
+
+Function TvgScene.FindExtension(aClass: TClass): TvgSceneExtension;
+  Var I : Integer;
+begin
+  Result := nil;
+  If not assigned(fExtensions) then exit;
+  For I := 0 to fExtensions.Count - 1 do
+    If fExtensions[I] is aClass then
+      Exit(fExtensions[I]);
+end;
+
+Procedure TvgScene.MoveExtensionsTo(aTarget: TvgScene);
+  Var I : Integer;
+begin
+  If not assigned(fExtensions) or not assigned(aTarget) or (aTarget = Self) then exit;
+  For I := 0 to fExtensions.Count - 1 do
+    fExtensions[I].MoveTo(aTarget);
 end;
 
 Procedure TvgScene.RegisterStoreObjects(aDataStore: TvgObjectStore);
@@ -3292,6 +3409,11 @@ begin
   If assigned(fLights) then
      fLights.Clear;
 
+  // Likewise whatever the extensions hold of the objects.
+  If assigned(fExtensions) then
+    For I := 0 to fExtensions.Count - 1 do
+      fExtensions[I].SceneCleared;
+
   CustomAssert(Assigned(fSceneData), 'Scene Data List NOT assigned',self);
   if fSceneData.Count = 0 then Exit;
 
@@ -3394,6 +3516,7 @@ begin
 
   fCameras   := TvgCameraManager.Create;
   fLights    := TList<TvgLight>.Create;
+  fExtensions := TObjectList<TvgSceneExtension>.Create(True);
 
   fLiveObjects := TDictionary<Pointer, TvgObject>.Create;
 
@@ -3414,6 +3537,10 @@ begin
   // not (ClearScene below only runs on a loaded one).
   For TM in GetToolManagers do
     TM.SceneCleared;
+
+  // The extensions go first, so freeing the objects below tells nobody.
+  If assigned(fExtensions) then
+     FreeAndNil(fExtensions);
 
   //not when the constructor failed before making the list: the reason it
   //failed is the error to show, not ClearScene's assertion
@@ -3706,6 +3833,7 @@ var
   Aspect    : Single;
   GPULights : TArray<TvgLightGPUData>;
   I         : Integer;
+  LodView   : TvgLodView;
 begin
   // No camera means no cull volume.  PrepareGlobalAndSceneDescriptors has
   // already invalidated the previous one, so leaving now draws everything -
@@ -3737,6 +3865,23 @@ begin
   // Same origin too: the planes come out in local coordinates, which is the
   // space the data stores build their float32 bounds in.
   aTarget.SetFrustumPlanes( Cam.GetFrustumPlanesForAspect(Aspect, fWorldOrigin) );
+
+  // Level-of-detail view: the same camera, local like the planes.  The
+  // projection's Y scale - the aspect never changes it - per half viewport
+  // height; the renderer makes it pixels with its own height.
+  LodView.Eye   := Cam.Position - fWorldOrigin;
+  LodView.Ortho := Cam.ProjectionType = ptOrthographic;
+  LodView.Bias  := 1.0;
+  if LodView.Ortho then
+  begin
+    if Cam.OrthTop <> Cam.OrthBottom then
+      LodView.PixelScale := 2 / Abs(Cam.OrthTop - Cam.OrthBottom)
+    else
+      LodView.PixelScale := 1;
+  end
+  else
+    LodView.PixelScale := 1 / Tan(DegToRad(Cam.FieldOfView) / 2);
+  aTarget.SetLodView(LodView);
 
   // Lights are already world-space (see TvgLight); narrowed to GPU layout
   // and made WorldOrigin-relative here, same as the VP matrix and vertex

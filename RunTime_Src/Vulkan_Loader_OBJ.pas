@@ -70,7 +70,7 @@ uses
   PasVulkan.Image.TGA,
   Vulkan_Components_DataStore,
   Vulkan_Components_Descriptors, Vulkan_Components_TextureInspector,
-  Vulkan_Components_Lookups, Vulkan_SceneLoaders;
+  Vulkan_Components_Lookups, Vulkan_SceneLoaders, Vulkan_MeshUtils;
 
 type
   TCorner = record
@@ -420,78 +420,21 @@ end;
 
 procedure TOBJReader.Triangulate(P: TPrimitive);
 var
-  V, NextV: TpvVector3;
-  XY: TArray<TpvVector2D>;
-  Remaining, Tri: TList<Integer>;
-  I, J, A, B, C, Q, Axis: Integer;
-  Area, Sign, Eps, Extent: Double;
-  Ear, Inside: Boolean;
-  function Cross2(U, V, W: Integer): Double;
-  begin
-    Result := (XY[V].x - XY[U].x) * (XY[W].y - XY[U].y) -
-              (XY[V].y - XY[U].y) * (XY[W].x - XY[U].x);
-  end;
+  Pts: TArray<TpvVector3D>;
+  V: TpvVector3;
+  I: Integer;
 begin
-  P.Normal := TpvVector3D.Create(0, 0, 0);
-  for I := 0 to High(P.Corners) do
+  SetLength(Pts, Length(P.Corners));
+  for I := 0 to High(Pts) do
   begin
     V := Positions[P.Corners[I].P];
-    NextV := Positions[P.Corners[(I + 1) mod Length(P.Corners)].P];
-    P.Normal.x := P.Normal.x + (Double(V.y) - NextV.y) * (Double(V.z) + NextV.z);
-    P.Normal.y := P.Normal.y + (Double(V.z) - NextV.z) * (Double(V.x) + NextV.x);
-    P.Normal.z := P.Normal.z + (Double(V.x) - NextV.x) * (Double(V.y) + NextV.y);
+    Pts[I] := TpvVector3D.Create(V.x, V.y, V.z);
   end;
-  // Preserve degenerate triangles (common at exported sphere poles).
-  if Length(P.Corners) = 3 then begin P.Triangles := TArray<Integer>.Create(0, 1, 2); Exit; end;
-  Axis := 2;
-  if (Abs(P.Normal.x) > Abs(P.Normal.y)) and (Abs(P.Normal.x) > Abs(P.Normal.z)) then Axis := 0
-  else if Abs(P.Normal.y) > Abs(P.Normal.z) then Axis := 1;
-  SetLength(XY, Length(P.Corners));
-  for I := 0 to High(XY) do
-  begin
-    V := Positions[P.Corners[I].P];
-    case Axis of
-      0: XY[I] := TpvVector2D.Create(V.y, V.z);
-      1: XY[I] := TpvVector2D.Create(V.x, V.z);
-      2: XY[I] := TpvVector2D.Create(V.x, V.y);
-    end;
+  // Triangles pass through even with no area (exported sphere poles).
+  case vgTriangulatePolygon(Pts, P.Triangles, P.Normal) of
+    trDegenerate: Error('Degenerate polygon');
+    trFailed: Error('Cannot triangulate polygon (duplicate or intersecting edges)');
   end;
-  Area := 0; Extent := 0;
-  for I := 1 to High(XY) - 1 do Area := Area + Cross2(0, I, I + 1);
-  for I := 1 to High(XY) do
-    Extent := Max(Extent, Max(Abs(XY[I].x - XY[0].x), Abs(XY[I].y - XY[0].y)));
-  Eps := Extent * Extent * 1e-12;
-  if Abs(Area) <= Eps then Error('Degenerate polygon');
-  Sign := 1; if Area < 0 then Sign := -1;
-  Remaining := TList<Integer>.Create;
-  Tri := TList<Integer>.Create;
-  try
-    for I := 0 to High(XY) do Remaining.Add(I);
-    while Remaining.Count > 3 do
-    begin
-      Ear := False;
-      // Start at corner 1 so a convex polygon retains the old fan order.
-      for J := 1 to Remaining.Count do
-      begin
-        I := J mod Remaining.Count;
-        A := Remaining[(I + Remaining.Count - 1) mod Remaining.Count];
-        B := Remaining[I]; C := Remaining[(I + 1) mod Remaining.Count];
-        if Sign * Cross2(A, B, C) <= Eps then Continue;
-        Inside := False;
-        for Q in Remaining do
-          if (Q <> A) and (Q <> B) and (Q <> C) and
-             (Sign * Cross2(A, B, Q) >= -Eps) and
-             (Sign * Cross2(B, C, Q) >= -Eps) and
-             (Sign * Cross2(C, A, Q) >= -Eps) then begin Inside := True; Break; end;
-        if Inside then Continue;
-        Tri.Add(A); Tri.Add(B); Tri.Add(C);
-        Remaining.Delete(I); Ear := True; Break;
-      end;
-      if not Ear then Error('Cannot triangulate polygon (duplicate or intersecting edges)');
-    end;
-    Tri.Add(Remaining[0]); Tri.Add(Remaining[1]); Tri.Add(Remaining[2]);
-    P.Triangles := Tri.ToArray;
-  finally Tri.Free; Remaining.Free; end;
 end;
 
 function TOBJReader.ReadMap(const W: TArray<string>): TvgOBJTextureMap;
@@ -667,79 +610,20 @@ var
   VPos, VNrm, VUV: TList<TpvVector3>;
   VIdx: TList<Integer>;
 
-  // Tangent frames for the current store, written once it is complete.
-  // Per triangle the UV derivatives give a tangent (along +U) and bitangent
-  // (along +V, the file's own V - OpenGL normal-map convention); each vertex
-  // sums those of its triangles.  The tangent is then made perpendicular to
-  // the vertex normal (Gram-Schmidt) and the bitangent rebuilt as
-  // normal x tangent, flipped where the UVs are mirrored, so the frame is
-  // orthonormal.  A vertex with no usable UVs (none, or degenerate on all
-  // its triangles) - and every line or point - gets any unit tangent
-  // perpendicular to its normal.
+  // Tangent frames for the current store, written once it is complete
+  // (vgBuildTangents: lines and points get any frame about the normal).
   procedure WriteTangents;
   var
     Tan, Bit: TArray<TpvVector3D>;
-    A, B, CI, K: Integer;
-    E1, E2, NV, TV, BV: TpvVector3D;
-    DU1, DV1, DU2, DV2, Det, R, Len: Double;
-    function V3(const V: TpvVector3): TpvVector3D;
-    begin Result := TpvVector3D.Create(V.x, V.y, V.z); end;
-    function Cross(const X, Y: TpvVector3D): TpvVector3D;
-    begin
-      Result := TpvVector3D.Create(X.y * Y.z - X.z * Y.y, X.z * Y.x - X.x * Y.z, X.x * Y.y - X.y * Y.x);
-    end;
-    function Dot(const X, Y: TpvVector3D): Double;
-    begin Result := X.x * Y.x + X.y * Y.y + X.z * Y.z; end;
-    procedure AddTo(I: Integer; const T, U: TpvVector3D);
-    begin
-      Tan[I] := TpvVector3D.Create(Tan[I].x + T.x, Tan[I].y + T.y, Tan[I].z + T.z);
-      Bit[I] := TpvVector3D.Create(Bit[I].x + U.x, Bit[I].y + U.y, Bit[I].z + U.z);
-    end;
+    K: Integer;
   begin
     if (Store = nil) or (VPos.Count = 0) then Exit;
-    SetLength(Tan, VPos.Count); SetLength(Bit, VPos.Count);   // zeroed
-    if Store.Topology = TRIANGLE_LIST then
-    begin
-      K := 0;
-      while K + 2 < VIdx.Count do
-      begin
-        A := VIdx[K]; B := VIdx[K + 1]; CI := VIdx[K + 2]; Inc(K, 3);
-        E1 := TpvVector3D.Create(VPos[B].x - VPos[A].x, VPos[B].y - VPos[A].y, VPos[B].z - VPos[A].z);
-        E2 := TpvVector3D.Create(VPos[CI].x - VPos[A].x, VPos[CI].y - VPos[A].y, VPos[CI].z - VPos[A].z);
-        DU1 := VUV[B].x - VUV[A].x; DV1 := VUV[B].y - VUV[A].y;
-        DU2 := VUV[CI].x - VUV[A].x; DV2 := VUV[CI].y - VUV[A].y;
-        Det := DU1 * DV2 - DU2 * DV1;
-        if Abs(Det) < 1e-12 then Continue;   // no UV mapping on this triangle
-        R := 1 / Det;
-        TV := TpvVector3D.Create((E1.x * DV2 - E2.x * DV1) * R, (E1.y * DV2 - E2.y * DV1) * R,
-                                 (E1.z * DV2 - E2.z * DV1) * R);
-        BV := TpvVector3D.Create((E2.x * DU1 - E1.x * DU2) * R, (E2.y * DU1 - E1.y * DU2) * R,
-                                 (E2.z * DU1 - E1.z * DU2) * R);
-        AddTo(A, TV, BV); AddTo(B, TV, BV); AddTo(CI, TV, BV);
-      end;
-    end;
+    vgBuildTangents(VPos.ToArray, VNrm.ToArray, VUV.ToArray, VIdx.ToArray,
+      Store.Topology = TRIANGLE_LIST, Tan, Bit);
     for K := 0 to VPos.Count - 1 do
     begin
-      NV := V3(VNrm[K]);
-      Len := Sqrt(Dot(NV, NV));   // a file's vn need not be unit length
-      if Len > 1e-12 then NV := TpvVector3D.Create(NV.x / Len, NV.y / Len, NV.z / Len)
-      else NV := TpvVector3D.Create(0, 0, 1);
-      TV := Tan[K];
-      R := Dot(NV, TV);
-      TV := TpvVector3D.Create(TV.x - NV.x * R, TV.y - NV.y * R, TV.z - NV.z * R);
-      Len := Sqrt(Dot(TV, TV));
-      if Len < 1e-9 then
-      begin
-        // any perpendicular: across whichever axis is least like the normal
-        if Abs(NV.x) < 0.9 then TV := Cross(NV, TpvVector3D.Create(1, 0, 0))
-        else TV := Cross(NV, TpvVector3D.Create(0, 1, 0));
-        Len := Sqrt(Dot(TV, TV));
-      end;
-      TV := TpvVector3D.Create(TV.x / Len, TV.y / Len, TV.z / Len);
-      BV := Cross(NV, TV);
-      if Dot(BV, Bit[K]) < 0 then BV := TpvVector3D.Create(-BV.x, -BV.y, -BV.z);   // mirrored UVs
-      Store.SetObjectVertexTangent(0, K, TV.x, TV.y, TV.z);
-      Store.SetObjectVertexBiTangent(0, K, BV.x, BV.y, BV.z);
+      Store.SetObjectVertexTangent(0, K, Tan[K].x, Tan[K].y, Tan[K].z);
+      Store.SetObjectVertexBiTangent(0, K, Bit[K].x, Bit[K].y, Bit[K].z);
     end;
   end;
 

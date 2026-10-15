@@ -443,6 +443,13 @@ TvgBaseComponent = class(TComponent)
     // Called instead of SetFrustumPlanes when no cull volume can be produced
     // (no camera, for instance).  Everything is then drawn.
     procedure ClearFrustumPlanes;
+
+    // Where level-of-detail bands are measured from this frame: the same
+    // camera and origin as the cull volume.  aView.PixelScale comes in per
+    // half viewport height (the projection's Y scale); the renderer
+    // multiplies it by its own half height in pixels and sets Bias.  With
+    // no call - no camera - every object is drawn whatever its band.
+    procedure SetLodView(const aView : TvgLodView);
   end;
 
 
@@ -5739,6 +5746,9 @@ TvgBaseComponent = class(TComponent)
 
     procedure SetFrustumPlanes(const aPlanes : TvgFrustrumPlanes);
     procedure ClearFrustumPlanes;
+    procedure SetLodView(const aView : TvgLodView);
+    procedure SetLodBias(const Value: Double);
+    function  IsLodBiasStored: Boolean;
 
     procedure SetMVPMatrixON(const Value: Boolean);
     procedure SetSelectMode(const Value: TvgSelectMode);
@@ -5769,6 +5779,13 @@ TvgBaseComponent = class(TComponent)
     fCurrentPrepareFrame  : TvgFrame;
     fImageIndex           : Integer;
     //current rendering frame and image
+
+  //Level of detail: the view published with the cull volume, kept the same
+  //way (one value, written before the workers start).  fLodValid False -
+  //no camera this frame - draws every level.
+    fLodView              : TvgLodView;
+    fLodValid             : Boolean;
+    fLodBias              : Double;
 
   //Frustum culling
     fFrustumPlanes        : TvgFrustrumPlanes;
@@ -5932,12 +5949,25 @@ TvgBaseComponent = class(TComponent)
       they are launched and not touched again until after they are joined. }
     Function GetFrustumPlanes(out aPlanes : TvgFrustrumPlanes) : Boolean;
 
+    { Where level-of-detail bands are measured from for the frame being
+      recorded (TvgLodBand.Accepts), Bias set to LodBias.  False - draw every
+      level - when the scene published none this frame.  Safe from the
+      render workers, like GetFrustumPlanes. }
+    Function GetLodView(out aView : TvgLodView) : Boolean;
+
   Published
 
     { Master switch for CPU frustum culling in this renderer.  Default True.
       Turn it off to establish whether missing geometry is the culler's doing
       before looking anywhere else. }
     Property FrustumCulling : Boolean read fFrustumCullingON write fFrustumCullingON default True;
+
+    { Level-of-detail quality for this renderer: distances are multiplied by
+      it before objects' bands are tested.  1 (default) as authored; 2
+      switches to coarser levels at half the distance; 0 always draws the
+      finest level.  Negative is taken as 0.  The frames are recorded again
+      on the next draw. }
+    Property LodBias : Double read fLodBias write SetLodBias stored IsLodBiasStored;
 
 
     Property Linker        : TvgLinker read GetLinker write SetLinker;
@@ -13105,6 +13135,8 @@ begin
   //a cull volume - fFrustumValid is False until then, so nothing is culled.
   fFrustumCullingON  := True;
   fFrustumValid      := False;
+  fLodValid          := False;
+  fLodBias           := 1.0;
 
   fRenderingMode         := rmDynamic;
   fDynamicRenderingInUse := False;
@@ -13238,6 +13270,51 @@ begin
     FillChar(aPlanes, SizeOf(aPlanes), 0);
 end;
 
+procedure TvgBaseRenderEngine.SetLodView(const aView: TvgLodView);
+var
+  H : TvkUint32;
+begin
+  fLodView := aView;
+  // The scene's PixelScale is per half viewport height; this renderer's
+  // own height makes it pixels.  No swapchain yet: a nominal 1080.
+  H := 1080;
+  if Assigned(fLinker) and Assigned(fLinker.SwapChain) and
+     (fLinker.SwapChain.ImageHeight > 0) then
+    H := fLinker.SwapChain.ImageHeight;
+  fLodView.PixelScale := aView.PixelScale * H * 0.5;
+  fLodValid := True;
+end;
+
+function TvgBaseRenderEngine.GetLodView(out aView: TvgLodView): Boolean;
+begin
+  Result := fLodValid;
+  if Result then
+  begin
+    aView      := fLodView;
+    aView.Bias := fLodBias;
+  end
+  else
+    FillChar(aView, SizeOf(aView), 0);
+end;
+
+procedure TvgBaseRenderEngine.SetLodBias(const Value: Double);
+var
+  V : Double;
+begin
+  V := Value;
+  if V < 0 then V := 0;
+  if V = fLodBias then exit;
+  fLodBias := V;
+  FlagRebuildALLFrames;
+  If Active then
+    TriggerWindowRepaint;
+end;
+
+function TvgBaseRenderEngine.IsLodBiasStored: Boolean;
+begin
+  Result := fLodBias <> 1.0;
+end;
+
 function TvgBaseRenderEngine.GetGlobalResources: TvgDescriptorSet;
 begin
   Result := fGlobalRes;
@@ -13293,7 +13370,9 @@ begin
   //
   //    It must not move below step 3: clearing after the scene has published
   //    throws away the volume it just built, and nothing is ever culled.
+  //    The level-of-detail view goes with it, for the same reasons.
   ClearFrustumPlanes;
+  fLodValid := False;
 
   If assigned(fGlobalRes) then
   Begin

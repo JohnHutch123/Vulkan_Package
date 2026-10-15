@@ -91,6 +91,39 @@ type
     cmManual    // bounds supplied by the application via SetObjectBounds
   );
 
+  { Level of detail: what an object's band is measured in.  lmNone MUST be
+    the first value, for the same FillChar reason as cmAuto. }
+  TvgLodMetric = (
+    lmNone,        // no band: always drawn
+    lmDistance,    // distance from the eye to Centre, times the view's Bias
+    lmScreenSize   // Centre's sphere of Radius, across, in pixels on screen
+  );
+
+  { The range an object is drawn in - one level of a level-of-detail group
+    (Vulkan_LOD.TvgLodGroup), or any object that should only appear near or
+    far.  Drawn when Min <= metric < Max: metres for lmDistance, pixels for
+    lmScreenSize.  Max is Infinity for no upper end.  Centre is in the
+    store's space, local to TvgScene.WorldOrigin, like the vertices.
+
+    Every level of one group shares Centre, Radius and Metric, so its levels
+    hand over at exactly one distance - the parts of a level in different
+    stores switch together.  Tested per renderer (TvgLodView), so two windows
+    on one scene each pick their own level.  An instanced object switches as
+    a whole, all its copies by the one Centre. }
+  TvgLodBand = record
+    Metric   : TvgLodMetric;
+    Centre   : TpvVector3;
+    Radius   : Single;
+    Min, Max : Single;
+    class function Make(aMetric: TvgLodMetric; const aCentre: TpvVector3;
+                        aRadius, aMin, aMax: Single): TvgLodBand; static;
+    { What the band measures from aView: metres or pixels. }
+    function Measure(const aView: TvgLodView): Double;
+    { True if the object is drawn seen from aView - the draw loop's test.
+      Always True for lmNone. }
+    function Accepts(const aView: TvgLodView): Boolean;
+  end;
+
   // Simplified object record - just tracks ranges
   TvgVulkanObjectRecord = record
     VertexStart,
@@ -145,6 +178,10 @@ type
     // drawing the object, packed RGBA8 (TvgPushConstant_ObjectColor).  0 (no
     // override) from the FillChar in AddDataObject; kept like Hidden.
     ColorOverride  : Cardinal;
+
+    // Set by SetObjectLod: the band of distance or screen size the object
+    // is drawn in.  lmNone (always drawn) from the FillChar; kept like Hidden.
+    Lod            : TvgLodBand;
   end;
 
   // The three CPU arrays a store keeps.  Lets one routine grow, shrink,
@@ -213,6 +250,7 @@ type
     //with several pipes drawing the same store, this reports the last one.
     //Diagnostic only; maintained inside FCriticalSection with the draw loop.
     FLastCulledCount   : Integer;
+    FLastLodSkippedCount : Integer;   //the same, for level-of-detail bands
 
     StageBufferList    : TList<TpvVulkanBuffer>;
 
@@ -609,6 +647,21 @@ type
     function  ShouldCullObject(ObjectIndex: Integer;
                                const aFrustum: TvgFrustrumPlanes): Boolean;
 
+    // --- Level of detail ---------------------------------------------------
+
+    { The band of distance or screen size the object is drawn in (see
+      TvgLodBand); Metric lmNone draws it always, as every object starts.
+      Like SetObjectHidden nothing is uploaded, and the frames must be
+      recorded again to see it (TvgObject.SetLod does).  Raises for a deleted
+      object.  Vulkan_LOD.TvgLodGroup sets these for whole levels. }
+    procedure SetObjectLod(ObjectIndex: Integer; const aBand: TvgLodBand);
+    procedure ClearObjectLod(ObjectIndex: Integer);
+    function  GetObjectLod(ObjectIndex: Integer): TvgLodBand;
+
+    { True if VulkanDraw would leave this object out for its band, seen
+      from aView - the loop's own test, for checking without a device. }
+    function  ShouldLodSkipObject(ObjectIndex: Integer; const aView: TvgLodView): Boolean;
+
     // Getters
     function GetObjectVertexStart(ObjectIndex: Integer): Integer;
     function GetObjectVertexCount(ObjectIndex: Integer): Integer;
@@ -664,6 +717,9 @@ type
       to tell culling apart from a rendering fault: if geometry is missing and
       this is 0, the culler is not the cause. }
     property LastCulledCount: Integer read FLastCulledCount;
+    { Objects the most recent VulkanDraw left out for their level-of-detail
+      band - not counted in LastCulledCount. }
+    property LastLodSkippedCount: Integer read FLastLodSkippedCount;
 
     property ValidateWrites: Boolean read FValidateWrites write FValidateWrites;
     property BuffersCreated: Boolean read fBuffersCreated;
@@ -2864,6 +2920,95 @@ begin
   end;
 end;
 
+{ Level of detail }
+
+class function TvgLodBand.Make(aMetric: TvgLodMetric; const aCentre: TpvVector3;
+  aRadius, aMin, aMax: Single): TvgLodBand;
+begin
+  Result.Metric := aMetric;
+  Result.Centre := aCentre;
+  Result.Radius := aRadius;
+  Result.Min    := aMin;
+  Result.Max    := aMax;
+end;
+
+function TvgLodBand.Measure(const aView: TvgLodView): Double;
+var
+  D : Double;
+begin
+  D := Sqrt(Sqr(Centre.x - aView.Eye.x) + Sqr(Centre.y - aView.Eye.y) +
+            Sqr(Centre.z - aView.Eye.z)) * aView.Bias;
+  case Metric of
+    lmDistance:
+      Result := D;
+    lmScreenSize:
+    begin
+      // Across, in pixels.  Bias 0 (or the eye at the centre) makes it
+      // infinitely large: the finest level, whose Max is Infinity.
+      if aView.Ortho then
+      begin
+        if aView.Bias <= 0 then Exit(Infinity);
+        Result := 2 * Radius * aView.PixelScale / aView.Bias;
+      end
+      else if D <= 0 then
+        Result := Infinity
+      else
+        Result := 2 * Radius * aView.PixelScale / D;
+    end;
+  else
+    Result := 0;
+  end;
+end;
+
+function TvgLodBand.Accepts(const aView: TvgLodView): Boolean;
+var
+  M : Double;
+begin
+  if Metric = lmNone then Exit(True);
+  M := Measure(aView);
+  // An infinite Max is open: it takes an infinite size too (bias 0).
+  Result := (M >= Min) and ((M < Max) or IsInfinite(Max));
+end;
+
+procedure TvgVulkanDataStore.SetObjectLod(ObjectIndex: Integer; const aBand: TvgLodBand);
+var
+  Obj : TvgVulkanObjectRecord;
+begin
+  FCriticalSection.Enter;
+  try
+    Obj := CheckLiveObject(ObjectIndex);
+    Obj.Lod := aBand;
+    FDataObjects[ObjectIndex] := Obj;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+procedure TvgVulkanDataStore.ClearObjectLod(ObjectIndex: Integer);
+begin
+  SetObjectLod(ObjectIndex, Default(TvgLodBand));
+end;
+
+function TvgVulkanDataStore.GetObjectLod(ObjectIndex: Integer): TvgLodBand;
+begin
+  FCriticalSection.Enter;
+  try
+    Result := CheckObject(ObjectIndex).Lod;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+function TvgVulkanDataStore.ShouldLodSkipObject(ObjectIndex: Integer; const aView: TvgLodView): Boolean;
+begin
+  FCriticalSection.Enter;
+  try
+    Result := not CheckObject(ObjectIndex).Lod.Accepts(aView);
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
 procedure TvgVulkanDataStore.SetObjectCullMode(ObjectIndex: Integer; AMode: TvgObjectCullMode);
 var
   Obj: TvgVulkanObjectRecord;
@@ -4213,6 +4358,8 @@ var
   BufferCount: Integer;
   CullON  : Boolean;
   Frustum : TvgFrustrumPlanes;
+  LodON   : Boolean;
+  LodView : TvgLodView;
   Short   : Boolean;
   ColorON     : Boolean;
   ColorOffset : TVkUInt32;
@@ -4268,6 +4415,13 @@ begin
     if Assigned(aPipe) and Assigned(aPipe.Renderer) then
       CullON := aPipe.Renderer.GetFrustumPlanes(Frustum);
 
+    //Level-of-detail view, the same way and for the same reason: each
+    //renderer picks its own levels.  LodON False - no camera - draws every
+    //level, which shows too much rather than nothing.
+    LodON := False;
+    if Assigned(aPipe) and Assigned(aPipe.Renderer) then
+      LodON := aPipe.Renderer.GetLodView(LodView);
+
     //Per-object colour: pushed before every object drawn - its override or
     //0 - so one object's colour never carries over to the next.  Only when
     //the pipeline's layout has the range.
@@ -4282,6 +4436,7 @@ begin
     end;
     
     FLastCulledCount := 0;
+    FLastLodSkippedCount := 0;
 
     for I := 0 to FDataObjects.Count - 1 do
     begin
@@ -4291,6 +4446,15 @@ begin
       //object costs no binds and is not counted as culled.
       if RecordIsSkipped(Obj) then
         Continue;
+
+      //Outside its level-of-detail band: another level is drawn instead.
+      //Before the frustum test, which may rebuild bounds - this costs one
+      //distance.
+      if LodON and (Obj.Lod.Metric <> lmNone) and not Obj.Lod.Accepts(LodView) then
+      begin
+        Inc(FLastLodSkippedCount);
+        Continue;
+      end;
 
       //Frustum cull before ANY recording for this object.  Skipping here also
       //skips the CmdBindVertexBuffers and CmdBindIndexBuffer below, which in
