@@ -8,7 +8,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, PasVulkan.Math, Vulkan_Components,
-  Vulkan_Components_Scene_Renderer;
+  Vulkan_Components_Scene_Renderer, Vulkan_Components_Lookups;
 
 type
   EvgOBJError = class(Exception);
@@ -41,12 +41,11 @@ type
   // by the interpolated vertex normals.  The order is the shader's SHADING.
   TvgOBJShading = (osUnlit, osFlat, osSmooth);
 
-  // Scene-owned data: remains available even when vgLoadSceneFile frees its
-  // temporary loader. One store per contiguous object/group/material/topology.
-  TvgOBJObjectStore = class(TvgObjectStore)
+  // A store drawn with the OBJ prebuilt shaders (OBJ / OBJTexture and their
+  // variants), lit by their headlight.  TvgOBJObjectStore is one; another
+  // loader that borrows the shaders derives its stores from this too.
+  TvgOBJShadedStore = class(TvgObjectStore)
   private
-    fMaterial: TvgOBJMaterial;
-    fObjectName, fGroupNames: string;
     fShading: TvgOBJShading;
     fAmbient: Single;
     procedure SetShading(const Value: TvgOBJShading);
@@ -54,21 +53,35 @@ type
     procedure RebuildPipelines;
   protected
     procedure ConfigureGraphicPipeline(GP: TvgGraphicPipeline); override;
+    // Adds or replaces one of the fragment shader's specialization constants.
+    class procedure SetFragmentConstant(GP: TvgGraphicPipeline; ID: Integer;
+      const Name: string; SpecType: TvgSpecialisationType; const Value: string);
   public
     constructor Create(AOwner: TComponent); override;
-    property Material: TvgOBJMaterial read fMaterial;
-    property ObjectName: string read fObjectName;
-    property GroupNames: string read fGroupNames;
   published
-    { Set by the loader from the file - flat for faces with no normals and
-      smoothing off, as the OBJ format says, unless the loader's
-      SmoothWhenNoNormals; smooth otherwise; unlit for lines and points,
-      which have no surface to light.  Both are shader specialization
+    { The loader sets it from the file.  Lines and points are always drawn
+      unlit, having no surface to light.  Both are shader specialization
       constants: changing either on a store already drawing rebuilds just
       its pipelines (main thread). }
     property Shading: TvgOBJShading read fShading write SetShading default osSmooth;
     // Brightness of a surface seen edge-on, 0..1; face-on it is 1.
     property Ambient: Single read fAmbient write SetAmbient;
+  end;
+
+  // Scene-owned data: remains available even when vgLoadSceneFile frees its
+  // temporary loader. One store per contiguous object/group/material/topology.
+  // Shading starts flat for faces with no normals and smoothing off, as the
+  // OBJ format says (unless the loader's SmoothWhenNoNormals), else smooth.
+  TvgOBJObjectStore = class(TvgOBJShadedStore)
+  private
+    fMaterial: TvgOBJMaterial;
+    fObjectName, fGroupNames: string;
+  protected
+    procedure ConfigureGraphicPipeline(GP: TvgGraphicPipeline); override;
+  public
+    property Material: TvgOBJMaterial read fMaterial;
+    property ObjectName: string read fObjectName;
+    property GroupNames: string read fGroupNames;
   end;
 
   TvgSceneLoader_OBJ = class(TvgSceneLoaderStorer)
@@ -97,7 +110,7 @@ uses
   PasVulkan.Image.TGA,
   Vulkan_Components_DataStore,
   Vulkan_Components_Descriptors, Vulkan_Components_TextureInspector,
-  Vulkan_Components_Lookups, Vulkan_SceneLoaders, Vulkan_MeshUtils;
+  Vulkan_SceneLoaders, Vulkan_MeshUtils;
 
 type
   TCorner = record
@@ -164,21 +177,21 @@ type
     function BuildStores: TObjectList<TvgOBJObjectStore>;
   end;
 
-constructor TvgOBJObjectStore.Create(AOwner: TComponent);
+constructor TvgOBJShadedStore.Create(AOwner: TComponent);
 begin
   inherited;
   fShading := osSmooth;
   fAmbient := 0.35;
 end;
 
-procedure TvgOBJObjectStore.SetShading(const Value: TvgOBJShading);
+procedure TvgOBJShadedStore.SetShading(const Value: TvgOBJShading);
 begin
   if fShading = Value then Exit;
   fShading := Value;
   RebuildPipelines;
 end;
 
-procedure TvgOBJObjectStore.SetAmbient(const Value: Single);
+procedure TvgOBJShadedStore.SetAmbient(const Value: Single);
 begin
   if fAmbient = EnsureRange(Value, 0, 1) then Exit;
   fAmbient := EnsureRange(Value, 0, 1);
@@ -189,7 +202,7 @@ end;
 // a store already drawing gets its own pipelines built again, every other
 // store's left alone (as TvgDelaunayDisplay does for a live PointSize).  One
 // not yet drawing picks the values up when its pipelines are first built.
-procedure TvgOBJObjectStore.RebuildPipelines;
+procedure TvgOBJShadedStore.RebuildPipelines;
 var I: Integer;
 begin
   if not Assigned(fGraphicPipes) or (fGraphicPipes.Count = 0) then Exit;
@@ -202,36 +215,41 @@ begin
   fScene.NotifyDataChanged(Self);
 end;
 
-procedure TvgOBJObjectStore.ConfigureGraphicPipeline(GP: TvgGraphicPipeline);
-var Map: TvgOBJTextureMap;
-  function Constant(ID: Integer; const Name: string;
-    SpecType: TvgSpecialisationType): TvgShaderSpecialisationItem;
-  var I: Integer;
-  begin
-    Result := nil;
-    for I := 0 to GP.FragmentS.SpecialConst.Count - 1 do
-      if GP.FragmentS.SpecialConst[I].ConstantID = ID then Result := GP.FragmentS.SpecialConst[I];
-    if Result = nil then Result := GP.FragmentS.SpecialConst.Add;
-    Result.Name := Name; Result.ConstantID := ID; Result.SpecType := SpecType;
-  end;
-  procedure SetFloat(ID: Integer; const Name: string; Value: Single);
-  begin
-    // The shared specialization setter parses using the current locale.
-    Constant(ID, Name, TS_SINGLE).SpecTValue := FloatToStr(Value);
-  end;
-  procedure SetInteger(ID: Integer; const Name: string; Value: Integer);
-  begin
-    Constant(ID, Name, TS_INTEGER).SpecTValue := IntToStr(Value);
-  end;
+class procedure TvgOBJShadedStore.SetFragmentConstant(GP: TvgGraphicPipeline;
+  ID: Integer; const Name: string; SpecType: TvgSpecialisationType; const Value: string);
+var I: Integer; Item: TvgShaderSpecialisationItem;
+begin
+  Item := nil;
+  for I := 0 to GP.FragmentS.SpecialConst.Count - 1 do
+    if GP.FragmentS.SpecialConst[I].ConstantID = ID then Item := GP.FragmentS.SpecialConst[I];
+  if Item = nil then Item := GP.FragmentS.SpecialConst.Add;
+  Item.Name := Name; Item.ConstantID := ID; Item.SpecType := SpecType;
+  Item.SpecTValue := Value;
+end;
+
+procedure TvgOBJShadedStore.ConfigureGraphicPipeline(GP: TvgGraphicPipeline);
 begin
   // Shader names (OBJ / OBJTexture and their Double, Pick and PickImage
   // variants) come from inherited: BaseVertName, BaseFragName and
   // PrebuiltShaderVariants are set when the store is built.
   inherited;
   // Lines and points have no surface: their normals are placeholders.
-  if Topology = TRIANGLE_LIST then SetInteger(9, 'SHADING', Ord(fShading))
-  else SetInteger(9, 'SHADING', Ord(osUnlit));
-  SetFloat(10, 'AMBIENT', fAmbient);
+  if Topology = TRIANGLE_LIST then
+    SetFragmentConstant(GP, 9, 'SHADING', TS_INTEGER, IntToStr(Ord(fShading)))
+  else SetFragmentConstant(GP, 9, 'SHADING', TS_INTEGER, IntToStr(Ord(osUnlit)));
+  // The shared specialization setter parses using the current locale.
+  SetFragmentConstant(GP, 10, 'AMBIENT', TS_SINGLE, FloatToStr(fAmbient));
+end;
+
+procedure TvgOBJObjectStore.ConfigureGraphicPipeline(GP: TvgGraphicPipeline);
+var Map: TvgOBJTextureMap;
+  procedure SetFloat(ID: Integer; const Name: string; Value: Single);
+  begin
+    // The shared specialization setter parses using the current locale.
+    SetFragmentConstant(GP, ID, Name, TS_SINGLE, FloatToStr(Value));
+  end;
+begin
+  inherited;
   for Map in fMaterial.Maps do
     if Map.Kind = 'map_Kd' then
     begin
