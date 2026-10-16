@@ -257,6 +257,21 @@ begin
     FileExists(ShaderFolderPath + 'OBJInstDouble_vert.spv'));
 end;
 
+// The SHADING specialization constant a store's pipeline gets.
+function ShadingConstant(Store: TvgOBJObjectStore): string;
+var Pipeline: TvgGraphicPipeline; Engine: TvgRenderEngine; I: Integer;
+begin
+  Result := '';
+  Pipeline := TvgGraphicPipeline.Create(nil); Engine := TvgRenderEngine.Create(nil);
+  try
+    Pipeline.Renderer := Engine;
+    TStoreAccess(Store).ConfigureGraphicPipeline(Pipeline);
+    for I := 0 to Pipeline.FragmentS.SpecialConst.Count - 1 do
+      if Pipeline.FragmentS.SpecialConst[I].ConstantID = 9 then
+        Result := Pipeline.FragmentS.SpecialConst[I].SpecTValue;
+  finally Pipeline.Free; Engine.Free; end;
+end;
+
 procedure TestGeometry;
 var S: TvgObjectStore; I, A, B, C: Integer; Area: Double; P, Q, R: TpvVector3D;
   function Pos(Index: Integer): TpvVector3D;
@@ -276,10 +291,24 @@ begin
   S := Scene.SceneData[0];
   Check('smoothing shares common corners', S.GetObjectVertexCount(0) = 4);
   Check('area-weighted smooth normal', Near(Attribute(S, 0, 2, 1), Sqrt(0.5)) and Near(Attribute(S, 0, 2, 2), Sqrt(0.5)));
+  // Flat shading is the shader's (from each triangle's own plane), so flat
+  // faces share corners too, and carry smooth normals for a switch to smooth.
   Load(Mesh + 'v 0 0 1'#10's off'#10'f 1 2 3'#10'f 1 5 2');
   S := Scene.SceneData[0];
-  Check('flat shading splits hard edge', S.GetObjectVertexCount(0) = 6);
-  Check('flat normals differ across edge', Near(Attribute(S, 0, 2, 2), 1) and Near(Attribute(S, 3, 2, 1), 1));
+  Check('flat faces share common corners', S.GetObjectVertexCount(0) = 4);
+  Check('flat faces still get smooth normals', Near(Attribute(S, 0, 2, 1), Sqrt(0.5)) and Near(Attribute(S, 0, 2, 2), Sqrt(0.5)));
+  Check('no normals and smoothing off: starts flat', TvgOBJObjectStore(S).Shading = osFlat);
+  Check('flat: SHADING constant 1', ShadingConstant(TvgOBJObjectStore(S)) = '1');
+  Loader.SmoothWhenNoNormals := True;
+  try
+    Load(Mesh + 'v 0 0 1'#10's off'#10'f 1 2 3'#10'f 1 5 2');
+    S := Scene.SceneData[0];
+    Check('SmoothWhenNoNormals: starts smooth', TvgOBJObjectStore(S).Shading = osSmooth);
+    Check('SmoothWhenNoNormals: same vertices', S.GetObjectVertexCount(0) = 4);
+  finally Loader.SmoothWhenNoNormals := False; end;
+  Load(Mesh + 'v 0 0 1'#10's 1'#10'f 1 2 3'#10'f 1 5 2');
+  Check('smoothing group: starts smooth', TvgOBJObjectStore(Scene.SceneData[0]).Shading = osSmooth);
+  Check('smooth: SHADING constant 2', ShadingConstant(TvgOBJObjectStore(Scene.SceneData[0])) = '2');
 
   Load('v 0 0 0'#10'v 2 0 0'#10'v 2 2 0'#10'v 1 1 0'#10'v 0 2 0'#10'f 1 2 3 4 5');
   S := Scene.SceneData[0]; Area := 0;

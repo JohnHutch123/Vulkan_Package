@@ -2164,6 +2164,16 @@ begin
   end;
 end;
 
+{ Doubles for one-at-a-time growth, but a bulk Allocate* that needs more than
+  double gets exactly what it asks for: rounding a large mesh up to the next
+  power of two can waste hundreds of MB, too much for a 32-bit process. }
+function GrownCapacity(ACapacity, ARequiredCount: Integer): Integer;
+begin
+  Result := Max(16, ACapacity * 2);
+  if Result < ARequiredCount then
+    Result := ARequiredCount;
+end;
+
 procedure TvgVulkanDataStore.EnsureVertexCapacity(ARequiredCount: Integer);
 var
   NewCapacity: Integer;
@@ -2171,13 +2181,7 @@ begin
   if ARequiredCount <= FVertexCapacity then
     Exit;
 
-  NewCapacity := FVertexCapacity;
-  if NewCapacity < 16 then
-    NewCapacity := 16;
-    
-  while NewCapacity < ARequiredCount do
-    NewCapacity := NewCapacity * 2;
-    
+  NewCapacity := GrownCapacity(FVertexCapacity, ARequiredCount);
   FVertexCapacity := NewCapacity;
   SetLength(FVertexData, FVertexCapacity * Integer(FVertexStride));
 end;
@@ -2189,13 +2193,7 @@ begin
   if ARequiredCount <= FInstanceCapacity then
     Exit;
     
-  NewCapacity := FInstanceCapacity;
-  if NewCapacity < 16 then
-    NewCapacity := 16;
-    
-  while NewCapacity < ARequiredCount do
-    NewCapacity := NewCapacity * 2;
-    
+  NewCapacity := GrownCapacity(FInstanceCapacity, ARequiredCount);
   FInstanceCapacity := NewCapacity;
   SetLength(FInstanceData, FInstanceCapacity * Integer(FInstanceStride));
 end;
@@ -2208,13 +2206,7 @@ begin
   if ARequiredCount <= FIndexCapacity then
     Exit;
     
-  NewCapacity := FIndexCapacity;
-  if NewCapacity < 16 then
-    NewCapacity := 16;
-    
-  while NewCapacity < ARequiredCount do
-    NewCapacity := NewCapacity * 2;
-    
+  NewCapacity := GrownCapacity(FIndexCapacity, ARequiredCount);
   FIndexCapacity := NewCapacity;
   ElementSize := GetIndexElementSize(FIndexType);
   SetLength(FIndexData, FIndexCapacity * ElementSize);

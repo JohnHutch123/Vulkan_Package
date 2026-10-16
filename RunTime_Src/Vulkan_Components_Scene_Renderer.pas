@@ -1027,6 +1027,7 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
     fOrbitButton   : TvgMouseButton;   // Default: vgmbLeft
     fPanButton     : TvgMouseButton;   // Default: vgmbMiddle
     fDollyButton   : TvgMouseButton;   // Default: vgmbRight
+    fDollySensitivity : Single;        // Default: 1.0
 
     fMouseState    : TvgMouseState;
 
@@ -1263,6 +1264,11 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
     property OrbitButton   : TvgMouseButton     read fOrbitButton  write SetOrbitButton  default vgmbLeft;
     property PanButton     : TvgMouseButton     read fPanButton    write SetPanButton    default vgmbMiddle;
     property DollyButton   : TvgMouseButton     read fDollyButton  write SetDollyButton  default vgmbRight;
+    // Dolly-button drag speed, relative to the distance to the camera target
+    // so it feels the same whatever the model size.  At 1.0 (and the default
+    // MouseSensitivity) about 175 pixels of drag halves or doubles that
+    // distance; 2.0 is twice as fast.
+    property DollySensitivity : Single          read fDollySensitivity write fDollySensitivity;
     // 0=horizontal, 1=front (vertical), 2=side (vertical), in the active world
     // axis convention (see Vulkan_WorldAxes).  Used for object drag.
     property DragPlaneAxis : Integer            read fDragPlaneAxis write SetDragPlaneAxis default 0;
@@ -4054,6 +4060,7 @@ begin
   fOrbitButton    := vgmbLeft;
   fPanButton      := vgmbMiddle;
   fDollyButton    := vgmbRight;
+  fDollySensitivity := 1.0;
   fSelectedObject := nil;
   fDragPlaneAxis  := 0;
   fDragStartHitPt := TpvVector3.Create(0, 0, 0);
@@ -5128,8 +5135,11 @@ procedure TvgToolManager.DoCameraDolly(aDelta: Single);
 begin
   Cam := GetActiveCamera;
   If not Assigned(Cam) then exit;
-  // aDelta: positive = forward into the scene.
-  Cam.Dolly(aDelta * 0.05);
+  // aDelta: positive = forward into the scene.  A fixed world distance per
+  // pixel crawls on a large model and leaps past a small one, so the drag
+  // scales the distance to the target instead, by Exp(-aDelta * 0.01 *
+  // DollySensitivity).  Zoom sets distance * (1 - D * 0.1), hence D.
+  Cam.Zoom(10 * (1 - Exp(-aDelta * 0.01 * fDollySensitivity)));
 end;
 
 procedure TvgToolManager.DoCameraZoom(aWheelDelta: Integer);
