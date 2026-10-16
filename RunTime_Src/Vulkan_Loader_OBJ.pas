@@ -37,29 +37,56 @@ type
     ExtraStatements: TArray<string>;
   end;
 
+  // How OBJ.frag lights a store: not at all, by each triangle's own plane, or
+  // by the interpolated vertex normals.  The order is the shader's SHADING.
+  TvgOBJShading = (osUnlit, osFlat, osSmooth);
+
   // Scene-owned data: remains available even when vgLoadSceneFile frees its
   // temporary loader. One store per contiguous object/group/material/topology.
   TvgOBJObjectStore = class(TvgObjectStore)
   private
     fMaterial: TvgOBJMaterial;
     fObjectName, fGroupNames: string;
+    fShading: TvgOBJShading;
+    fAmbient: Single;
+    procedure SetShading(const Value: TvgOBJShading);
+    procedure SetAmbient(const Value: Single);
+    procedure RebuildPipelines;
   protected
     procedure ConfigureGraphicPipeline(GP: TvgGraphicPipeline); override;
   public
+    constructor Create(AOwner: TComponent); override;
     property Material: TvgOBJMaterial read fMaterial;
     property ObjectName: string read fObjectName;
     property GroupNames: string read fGroupNames;
+  published
+    { Set by the loader from the file - flat for faces with no normals and
+      smoothing off, as the OBJ format says, unless the loader's
+      SmoothWhenNoNormals; smooth otherwise; unlit for lines and points,
+      which have no surface to light.  Both are shader specialization
+      constants: changing either on a store already drawing rebuilds just
+      its pipelines (main thread). }
+    property Shading: TvgOBJShading read fShading write SetShading default osSmooth;
+    // Brightness of a surface seen edge-on, 0..1; face-on it is 1.
+    property Ambient: Single read fAmbient write SetAmbient;
   end;
 
   TvgSceneLoader_OBJ = class(TvgSceneLoaderStorer)
   private
     fFileName: string;
+    fSmoothWhenNoNormals: Boolean;
     procedure LoadTextures(aStore: TvgOBJObjectStore);
   public
     procedure LoadScene; override;
     procedure StoreScene; override;
   published
     property FileName: string read fFileName write fFileName;
+    { Faces with no normals and smoothing off are flat in the OBJ format, so
+      their stores start with Shading osFlat.  True starts them osSmooth -
+      for scans, which are usually exported that way but meant smooth.  The
+      vertices are the same either way: Shading can still be changed after. }
+    property SmoothWhenNoNormals: Boolean read fSmoothWhenNoNormals
+      write fSmoothWhenNoNormals default False;
   end;
 
 implementation
@@ -76,29 +103,47 @@ type
   TCorner = record
     P, T, N: Integer;
   end;
-  TPrimitive = class
-    Corners: TArray<TCorner>;
-    Triangles: TArray<Integer>; // indices into Corners
+  // The o/g/usemtl/s statements in force for a run of primitives.
+  TPrimitiveState = record
     ObjectName, Groups, MaterialName, Smooth: string;
+    SmoothID: Integer; // one per object + smoothing group, off included
+  end;
+  // A face, line or point.  Corners and triangles live in the reader's shared
+  // lists rather than an object and two arrays per face: a scanned mesh has
+  // millions of faces, and that overhead alone fills a 32-bit address space.
+  TPrimitive = record
+    FirstCorner, CornerCount: Integer;
+    // Into Triangles, numbering the primitive's own corners; -1 for a plain
+    // triangle, which is 0 1 2.
+    FirstTriangle, TriangleCount: Integer;
+    State: Integer;
     Kind: TvgPrimitiveTopology;
-    Normal: TpvVector3D; // unnormalised Newell normal, for area weighting
     LineNo: Integer;
+    Normal: TpvVector3D; // unnormalised Newell normal, for area weighting
+  end;
+  TSmoothKey = record
+    SmoothID, Vertex: Integer;
   end;
   TMaterial = class
     Data: TvgOBJMaterial;
   end;
   TOBJReader = class
     FileName: string;
-    LineNo: Integer;
+    LineNo, PhysicalLine: Integer;
     FS: TFormatSettings;
     Positions, Colors, Normals, UVs: TList<TpvVector3>;
     HasColors: TList<Boolean>;
-    Primitives: TObjectList<TPrimitive>;
+    Corners: TList<TCorner>;
+    Triangles: TList<Integer>;
+    States: TList<TPrimitiveState>;
+    SmoothIDs: TDictionary<string, Integer>;
+    Primitives: TList<TPrimitive>;
     Materials: TObjectDictionary<string, TMaterial>;
     Libraries: TList<string>;
-    SmoothNormals: TDictionary<string, TpvVector3D>;
+    SmoothNormals: TDictionary<TSmoothKey, TpvVector3D>;
     // What the load got past: libraries and materials it could not find.
     Warnings: TArray<string>;
+    SmoothWhenNoNormals: Boolean;   // the loader's
     procedure Warn(const S: string; const Once: string = '');
     constructor Create;
     destructor Destroy; override;
@@ -106,35 +151,87 @@ type
     function Number(const S: string): Double;
     function IntegerValue(const S: string): Integer;
     function Tokens(const S: string): TArray<string>;
-    function Lines(const Path: string): TArray<string>;
+    function OpenLines(const Path: string): TStreamReader;
+    function NextLine(R: TStreamReader; out S: string): Boolean;
     function Index(const S: string; Count: Integer): Integer;
     function Corner(const S: string): TCorner;
+    function CornerOf(const P: TPrimitive; I: Integer): TCorner;
     procedure ReadOBJ(const Path: string);
     procedure ReadMTL(const Path: string);
     function ReadMap(const W: TArray<string>): TvgOBJTextureMap;
-    procedure Triangulate(P: TPrimitive);
+    procedure Triangulate(var P: TPrimitive);
     procedure BuildNormals;
     function BuildStores: TObjectList<TvgOBJObjectStore>;
   end;
 
+constructor TvgOBJObjectStore.Create(AOwner: TComponent);
+begin
+  inherited;
+  fShading := osSmooth;
+  fAmbient := 0.35;
+end;
+
+procedure TvgOBJObjectStore.SetShading(const Value: TvgOBJShading);
+begin
+  if fShading = Value then Exit;
+  fShading := Value;
+  RebuildPipelines;
+end;
+
+procedure TvgOBJObjectStore.SetAmbient(const Value: Single);
+begin
+  if fAmbient = EnsureRange(Value, 0, 1) then Exit;
+  fAmbient := EnsureRange(Value, 0, 1);
+  RebuildPipelines;
+end;
+
+// Shading and Ambient are specialization constants, baked into the pipeline:
+// a store already drawing gets its own pipelines built again, every other
+// store's left alone (as TvgDelaunayDisplay does for a live PointSize).  One
+// not yet drawing picks the values up when its pipelines are first built.
+procedure TvgOBJObjectStore.RebuildPipelines;
+var I: Integer;
+begin
+  if not Assigned(fGraphicPipes) or (fGraphicPipes.Count = 0) then Exit;
+  if not Assigned(fScene) or not Assigned(fScene.RendererList) then Exit;
+  for I := 0 to fScene.RendererList.Count - 1 do
+    if Assigned(fScene.RendererList.Items[I]) then
+      DisConnectDataFromSceneandRenderer(fScene.RendererList.Items[I]);
+  // The Vulkan buffers freed above are recreated by the next upload.
+  fScene.ConnectStoreLive(Self);
+  fScene.NotifyDataChanged(Self);
+end;
+
 procedure TvgOBJObjectStore.ConfigureGraphicPipeline(GP: TvgGraphicPipeline);
 var Map: TvgOBJTextureMap;
-  procedure SetFloat(ID: Integer; const Name: string; Value: Single);
-  var I: Integer; Item: TvgShaderSpecialisationItem;
+  function Constant(ID: Integer; const Name: string;
+    SpecType: TvgSpecialisationType): TvgShaderSpecialisationItem;
+  var I: Integer;
   begin
-    Item := nil;
+    Result := nil;
     for I := 0 to GP.FragmentS.SpecialConst.Count - 1 do
-      if GP.FragmentS.SpecialConst[I].ConstantID = ID then Item := GP.FragmentS.SpecialConst[I];
-    if Item = nil then Item := GP.FragmentS.SpecialConst.Add;
-    Item.Name := Name; Item.ConstantID := ID; Item.SpecType := TS_SINGLE;
+      if GP.FragmentS.SpecialConst[I].ConstantID = ID then Result := GP.FragmentS.SpecialConst[I];
+    if Result = nil then Result := GP.FragmentS.SpecialConst.Add;
+    Result.Name := Name; Result.ConstantID := ID; Result.SpecType := SpecType;
+  end;
+  procedure SetFloat(ID: Integer; const Name: string; Value: Single);
+  begin
     // The shared specialization setter parses using the current locale.
-    Item.SpecTValue := FloatToStr(Value);
+    Constant(ID, Name, TS_SINGLE).SpecTValue := FloatToStr(Value);
+  end;
+  procedure SetInteger(ID: Integer; const Name: string; Value: Integer);
+  begin
+    Constant(ID, Name, TS_INTEGER).SpecTValue := IntToStr(Value);
   end;
 begin
   // Shader names (OBJ / OBJTexture and their Double, Pick and PickImage
   // variants) come from inherited: BaseVertName, BaseFragName and
   // PrebuiltShaderVariants are set when the store is built.
   inherited;
+  // Lines and points have no surface: their normals are placeholders.
+  if Topology = TRIANGLE_LIST then SetInteger(9, 'SHADING', Ord(fShading))
+  else SetInteger(9, 'SHADING', Ord(osUnlit));
+  SetFloat(10, 'AMBIENT', fAmbient);
   for Map in fMaterial.Maps do
     if Map.Kind = 'map_Kd' then
     begin
@@ -173,11 +270,9 @@ begin
   else Result := TpvVector3.Create(0, 0, 1);
 end;
 
-function SmoothKey(P: TPrimitive; Vertex: Integer): string;
+function SmoothKey(SmoothID, Vertex: Integer): TSmoothKey;
 begin
-  // Length-prefix names to avoid collisions when names contain separators.
-  Result := IntToStr(Length(P.ObjectName)) + ':' + P.ObjectName + ':' +
-    IntToStr(Length(P.Smooth)) + ':' + P.Smooth + ':' + IntToStr(Vertex);
+  Result.SmoothID := SmoothID; Result.Vertex := Vertex;
 end;
 
 procedure TOBJReader.Warn(const S: string; const Once: string = '');
@@ -200,10 +295,14 @@ begin
   HasColors := TList<Boolean>.Create;
   Normals := TList<TpvVector3>.Create;
   UVs := TList<TpvVector3>.Create;
-  Primitives := TObjectList<TPrimitive>.Create;
+  Corners := TList<TCorner>.Create;
+  Triangles := TList<Integer>.Create;
+  States := TList<TPrimitiveState>.Create;
+  SmoothIDs := TDictionary<string, Integer>.Create;
+  Primitives := TList<TPrimitive>.Create;
   Materials := TObjectDictionary<string, TMaterial>.Create([doOwnsValues]);
   Libraries := TList<string>.Create;
-  SmoothNormals := TDictionary<string, TpvVector3D>.Create;
+  SmoothNormals := TDictionary<TSmoothKey, TpvVector3D>.Create;
 end;
 
 destructor TOBJReader.Destroy;
@@ -212,6 +311,10 @@ begin
   Libraries.Free;
   Materials.Free;
   Primitives.Free;
+  SmoothIDs.Free;
+  States.Free;
+  Triangles.Free;
+  Corners.Free;
   UVs.Free;
   Normals.Free;
   HasColors.Free;
@@ -238,8 +341,25 @@ begin
 end;
 
 function TOBJReader.Tokens(const S: string): TArray<string>;
-var I: Integer; Token: string; Quoted, Started: Boolean; List: TList<string>;
+var I, N, Start: Integer; Token: string; Quoted, Started: Boolean; List: TList<string>;
 begin
+  if Pos('"', S) = 0 then
+  begin
+    // The usual line, with no quoted names: cut whole tokens out rather than
+    // build them a character at a time - this runs for every line of the file.
+    SetLength(Result, 8); N := 0; I := 1;
+    while I <= Length(S) do
+    begin
+      if CharInSet(S[I], [' ', #9]) then begin Inc(I); Continue; end;
+      if S[I] = '#' then Break;
+      Start := I;
+      while (I <= Length(S)) and not CharInSet(S[I], [' ', #9, '#']) do Inc(I);
+      if N = Length(Result) then SetLength(Result, N * 2);
+      Result[N] := Copy(S, Start, I - Start); Inc(N);
+    end;
+    SetLength(Result, N);
+    Exit;
+  end;
   List := TList<string>.Create;
   try
     Token := ''; Quoted := False; Started := False;
@@ -260,34 +380,39 @@ begin
   finally List.Free; end;
 end;
 
-function TOBJReader.Lines(const Path: string): TArray<string>;
-var L: TStringList; I, First: Integer; S: string;
+// Files are read a line at a time: holding a whole file as a string list
+// costs several times its size, more than a 32-bit process can find for a
+// large scan.
+function TOBJReader.OpenLines(const Path: string): TStreamReader;
 begin
-  FileName := Path;
-  L := TStringList.Create;
-  try
-    L.LoadFromFile(Path, TEncoding.UTF8);
-    Result := L.ToStringArray;
-    // Join backslash continuations, keeping physical line numbers stable.
-    First := -1;
-    for I := 0 to High(Result) do
+  FileName := Path; PhysicalLine := 0; LineNo := 0;
+  Result := TStreamReader.Create(Path, TEncoding.UTF8, True, 1 shl 20);
+end;
+
+// The next statement, backslash continuations joined; LineNo is its first
+// physical line.
+function TOBJReader.NextLine(R: TStreamReader; out S: string): Boolean;
+var L: string; Last: Integer;
+begin
+  S := ''; Result := False;
+  while not R.EndOfStream do
+  begin
+    L := R.ReadLine; Inc(PhysicalLine);
+    if not Result then LineNo := PhysicalLine;
+    Result := True;
+    Last := Length(L);
+    while (Last > 0) and (L[Last] <= ' ') do Dec(Last);
+    if (Last > 0) and (L[Last] = '\') then
     begin
-      S := TrimRight(Result[I]);
-      if First < 0 then First := I;
-      if (S <> '') and (S[Length(S)] = '\') then
-      begin
-        Delete(S, Length(S), 1);
-        if I = First then Result[First] := S + ' '
-        else begin Result[First] := Result[First] + S + ' '; Result[I] := ''; end;
-        if I = High(Result) then begin LineNo := I + 1; Error('Unfinished continuation'); end;
-      end
-      else
-      begin
-        if I <> First then begin Result[First] := Result[First] + S; Result[I] := ''; end;
-        First := -1;
-      end;
+      S := S + Copy(L, 1, Last - 1) + ' ';
+      if R.EndOfStream then begin LineNo := PhysicalLine; Error('Unfinished continuation'); end;
+    end
+    else
+    begin
+      S := S + L;
+      Exit;
     end;
-  finally L.Free; end;
+  end;
 end;
 
 function TOBJReader.Index(const S: string; Count: Integer): Integer;
@@ -313,20 +438,29 @@ begin
   if Length(W) = 3 then Result.N := Index(W[2], Normals.Count);
 end;
 
+function TOBJReader.CornerOf(const P: TPrimitive; I: Integer): TCorner;
+begin
+  Result := Corners.List[P.FirstCorner + I];
+end;
+
 procedure TOBJReader.ReadOBJ(const Path: string);
 var
-  Text, W: TArray<string>;
-  I, J, K: Integer;
+  Reader: TStreamReader;
+  Line: string;
+  W: TArray<string>;
+  J, K, StateIndex: Integer;
   V, C: TpvVector3;
   X, Y, Z, Weight: Double;
-  ObjectName, Groups, MaterialName, Smooth, Lib: string;
+  ObjectName, Groups, MaterialName, Smooth, Lib, Key: string;
   P: TPrimitive;
+  State: TPrimitiveState;
 begin
-  Text := Lines(Path);
-  for I := 0 to High(Text) do
+  StateIndex := -1;
+  Reader := OpenLines(Path);
+  try
+  while NextLine(Reader, Line) do
   begin
-    LineNo := I + 1;
-    W := Tokens(Text[I]);
+    W := Tokens(Line);
     if Length(W) = 0 then Continue;
     if W[0] = 'v' then
     begin
@@ -358,26 +492,42 @@ begin
     begin
       if (Length(W) < 2) or ((W[0] = 'f') and (Length(W) < 4)) or
          ((W[0] = 'l') and (Length(W) < 3)) then Error('Too few primitive vertices');
-      P := TPrimitive.Create;
-      Primitives.Add(P);
-      P.ObjectName := ObjectName; P.Groups := Groups; P.MaterialName := MaterialName;
-      P.Smooth := Smooth; P.LineNo := LineNo;
+      if StateIndex < 0 then
+      begin
+        State.ObjectName := ObjectName; State.Groups := Groups;
+        State.MaterialName := MaterialName; State.Smooth := Smooth;
+        // Smoothing off is a group of its own, Smooth '': flat shading is the
+        // shader's (TvgOBJShading), so its faces share vertices and smooth
+        // normals like any other, for when a store is switched to smooth.
+        // Length-prefix names to avoid collisions when names contain separators.
+        Key := IntToStr(Length(ObjectName)) + ':' + ObjectName + ':' + Smooth;
+        if not SmoothIDs.TryGetValue(Key, State.SmoothID) then
+        begin
+          State.SmoothID := SmoothIDs.Count; SmoothIDs.Add(Key, State.SmoothID);
+        end;
+        StateIndex := States.Add(State);
+      end;
+      P := Default(TPrimitive);
+      P.State := StateIndex; P.LineNo := LineNo;
       P.Kind := TRIANGLE_LIST;
       if W[0] = 'l' then P.Kind := LINE_LIST;
       if W[0] = 'p' then P.Kind := POINT_LIST;
-      SetLength(P.Corners, Length(W) - 1);
-      for J := 1 to High(W) do P.Corners[J - 1] := Corner(W[J]);
+      P.FirstCorner := Corners.Count; P.CornerCount := Length(W) - 1;
+      P.FirstTriangle := -1;
+      for J := 1 to High(W) do Corners.Add(Corner(W[J]));
       if P.Kind = TRIANGLE_LIST then Triangulate(P);
+      Primitives.Add(P);
     end
-    else if W[0] = 'o' then ObjectName := Join(W, 1)
-    else if W[0] = 'g' then Groups := Join(W, 1)
-    else if W[0] = 'usemtl' then MaterialName := Join(W, 1)
+    else if W[0] = 'o' then begin ObjectName := Join(W, 1); StateIndex := -1; end
+    else if W[0] = 'g' then begin Groups := Join(W, 1); StateIndex := -1; end
+    else if W[0] = 'usemtl' then begin MaterialName := Join(W, 1); StateIndex := -1; end
     else if W[0] = 's' then
     begin
       if Length(W) <> 2 then Error('Expected smoothing group or off');
       Smooth := W[1];
       if (Smooth = 'off') or (Smooth = '0') then Smooth := '';
       if Smooth = 'on' then Smooth := '1';
+      StateIndex := -1;
     end
     else if W[0] = 'mtllib' then
     begin
@@ -409,7 +559,10 @@ begin
       (W[0] = 'surf') or (W[0] = 'cstype') or (W[0] = 'call') then
       Error('Unsupported free-form/external geometry statement: ' + W[0]);
   end;
+  finally Reader.Free; end;
   if Primitives.Count = 0 then Error('OBJ file contains no faces, lines or points');
+  // Returns the lists' spare growth room before the stores are built.
+  Primitives.TrimExcess; Corners.TrimExcess; Triangles.TrimExcess;
   // OBJ files are often distributed without their companion libraries.
   // Available libraries still load; absent ones leave default materials.
   for Lib in Libraries do
@@ -418,11 +571,11 @@ begin
   BuildNormals;
 end;
 
-procedure TOBJReader.Triangulate(P: TPrimitive);
+procedure TOBJReader.Triangulate(var P: TPrimitive);
 var
   V, NextV: TpvVector3;
   XY: TArray<TpvVector2D>;
-  Remaining, Tri: TList<Integer>;
+  Remaining: TList<Integer>;
   I, J, A, B, C, Q, Axis: Integer;
   Area, Sign, Eps, Extent: Double;
   Ear, Inside: Boolean;
@@ -433,23 +586,23 @@ var
   end;
 begin
   P.Normal := TpvVector3D.Create(0, 0, 0);
-  for I := 0 to High(P.Corners) do
+  for I := 0 to P.CornerCount - 1 do
   begin
-    V := Positions[P.Corners[I].P];
-    NextV := Positions[P.Corners[(I + 1) mod Length(P.Corners)].P];
+    V := Positions[CornerOf(P, I).P];
+    NextV := Positions[CornerOf(P, (I + 1) mod P.CornerCount).P];
     P.Normal.x := P.Normal.x + (Double(V.y) - NextV.y) * (Double(V.z) + NextV.z);
     P.Normal.y := P.Normal.y + (Double(V.z) - NextV.z) * (Double(V.x) + NextV.x);
     P.Normal.z := P.Normal.z + (Double(V.x) - NextV.x) * (Double(V.y) + NextV.y);
   end;
   // Preserve degenerate triangles (common at exported sphere poles).
-  if Length(P.Corners) = 3 then begin P.Triangles := TArray<Integer>.Create(0, 1, 2); Exit; end;
+  if P.CornerCount = 3 then begin P.FirstTriangle := -1; P.TriangleCount := 1; Exit; end;
   Axis := 2;
   if (Abs(P.Normal.x) > Abs(P.Normal.y)) and (Abs(P.Normal.x) > Abs(P.Normal.z)) then Axis := 0
   else if Abs(P.Normal.y) > Abs(P.Normal.z) then Axis := 1;
-  SetLength(XY, Length(P.Corners));
+  SetLength(XY, P.CornerCount);
   for I := 0 to High(XY) do
   begin
-    V := Positions[P.Corners[I].P];
+    V := Positions[CornerOf(P, I).P];
     case Axis of
       0: XY[I] := TpvVector2D.Create(V.y, V.z);
       1: XY[I] := TpvVector2D.Create(V.x, V.z);
@@ -463,8 +616,8 @@ begin
   Eps := Extent * Extent * 1e-12;
   if Abs(Area) <= Eps then Error('Degenerate polygon');
   Sign := 1; if Area < 0 then Sign := -1;
+  P.FirstTriangle := Triangles.Count; P.TriangleCount := P.CornerCount - 2;
   Remaining := TList<Integer>.Create;
-  Tri := TList<Integer>.Create;
   try
     for I := 0 to High(XY) do Remaining.Add(I);
     while Remaining.Count > 3 do
@@ -484,14 +637,13 @@ begin
              (Sign * Cross2(B, C, Q) >= -Eps) and
              (Sign * Cross2(C, A, Q) >= -Eps) then begin Inside := True; Break; end;
         if Inside then Continue;
-        Tri.Add(A); Tri.Add(B); Tri.Add(C);
+        Triangles.Add(A); Triangles.Add(B); Triangles.Add(C);
         Remaining.Delete(I); Ear := True; Break;
       end;
       if not Ear then Error('Cannot triangulate polygon (duplicate or intersecting edges)');
     end;
-    Tri.Add(Remaining[0]); Tri.Add(Remaining[1]); Tri.Add(Remaining[2]);
-    P.Triangles := Tri.ToArray;
-  finally Tri.Free; Remaining.Free; end;
+    Triangles.Add(Remaining[0]); Triangles.Add(Remaining[1]); Triangles.Add(Remaining[2]);
+  finally Remaining.Free; end;
 end;
 
 function TOBJReader.ReadMap(const W: TArray<string>): TvgOBJTextureMap;
@@ -549,8 +701,10 @@ end;
 
 procedure TOBJReader.ReadMTL(const Path: string);
 var
-  Text, W: TArray<string>;
-  I, J, N, Start: Integer;
+  Reader: TStreamReader;
+  Line: string;
+  W: TArray<string>;
+  J, N, Start: Integer;
   M: TMaterial;
   V: TpvVector3;
   X, Y, Z: Double;
@@ -559,10 +713,11 @@ var
   procedure Arity(Count: Integer);
   begin if Length(W) <> Count then Error('Invalid ' + W[0] + ' value count'); end;
 begin
-  Text := Lines(Path); M := nil;
-  for I := 0 to High(Text) do
+  Reader := OpenLines(Path); M := nil;
+  try
+  while NextLine(Reader, Line) do
   begin
-    LineNo := I + 1; W := Tokens(Text[I]);
+    W := Tokens(Line);
     if Length(W) = 0 then Continue;
     Key := W[0];
     if Key = 'newmtl' then
@@ -632,42 +787,88 @@ begin
     else
     begin
       N := Length(M.Data.ExtraStatements); SetLength(M.Data.ExtraStatements, N + 1);
-      M.Data.ExtraStatements[N] := Text[I];
+      M.Data.ExtraStatements[N] := Line;
     end;
   end;
+  finally Reader.Free; end;
 end;
 
 procedure TOBJReader.BuildNormals;
-var P: TPrimitive; C: TCorner; Key: string; V: TpvVector3D;
+var P: TPrimitive; I, SmoothID: Integer; Key: TSmoothKey; V: TpvVector3D; Needed: Boolean;
 begin
+  // Only corners with no normal of their own use these.
+  Needed := False;
+  for I := 0 to Corners.Count - 1 do
+    if Corners.List[I].N < 0 then begin Needed := True; Break; end;
+  if not Needed then Exit;
   for P in Primitives do
-    if (P.Kind = TRIANGLE_LIST) and (P.Smooth <> '') then
-      for C in P.Corners do
+  begin
+    SmoothID := States.List[P.State].SmoothID;
+    if P.Kind = TRIANGLE_LIST then
+      for I := 0 to P.CornerCount - 1 do
       begin
-        Key := SmoothKey(P, C.P);
+        Key := SmoothKey(SmoothID, CornerOf(P, I).P);
         if not SmoothNormals.TryGetValue(Key, V) then V := TpvVector3D.Create(0, 0, 0);
         SmoothNormals.AddOrSetValue(Key, V + P.Normal);
       end;
+  end;
 end;
 
 function TOBJReader.BuildStores: TObjectList<TvgOBJObjectStore>;
+type
+  TVertexKey = record
+    P, T, N, SmoothID: Integer;
+  end;
+  // A vertex of the store being built: the corner it came from, and the
+  // primitive whose face normal or smoothing group it takes.
+  TStoreVertex = record
+    C: TCorner;
+    Prim: Integer;
+  end;
 var
-  P, Prev: TPrimitive;
   Store: TvgOBJObjectStore;
   Obj: TvgObject;
   M: TMaterial;
-  Vertices: TDictionary<string, Integer>;
-  C: TCorner;
+  Vertices: TDictionary<TVertexKey, Integer>;
+  StoreVertices: TList<TStoreVertex>;
+  Indices: TList<Cardinal>;
+  First, Last, FaceID, I, J, K: Integer;
+  P: TPrimitive;
   Position, Color, Normal, UV: TpvVector3;
-  Key: string;
-  I, J, FaceID, VertexIndex: Integer;
-  HasDiffuseMap: Boolean;
+  HasDiffuseMap, HasFlatFaces: Boolean;
   Map: TvgOBJTextureMap;
-  // The current store's finished vertices and indices, for its tangents.
-  VPos, VNrm, VUV: TList<TpvVector3>;
-  VIdx: TList<Integer>;
+  FirstState: TPrimitiveState;
 
-  // Tangent frames for the current store, written once it is complete.
+  function SameStore(const A, B: TPrimitive): Boolean;
+  var SA, SB: TPrimitiveState;
+  begin
+    SA := States.List[A.State]; SB := States.List[B.State];
+    Result := (A.Kind = B.Kind) and (SA.ObjectName = SB.ObjectName) and
+      (SA.Groups = SB.Groups) and (SA.MaterialName = SB.MaterialName);
+  end;
+
+  function VertexPosition(K: Integer): TpvVector3;
+  begin Result := Positions.List[StoreVertices.List[K].C.P]; end;
+
+  function VertexUV(K: Integer): TpvVector3;
+  var T: Integer;
+  begin
+    T := StoreVertices.List[K].C.T;
+    if T >= 0 then Result := UVs.List[T] else Result := TpvVector3.Create(0, 0, 0);
+  end;
+
+  function VertexNormal(K: Integer): TpvVector3;
+  var V: TStoreVertex; Q: TPrimitive;
+  begin
+    V := StoreVertices.List[K];
+    Q := Primitives.List[V.Prim];
+    Result := TpvVector3.Create(0, 0, 1);
+    if V.C.N >= 0 then Result := Normals.List[V.C.N]
+    else if Q.Kind = TRIANGLE_LIST then
+      Result := UnitNormal(SmoothNormals[SmoothKey(States.List[Q.State].SmoothID, V.C.P)]);
+  end;
+
+  // Tangent frames for the current store, once its vertices are written.
   // Per triangle the UV derivatives give a tangent (along +U) and bitangent
   // (along +V, the file's own V - OpenGL normal-map convention); each vertex
   // sums those of its triangles.  The tangent is then made perpendicular to
@@ -675,11 +876,13 @@ var
   // normal x tangent, flipped where the UVs are mirrored, so the frame is
   // orthonormal.  A vertex with no usable UVs (none, or degenerate on all
   // its triangles) - and every line or point - gets any unit tangent
-  // perpendicular to its normal.
+  // perpendicular to its normal.  The sums are single precision: per-vertex
+  // doubles cost tens of MB more on a large scan.
   procedure WriteTangents;
   var
-    Tan, Bit: TArray<TpvVector3D>;
+    Tan, Bit: TArray<TpvVector3>;
     A, B, CI, K: Integer;
+    PA, PB, PC, UA, UB, UC: TpvVector3;
     E1, E2, NV, TV, BV: TpvVector3D;
     DU1, DV1, DU2, DV2, Det, R, Len: Double;
     function V3(const V: TpvVector3): TpvVector3D;
@@ -692,22 +895,23 @@ var
     begin Result := X.x * Y.x + X.y * Y.y + X.z * Y.z; end;
     procedure AddTo(I: Integer; const T, U: TpvVector3D);
     begin
-      Tan[I] := TpvVector3D.Create(Tan[I].x + T.x, Tan[I].y + T.y, Tan[I].z + T.z);
-      Bit[I] := TpvVector3D.Create(Bit[I].x + U.x, Bit[I].y + U.y, Bit[I].z + U.z);
+      Tan[I] := TpvVector3.Create(Tan[I].x + T.x, Tan[I].y + T.y, Tan[I].z + T.z);
+      Bit[I] := TpvVector3.Create(Bit[I].x + U.x, Bit[I].y + U.y, Bit[I].z + U.z);
     end;
   begin
-    if (Store = nil) or (VPos.Count = 0) then Exit;
-    SetLength(Tan, VPos.Count); SetLength(Bit, VPos.Count);   // zeroed
+    SetLength(Tan, StoreVertices.Count); SetLength(Bit, StoreVertices.Count);   // zeroed
     if Store.Topology = TRIANGLE_LIST then
     begin
       K := 0;
-      while K + 2 < VIdx.Count do
+      while K + 2 < Indices.Count do
       begin
-        A := VIdx[K]; B := VIdx[K + 1]; CI := VIdx[K + 2]; Inc(K, 3);
-        E1 := TpvVector3D.Create(VPos[B].x - VPos[A].x, VPos[B].y - VPos[A].y, VPos[B].z - VPos[A].z);
-        E2 := TpvVector3D.Create(VPos[CI].x - VPos[A].x, VPos[CI].y - VPos[A].y, VPos[CI].z - VPos[A].z);
-        DU1 := VUV[B].x - VUV[A].x; DV1 := VUV[B].y - VUV[A].y;
-        DU2 := VUV[CI].x - VUV[A].x; DV2 := VUV[CI].y - VUV[A].y;
+        A := Indices[K]; B := Indices[K + 1]; CI := Indices[K + 2]; Inc(K, 3);
+        PA := VertexPosition(A); PB := VertexPosition(B); PC := VertexPosition(CI);
+        UA := VertexUV(A); UB := VertexUV(B); UC := VertexUV(CI);
+        E1 := TpvVector3D.Create(PB.x - PA.x, PB.y - PA.y, PB.z - PA.z);
+        E2 := TpvVector3D.Create(PC.x - PA.x, PC.y - PA.y, PC.z - PA.z);
+        DU1 := UB.x - UA.x; DV1 := UB.y - UA.y;
+        DU2 := UC.x - UA.x; DV2 := UC.y - UA.y;
         Det := DU1 * DV2 - DU2 * DV1;
         if Abs(Det) < 1e-12 then Continue;   // no UV mapping on this triangle
         R := 1 / Det;
@@ -718,13 +922,13 @@ var
         AddTo(A, TV, BV); AddTo(B, TV, BV); AddTo(CI, TV, BV);
       end;
     end;
-    for K := 0 to VPos.Count - 1 do
+    for K := 0 to StoreVertices.Count - 1 do
     begin
-      NV := V3(VNrm[K]);
+      NV := V3(VertexNormal(K));
       Len := Sqrt(Dot(NV, NV));   // a file's vn need not be unit length
       if Len > 1e-12 then NV := TpvVector3D.Create(NV.x / Len, NV.y / Len, NV.z / Len)
       else NV := TpvVector3D.Create(0, 0, 1);
-      TV := Tan[K];
+      TV := V3(Tan[K]);
       R := Dot(NV, TV);
       TV := TpvVector3D.Create(TV.x - NV.x * R, TV.y - NV.y * R, TV.z - NV.z * R);
       Len := Sqrt(Dot(TV, TV));
@@ -737,102 +941,128 @@ var
       end;
       TV := TpvVector3D.Create(TV.x / Len, TV.y / Len, TV.z / Len);
       BV := Cross(NV, TV);
-      if Dot(BV, Bit[K]) < 0 then BV := TpvVector3D.Create(-BV.x, -BV.y, -BV.z);   // mirrored UVs
+      if Dot(BV, V3(Bit[K])) < 0 then BV := TpvVector3D.Create(-BV.x, -BV.y, -BV.z);   // mirrored UVs
       Store.SetObjectVertexTangent(0, K, TV.x, TV.y, TV.z);
       Store.SetObjectVertexBiTangent(0, K, BV.x, BV.y, BV.z);
     end;
   end;
 
   procedure AddCorner(CornerIndex: Integer);
+  var C: TCorner; Key: TVertexKey; V: TStoreVertex; VertexIndex: Integer;
   begin
-    C := P.Corners[CornerIndex];
-    Key := IntToStr(C.P) + '/' + IntToStr(C.T) + '/' + IntToStr(C.N);
+    C := CornerOf(P, CornerIndex);
+    // Flat shading is the shader's, from each triangle's own plane, so even a
+    // flat face's corners are shared - by smoothing group, whose normal they
+    // take when the store is switched to smooth.
+    Key.P := C.P; Key.T := C.T; Key.N := C.N; Key.SmoothID := -1;
     if (C.N < 0) and (P.Kind = TRIANGLE_LIST) then
-      if P.Smooth <> '' then Key := Key + '/s' + P.Smooth
-      else Key := Key + '/f' + IntToStr(FaceID);
+    begin
+      Key.SmoothID := States.List[P.State].SmoothID;
+      if States.List[P.State].Smooth = '' then HasFlatFaces := True;
+    end;
     if not Vertices.TryGetValue(Key, VertexIndex) then
     begin
-      Position := Positions[C.P]; Color := Store.fMaterial.Diffuse;
-      if HasColors[C.P] then
-      begin
-        // Explicit vertex colours keep their original brightness when there
-        // is no material, otherwise they modulate the material diffuse colour.
-        if Store.fMaterial.LibraryFile = '' then Color := Colors[C.P]
-        else Color := TpvVector3.Create(Color.x * Colors[C.P].x,
-          Color.y * Colors[C.P].y, Color.z * Colors[C.P].z);
-      end;
-      Normal := TpvVector3.Create(0, 0, 1);
-      if C.N >= 0 then Normal := Normals[C.N]
-      else if P.Kind = TRIANGLE_LIST then
-        if P.Smooth <> '' then Normal := UnitNormal(SmoothNormals[SmoothKey(P, C.P)])
-        else Normal := UnitNormal(P.Normal);
-      UV := TpvVector3.Create(0, 0, 0);
-      if C.T >= 0 then UV := UVs[C.T];
-      VertexIndex := Obj.AddVertex;
-      Obj.SetVertexPosition(Position.x, Position.y, Position.z);
-      Obj.SetVertexColor(Color.x, Color.y, Color.z, Store.fMaterial.Opacity);
-      Obj.SetVertexNormal(Normal.x, Normal.y, Normal.z);
-      // Retain source UVs; each map may have its own transform. The diffuse
-      // shader applies its transform and the image-origin V flip at sampling.
-      Obj.SetVertexTexCoord(UV.x, UV.y);
+      V.C := C; V.Prim := FaceID;
+      VertexIndex := StoreVertices.Add(V);
       Vertices.Add(Key, VertexIndex);
-      VPos.Add(Position); VNrm.Add(Normal); VUV.Add(UV);
     end;
-    Obj.AddIndex(VertexIndex);
-    VIdx.Add(VertexIndex);
+    Indices.Add(VertexIndex);
   end;
+
 begin
   Result := TObjectList<TvgOBJObjectStore>.Create;
-  Vertices := TDictionary<string, Integer>.Create;
-  VPos := TList<TpvVector3>.Create; VNrm := TList<TpvVector3>.Create;
-  VUV := TList<TpvVector3>.Create; VIdx := TList<Integer>.Create;
+  Vertices := TDictionary<TVertexKey, Integer>.Create;
+  StoreVertices := TList<TStoreVertex>.Create;
+  Indices := TList<Cardinal>.Create;
   try
     try
-      Prev := nil; Store := nil; Obj := nil;
-      for FaceID := 0 to Primitives.Count - 1 do
+      First := 0;
+      while First < Primitives.Count do
       begin
-        P := Primitives[FaceID]; LineNo := P.LineNo;
-        if (Prev = nil) or (Prev.ObjectName <> P.ObjectName) or (Prev.Groups <> P.Groups) or
-          (Prev.MaterialName <> P.MaterialName) or (Prev.Kind <> P.Kind) then
+        Last := First;
+        while (Last + 1 < Primitives.Count) and
+          SameStore(Primitives.List[First], Primitives.List[Last + 1]) do Inc(Last);
+        P := Primitives.List[First]; LineNo := P.LineNo;
+        FirstState := States.List[P.State];
+
+        // Every vertex and index first, so the store is allocated once at its
+        // final size rather than grown a vertex at a time.
+        Vertices.Clear; StoreVertices.Clear; Indices.Clear;
+        HasFlatFaces := False;
+        for FaceID := First to Last do
         begin
-          WriteTangents;   // the previous store's
-          VPos.Clear; VNrm.Clear; VUV.Clear; VIdx.Clear;
-          Store := TvgOBJObjectStore.Create(nil); Result.Add(Store);
-          Store.fObjectName := P.ObjectName; Store.fGroupNames := P.Groups;
-          Store.fMaterial := DefaultMaterial;
-          Store.fMaterial.Name := P.MaterialName;
-          if (P.MaterialName <> '') and Materials.TryGetValue(P.MaterialName, M) then
+          P := Primitives.List[FaceID]; LineNo := P.LineNo;
+          if P.Kind = TRIANGLE_LIST then
           begin
-            Store.fMaterial := M.Data;
-            Store.fMaterial.Maps := Copy(M.Data.Maps); // bindings are per store
+            if P.FirstTriangle < 0 then begin AddCorner(0); AddCorner(1); AddCorner(2); end
+            else for J := P.FirstTriangle to P.FirstTriangle + 3 * P.TriangleCount - 1 do
+              AddCorner(Triangles.List[J]);
           end
-          else if P.MaterialName <> '' then
-            Warn(Format('Material "%s" (usemtl, line %d) is in no material library loaded - drawn grey',
-              [P.MaterialName, P.LineNo]), Format('Material "%s" ', [P.MaterialName]));
-          Store.SetupVertexAttributes([vdtPosition, vdtColor, vdtNormal, vdtTexCoord,
-                                       vdtTangent, vdtBiTangent]);
-          Store.SetupInstanceAttributes([idtObjID]); Store.SetIndexType(itUInt32);
-          Store.Topology := P.Kind;
-          HasDiffuseMap := False;
-          for Map in Store.fMaterial.Maps do if Map.Kind = 'map_Kd' then HasDiffuseMap := True;
-          Store.PrebuiltShaderVariants := True;
-          Store.BaseVertName := 'OBJ';
-          Store.BaseFragName := 'OBJ';
-          if HasDiffuseMap then Store.BaseFragName := 'OBJTexture';
-          Obj := Store.AddObject(True); Obj.AddObjectID;
-          Vertices.Clear;
+          else if P.Kind = LINE_LIST then
+            for I := 0 to P.CornerCount - 2 do begin AddCorner(I); AddCorner(I + 1); end
+          else for I := 0 to P.CornerCount - 1 do AddCorner(I);
         end;
-        if P.Kind = TRIANGLE_LIST then
-          for J in P.Triangles do AddCorner(J)
-        else if P.Kind = LINE_LIST then
-          for I := 0 to High(P.Corners) - 1 do begin AddCorner(I); AddCorner(I + 1); end
-        else for I := 0 to High(P.Corners) do AddCorner(I);
-        Prev := P;
+        Vertices.Clear;
+
+        P := Primitives.List[First]; LineNo := P.LineNo;
+        Store := TvgOBJObjectStore.Create(nil); Result.Add(Store);
+        Store.fObjectName := FirstState.ObjectName; Store.fGroupNames := FirstState.Groups;
+        Store.fMaterial := DefaultMaterial;
+        Store.fMaterial.Name := FirstState.MaterialName;
+        if (FirstState.MaterialName <> '') and Materials.TryGetValue(FirstState.MaterialName, M) then
+        begin
+          Store.fMaterial := M.Data;
+          Store.fMaterial.Maps := Copy(M.Data.Maps); // bindings are per store
+        end
+        else if FirstState.MaterialName <> '' then
+          Warn(Format('Material "%s" (usemtl, line %d) is in no material library loaded - drawn grey',
+            [FirstState.MaterialName, P.LineNo]), Format('Material "%s" ', [FirstState.MaterialName]));
+        Store.SetupVertexAttributes([vdtPosition, vdtColor, vdtNormal, vdtTexCoord,
+                                     vdtTangent, vdtBiTangent]);
+        Store.SetupInstanceAttributes([idtObjID]); Store.SetIndexType(itUInt32);
+        Store.Topology := P.Kind;
+        HasDiffuseMap := False;
+        for Map in Store.fMaterial.Maps do if Map.Kind = 'map_Kd' then HasDiffuseMap := True;
+        Store.PrebuiltShaderVariants := True;
+        Store.BaseVertName := 'OBJ';
+        Store.BaseFragName := 'OBJ';
+        if HasDiffuseMap then Store.BaseFragName := 'OBJTexture';
+        Obj := Store.AddObject(True); Obj.AddObjectID;
+        // The OBJ format's own shading: flat where faces have no normals and
+        // smoothing is off.  The shader ignores it on lines and points.
+        if HasFlatFaces and not SmoothWhenNoNormals then Store.fShading := osFlat
+        else Store.fShading := osSmooth;
+
+        Store.AllocateVertices(0, StoreVertices.Count);
+        Store.AllocateIndices(0, Indices.Count, amUninitialized);
+        for K := 0 to StoreVertices.Count - 1 do
+        begin
+          J := StoreVertices.List[K].C.P;
+          Position := Positions.List[J]; Color := Store.fMaterial.Diffuse;
+          if HasColors.List[J] then
+          begin
+            // Explicit vertex colours keep their original brightness when there
+            // is no material, otherwise they modulate the material diffuse colour.
+            if Store.fMaterial.LibraryFile = '' then Color := Colors.List[J]
+            else Color := TpvVector3.Create(Color.x * Colors.List[J].x,
+              Color.y * Colors.List[J].y, Color.z * Colors.List[J].z);
+          end;
+          Normal := VertexNormal(K);
+          UV := VertexUV(K);
+          Store.SetObjectVertexPosition(0, K, Position.x, Position.y, Position.z);
+          Store.SetObjectVertexColor(0, K, Color.x, Color.y, Color.z, Store.fMaterial.Opacity);
+          Store.SetObjectVertexNormal(0, K, Normal.x, Normal.y, Normal.z);
+          // Retain source UVs; each map may have its own transform. The diffuse
+          // shader applies its transform and the image-origin V flip at sampling.
+          Store.SetObjectVertexTexCoord(0, K, UV.x, UV.y);
+        end;
+        for K := 0 to Indices.Count - 1 do Store.SetObjectIndex(0, K, Indices.List[K]);
+        WriteTangents;
+        First := Last + 1;
       end;
-      WriteTangents;   // the last store's
     except Result.Free; raise; end;
   finally
-    Vertices.Free; VPos.Free; VNrm.Free; VUV.Free; VIdx.Free;
+    Vertices.Free; StoreVertices.Free; Indices.Free;
   end;
 end;
 
@@ -894,35 +1124,39 @@ end;
 
 procedure TvgSceneLoader_OBJ.LoadScene;
 var Reader: TOBJReader; Stores: TObjectList<TvgOBJObjectStore>; Store: TvgOBJObjectStore;
-  PreviousStore: TvgObjectStore; W: string;
+  PreviousStore: TvgObjectStore; W: string; Warnings: TArray<string>;
 begin
   ClearWarnings;
   if not Assigned(fScene) then raise EvgOBJError.Create('OBJ loader requires a Scene');
   if Trim(fFileName) = '' then raise EvgOBJError.Create('OBJ loader requires a FileName');
+  // The reader and its parsed file are freed before the stores reach the
+  // GPU: on a large scan they are hundreds of MB the upload may need.
   Reader := TOBJReader.Create;
   try
+    Reader.SmoothWhenNoNormals := fSmoothWhenNoNormals;
     Reader.ReadOBJ(ExpandFileName(fFileName));
     Stores := Reader.BuildStores;
-    try
-      PreviousStore := fCurrentObjectStore;
-      try
-        for Store in Stores do LoadTextures(Store);
-      finally fCurrentObjectStore := PreviousStore; end;
-      // All files and CPU data are ready before replacing the current scene.
-      if not fScene.Load_Begin then raise EvgOBJError.Create('Scene is not ready to load an OBJ file');
-      fCurrentObjectStore := nil;
-      try
-        while Stores.Count > 0 do
-        begin
-          Store := Stores[0];
-          fScene.AddDataStore(Store);
-          Stores.Extract(Store);
-          fCurrentObjectStore := Store;
-        end;
-      finally fScene.Load_End; end;
-      for W in Reader.Warnings do AddWarning(W);
-    finally Stores.Free; end;
+    Warnings := Reader.Warnings;
   finally Reader.Free; end;
+  try
+    PreviousStore := fCurrentObjectStore;
+    try
+      for Store in Stores do LoadTextures(Store);
+    finally fCurrentObjectStore := PreviousStore; end;
+    // All files and CPU data are ready before replacing the current scene.
+    if not fScene.Load_Begin then raise EvgOBJError.Create('Scene is not ready to load an OBJ file');
+    fCurrentObjectStore := nil;
+    try
+      while Stores.Count > 0 do
+      begin
+        Store := Stores[0];
+        fScene.AddDataStore(Store);
+        Stores.Extract(Store);
+        fCurrentObjectStore := Store;
+      end;
+    finally fScene.Load_End; end;
+    for W in Warnings do AddWarning(W);
+  finally Stores.Free; end;
 end;
 
 procedure TvgSceneLoader_OBJ.StoreScene;
