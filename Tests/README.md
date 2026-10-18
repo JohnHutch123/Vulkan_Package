@@ -212,6 +212,23 @@ against the union of its copies and selects `OBJInst` / `OBJInstDouble`.
 Included in RunTests.bat. Uses the repository's VulkanShaders folder; pass an
 alternative folder as its first argument when building elsewhere.
 
+## STLTest
+
+`Vulkan_STL` and `Vulkan_LoaderStorer_STL` without a Vulkan device. The
+format: a box's area, volume (positive, so facing out), bounds and normals;
+welding to eight corners without touching the source mesh, a tolerance weld,
+a collapsed triangle dropped, open edges counted; binary round trip, size,
+name, attribute word, a binary header starting "solid" still read as binary,
+a truncated file refused, empty meshes; ASCII round trip exact under a comma
+locale, upper case, CRLF, several solids, a quad facet fanned, and malformed
+files refused; a 200 000 triangle strip welded through the hash. The scene
+side: `.stl` registered, welded and unwelded loads (vertex counts, smooth or
+flat shading), `StoreScene` binary and ASCII giving the same triangles back,
+`LoadMesh` and `SceneMesh`, hidden objects left out, and a missing or bad
+file leaving the scene as it was. The format half also builds with Free
+Pascal: `fpc -Mdelphi -Fu../RunTime_Src STLTest.dpr`. Included in
+RunTests.bat.
+
 ## InstancingTest
 
 `Vulkan_Instancing` without a device. The placement matrix: pivot onto the

@@ -172,3 +172,7 @@ It’s a **component-oriented architecture**:
 ### Simple OBJ loading
 
 The public runtime includes a load-only OBJ loader. See [OBJ loader](RunTime_Src/OBJ_LOADER.md) for usage and the supported subset.
+
+### STL loading and saving
+
+STL files (binary or ASCII) load into a scene and a scene saves as STL. The file format unit also works on its own, without Vulkan. See [STL loading and saving](RunTime_Src/STL_LOADER.md).

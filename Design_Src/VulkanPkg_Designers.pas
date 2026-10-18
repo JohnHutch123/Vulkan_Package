@@ -71,7 +71,8 @@ interface
         Vulkan_Components_Lookups,
         PasVulkan.Framework,
         Vulkan_Components_Scene_Renderer,
-        Vulkan_Loader_OBJ;
+        Vulkan_Loader_OBJ,
+        Vulkan_LoaderStorer_STL;
 
 Var
     SortedEnumLists  : Boolean = False;
@@ -375,7 +376,8 @@ begin
                                             TvgLinker,
                                             TvgScene,
                                             TvgToolManager,
-                                            TvgSceneLoader_OBJ]);
+                                            TvgSceneLoader_OBJ,
+                                            TvgSceneLoaderStorer_STL]);
 
    RegisterComponentEditor (TvgInstance,      TvgInstanceEditor);
    RegisterComponentEditor (TvgLogicalDevice, TvgDeviceEditor);
