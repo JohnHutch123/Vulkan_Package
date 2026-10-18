@@ -827,6 +827,57 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
+procedure TestBulkSetters;
+var
+  DS    : TvgVulkanDataStore;
+  A, B  : Integer;
+  Stamp : Cardinal;
+  Box   : TvgAABB;
+begin
+  Writeln('--- bulk vertex setters ---');
+  DS := NewStore(POINT_LIST);
+  try
+    A := AddObj(DS, 2, 0);
+    B := AddObj(DS, 3, 100);
+
+    Stamp := DS.ChangeStamp;
+    DS.SetObjectVertexPositions(B, 1, [7, 8, 9, 10, 11, 12]);
+    Check('bulk write changes the stamp', DS.ChangeStamp <> Stamp, True);
+    CheckVec('B vertex 0 untouched', DS.GetObjectVertexPosition(B, 0), V(100, 100, 100));
+    CheckVec('B vertex 1 written', DS.GetObjectVertexPosition(B, 1), V(7, 8, 9));
+    CheckVec('B vertex 2 written', DS.GetObjectVertexPosition(B, 2), V(10, 11, 12));
+    CheckObjIntact(DS, 'A intact after bulk write', A, 2, 0);
+
+    Box := DS.GetObjectLocalBounds(B);
+    Check('bounds grew to the new points', (Box.Min.x = 7) and (Box.Max.z = 100), True);
+
+    try
+      DS.SetObjectVertexPositions(A, 1, [1, 2, 3, 4, 5, 6]);
+      Check('bulk write past the end raises', False, True);
+    except
+      on EVulkanDataStoreException do Check('bulk write past the end raises', True, True);
+    end;
+    CheckVec('B vertex 0 still untouched', DS.GetObjectVertexPosition(B, 0), V(100, 100, 100));
+
+    try
+      DS.SetObjectVertexColors(B, 0, [1, 0, 0]);
+      Check('partial vertex raises', False, True);
+    except
+      on EVulkanDataStoreException do Check('partial vertex raises', True, True);
+    end;
+
+    DS.SetObjectVertexColors(B, 0, [1, 0, 0, 1, 0, 1, 0, 1]);
+    Check('colours write', True, True);
+
+    Stamp := DS.ChangeStamp;
+    DS.SetObjectVertexPositions(B, 0, []);
+    Check('empty write does nothing', DS.ChangeStamp = Stamp, True);
+  finally
+    DS.Free;
+  end;
+end;
+
+// ---------------------------------------------------------------------------
 begin
   try
     TestGrowBuriedObject;
@@ -843,6 +894,7 @@ begin
     TestGPUCapacityWithoutDevice;
     TestHidden;
     TestColorOverride;
+    TestBulkSetters;
 
     if Failures = 0 then
       Writeln('ALL CHECKS PASSED')

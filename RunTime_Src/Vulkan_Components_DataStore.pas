@@ -241,6 +241,21 @@ type
 
     FNumFrames         : Integer;
     FDataDirty         : TArray<Boolean>;
+
+    //Per frame.  When only vertices were written since that frame's last
+    //upload (SetVertexRangeDirty), [FVertexDirtyLo, FVertexDirtyHi) is the
+    //vertex range to send.  FVertexDirtyAll means send everything: any other
+    //change, new buffers, or a cut-short upload.
+    FVertexDirtyAll    : TArray<Boolean>;
+    FVertexDirtyLo     : TArray<Integer>;
+    FVertexDirtyHi     : TArray<Integer>;
+
+    //Staging buffers kept from one upload to the next, one per frame and
+    //array.  A frame's buffers are reused only when that frame is recorded
+    //again, so the GPU has finished with them.  Freed with the GPU buffers.
+    FVertexStaging     : TArray<TpvVulkanBuffer>;
+    FInstanceStaging   : TArray<TpvVulkanBuffer>;
+    FIndexStaging      : TArray<TpvVulkanBuffer>;
     FBuffersCreated    : Boolean;
     FTransferState     : TTransferState;
     FValidateWrites    : Boolean;
@@ -293,6 +308,14 @@ type
 
     // Generic data setters (work on global indices)
     procedure SetVertexAttributeData(AIndex: Integer; ADataType: TvgVertexDataType; const AData);
+    procedure SetObjectVertexRunLocked(ObjectIndex, AFirst, ACount: Integer;
+      ADataType: TvgVertexDataType; const AData);
+
+    procedure SizeFrameArrays;
+    procedure SetVertexRangeDirty(AFirst, ACount: Integer);
+    procedure NeedFullUpload;
+    procedure FrameUploaded(aFrameIndex: Integer; aTruncated: Boolean);
+    procedure FreeStagingBuffers;
     procedure SetInstanceAttributeData(AIndex: Integer; ADataType: TInstanceDataType; const AData);
 
 
@@ -591,6 +614,19 @@ type
     procedure SetObjectVertexTangent(ObjectIndex, LocalIndex: Integer; X, Y, Z: Single);
     procedure SetObjectVertexBiTangent(ObjectIndex, LocalIndex: Integer; X, Y, Z: Single);
     procedure SetObjectVertexIndex(ObjectIndex, LocalIndex: Integer; I: Cardinal);
+
+    { Bulk setters: write consecutive vertices of one object, starting at
+      local index AFirst, under one lock.  AData holds the values packed, so
+      Positions, Normals, Tangents and BiTangents take 3 Singles per vertex,
+      Colors 4 and TexCoords 2.  Much faster than the single-vertex setters
+      in a loop, and only the written range is uploaded. }
+    procedure SetObjectVertexPositions(ObjectIndex, AFirst: Integer; const AData: array of Single);
+    procedure SetObjectVertexColors(ObjectIndex, AFirst: Integer; const AData: array of Single);
+    procedure SetObjectVertexNormals(ObjectIndex, AFirst: Integer; const AData: array of Single);
+    procedure SetObjectVertexTexCoords(ObjectIndex, AFirst: Integer; const AData: array of Single);
+    procedure SetObjectVertexTangents(ObjectIndex, AFirst: Integer; const AData: array of Single);
+    procedure SetObjectVertexBiTangents(ObjectIndex, AFirst: Integer; const AData: array of Single);
+    procedure SetObjectVertexIndices(ObjectIndex, AFirst: Integer; const AData: array of Cardinal);
 
     procedure SetObjectInstanceObjID(ObjectIndex, LocalIndex: Integer; ID1, ID2: Cardinal);
     procedure SetObjectInstanceColor(ObjectIndex, LocalIndex: Integer; R, G, B, A: Single);
@@ -944,7 +980,7 @@ begin
   //buffer, its upload raises (and is swallowed by the worker) and its draw is
   //recorded with nothing bound - which presents as a blank frame.
   FNumFrames := Integer(MaxFramesInFlight);
-  SetLength(FDataDirty, FNumFrames);
+  SizeFrameArrays;
 end;
 
 destructor TvgVulkanDataStore.Destroy;
@@ -953,7 +989,8 @@ var
   SB: TpvVulkanBuffer;
 begin
   DeleteVulkanDataBuffers;
-  
+  FreeStagingBuffers;
+
   if Assigned(StageBufferList) then
   begin
     for I := 0 to StageBufferList.Count - 1 do
@@ -986,7 +1023,7 @@ begin
     FCriticalSection.Enter;
     try
       FNumFrames := Value;
-      SetLength(FDataDirty, FNumFrames);
+      SizeFrameArrays;
       SetDataDirty;   //new slots start False; every slot needs its upload
     finally
       FCriticalSection.Leave;
@@ -2501,7 +2538,7 @@ begin
     Obj.BoundsDirty := True;
     FDataObjects[ObjectIndex] := Obj;
 
-    SetDataDirty;
+    SetVertexRangeDirty(GlobalIndex, 1);
   finally
     FCriticalSection.Leave;
   end;
@@ -2517,7 +2554,7 @@ begin
     GlobalIndex := VertexGlobalIndex(ObjectIndex, LocalIndex);
     Data[0] := R; Data[1] := G; Data[2] := B; Data[3] := A;
     SetVertexAttributeData(GlobalIndex, vdtColor, Data);
-    SetDataDirty;
+    SetVertexRangeDirty(GlobalIndex, 1);
   finally
     FCriticalSection.Leave;
   end;
@@ -2533,7 +2570,7 @@ begin
     GlobalIndex := VertexGlobalIndex(ObjectIndex, LocalIndex);
     Data[0] := X; Data[1] := Y; Data[2] := Z;
     SetVertexAttributeData(GlobalIndex, vdtNormal, Data);
-    SetDataDirty;
+    SetVertexRangeDirty(GlobalIndex, 1);
   finally
     FCriticalSection.Leave;
   end;
@@ -2549,7 +2586,7 @@ begin
     GlobalIndex := VertexGlobalIndex(ObjectIndex, LocalIndex);
     Data[0] := U; Data[1] := V;
     SetVertexAttributeData(GlobalIndex, vdtTexCoord, Data);
-    SetDataDirty;
+    SetVertexRangeDirty(GlobalIndex, 1);
   finally
     FCriticalSection.Leave;
   end;
@@ -2565,7 +2602,7 @@ begin
     GlobalIndex := VertexGlobalIndex(ObjectIndex, LocalIndex);
     Data[0] := X; Data[1] := Y; Data[2] := Z;
     SetVertexAttributeData(GlobalIndex, vdtTangent, Data);
-    SetDataDirty;
+    SetVertexRangeDirty(GlobalIndex, 1);
   finally
     FCriticalSection.Leave;
   end;
@@ -2581,7 +2618,7 @@ begin
     GlobalIndex := VertexGlobalIndex(ObjectIndex, LocalIndex);
     Data[0] := X; Data[1] := Y; Data[2] := Z;
     SetVertexAttributeData(GlobalIndex, vdtBiTangent, Data);
-    SetDataDirty;
+    SetVertexRangeDirty(GlobalIndex, 1);
   finally
     FCriticalSection.Leave;
   end;
@@ -2595,7 +2632,164 @@ begin
   try
     GlobalIndex := VertexGlobalIndex(ObjectIndex, LocalIndex);
     SetVertexAttributeData(GlobalIndex, vdtIndex, I);
-    SetDataDirty;
+    SetVertexRangeDirty(GlobalIndex, 1);
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+{ Bulk vertex setters }
+
+procedure TvgVulkanDataStore.SetObjectVertexRunLocked(ObjectIndex, AFirst, ACount: Integer;
+  ADataType: TvgVertexDataType; const AData);
+var
+  Obj    : TvgVulkanObjectRecord;
+  I      : Integer;
+  Offset : Integer;
+  Stride : Integer;
+  Size   : Integer;
+  Src    : PByte;
+begin
+  if not (ADataType in FVertexTypes) then
+    raise EVulkanDataStoreException.Create('Vertex attribute type not configured');
+
+  Obj := CheckLiveObject(ObjectIndex);
+  if (AFirst < 0) or (ACount > Obj.VertexCount - AFirst) then
+    raise EVulkanDataStoreException.CreateFmt(
+      'Vertices %d..%d are out of range for object %d (it has %d)',
+      [AFirst, AFirst + ACount - 1, ObjectIndex, Obj.VertexCount]);
+
+  Stride := Integer(FVertexStride);
+  Size   := Integer(GetVertexSize(ADataType));
+  Offset := (Obj.VertexStart + AFirst) * Stride + Integer(FVertexOffsets[ADataType]);
+  Src    := @AData;
+  for I := 0 to ACount - 1 do
+  begin
+    Move(Src^, FVertexData[Offset], Size);
+    Inc(Src, Size);
+    Inc(Offset, Stride);
+  end;
+
+  SetVertexRangeDirty(Obj.VertexStart + AFirst, ACount);
+end;
+
+// Checks AData holds whole vertices and returns how many.
+function PackedVertexCount(ALength, AComponents: Integer): Integer;
+begin
+  if ALength mod AComponents <> 0 then
+    raise EVulkanDataStoreException.CreateFmt(
+      '%d values is not a whole number of vertices (%d values each)',
+      [ALength, AComponents]);
+  Result := ALength div AComponents;
+end;
+
+procedure TvgVulkanDataStore.SetObjectVertexPositions(ObjectIndex, AFirst: Integer;
+  const AData: array of Single);
+var
+  Count : Integer;
+  I     : Integer;
+  Obj   : TvgVulkanObjectRecord;
+begin
+  Count := PackedVertexCount(Length(AData), 3);
+  if Count = 0 then Exit;
+
+  FCriticalSection.Enter;
+  try
+    SetObjectVertexRunLocked(ObjectIndex, AFirst, Count, vdtPosition, AData[0]);
+
+    // Same bound tracking as SetObjectVertexPosition.
+    Obj := FDataObjects[ObjectIndex];
+    for I := 0 to Count - 1 do
+      Obj.LocalBounds.GrowPoint(AData[I * 3], AData[I * 3 + 1], AData[I * 3 + 2]);
+    Obj.BoundsDirty := True;
+    FDataObjects[ObjectIndex] := Obj;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+procedure TvgVulkanDataStore.SetObjectVertexColors(ObjectIndex, AFirst: Integer;
+  const AData: array of Single);
+var
+  Count : Integer;
+begin
+  Count := PackedVertexCount(Length(AData), 4);
+  if Count = 0 then Exit;
+  FCriticalSection.Enter;
+  try
+    SetObjectVertexRunLocked(ObjectIndex, AFirst, Count, vdtColor, AData[0]);
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+procedure TvgVulkanDataStore.SetObjectVertexNormals(ObjectIndex, AFirst: Integer;
+  const AData: array of Single);
+var
+  Count : Integer;
+begin
+  Count := PackedVertexCount(Length(AData), 3);
+  if Count = 0 then Exit;
+  FCriticalSection.Enter;
+  try
+    SetObjectVertexRunLocked(ObjectIndex, AFirst, Count, vdtNormal, AData[0]);
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+procedure TvgVulkanDataStore.SetObjectVertexTexCoords(ObjectIndex, AFirst: Integer;
+  const AData: array of Single);
+var
+  Count : Integer;
+begin
+  Count := PackedVertexCount(Length(AData), 2);
+  if Count = 0 then Exit;
+  FCriticalSection.Enter;
+  try
+    SetObjectVertexRunLocked(ObjectIndex, AFirst, Count, vdtTexCoord, AData[0]);
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+procedure TvgVulkanDataStore.SetObjectVertexTangents(ObjectIndex, AFirst: Integer;
+  const AData: array of Single);
+var
+  Count : Integer;
+begin
+  Count := PackedVertexCount(Length(AData), 3);
+  if Count = 0 then Exit;
+  FCriticalSection.Enter;
+  try
+    SetObjectVertexRunLocked(ObjectIndex, AFirst, Count, vdtTangent, AData[0]);
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+procedure TvgVulkanDataStore.SetObjectVertexBiTangents(ObjectIndex, AFirst: Integer;
+  const AData: array of Single);
+var
+  Count : Integer;
+begin
+  Count := PackedVertexCount(Length(AData), 3);
+  if Count = 0 then Exit;
+  FCriticalSection.Enter;
+  try
+    SetObjectVertexRunLocked(ObjectIndex, AFirst, Count, vdtBiTangent, AData[0]);
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+procedure TvgVulkanDataStore.SetObjectVertexIndices(ObjectIndex, AFirst: Integer;
+  const AData: array of Cardinal);
+begin
+  if Length(AData) = 0 then Exit;
+  FCriticalSection.Enter;
+  try
+    SetObjectVertexRunLocked(ObjectIndex, AFirst, Length(AData), vdtIndex, AData[0]);
   finally
     FCriticalSection.Leave;
   end;
@@ -3308,12 +3502,82 @@ begin
 end;
 
 procedure TvgVulkanDataStore.SetDataDirty;
+begin
+  Inc(FChangeStamp);
+  NeedFullUpload;
+end;
+
+procedure TvgVulkanDataStore.SizeFrameArrays;
+var
+  I, Old: Integer;
+begin
+  Old := Length(FVertexDirtyAll);
+  SetLength(FDataDirty,     FNumFrames);
+  SetLength(FVertexDirtyAll, FNumFrames);
+  SetLength(FVertexDirtyLo,  FNumFrames);
+  SetLength(FVertexDirtyHi,  FNumFrames);
+  //A new slot has never had an upload, so its first one sends everything.
+  for I := Old to FNumFrames - 1 do
+    FVertexDirtyAll[I] := True;
+end;
+
+procedure TvgVulkanDataStore.NeedFullUpload;
 var
   I: Integer;
 begin
+  for I := 0 to High(FDataDirty) do
+  begin
+    FDataDirty[I]     := True;
+    FVertexDirtyAll[I] := True;
+  end;
+end;
+
+procedure TvgVulkanDataStore.SetVertexRangeDirty(AFirst, ACount: Integer);
+var
+  I: Integer;
+begin
+  if ACount <= 0 then Exit;
   Inc(FChangeStamp);
   for I := 0 to High(FDataDirty) do
+  begin
+    if not FVertexDirtyAll[I] then
+    begin
+      if not FDataDirty[I] then
+      begin
+        FVertexDirtyLo[I] := AFirst;
+        FVertexDirtyHi[I] := AFirst + ACount;
+      end
+      else
+      begin
+        FVertexDirtyLo[I] := Min(FVertexDirtyLo[I], AFirst);
+        FVertexDirtyHi[I] := Max(FVertexDirtyHi[I], AFirst + ACount);
+      end;
+    end;
     FDataDirty[I] := True;
+  end;
+end;
+
+procedure TvgVulkanDataStore.FrameUploaded(aFrameIndex: Integer; aTruncated: Boolean);
+begin
+  //Cut short by buffers an edit outgrew: stay dirty, and send everything
+  //once EnsureGPUCapacity has replaced them.
+  FDataDirty[aFrameIndex]     := aTruncated;
+  FVertexDirtyAll[aFrameIndex] := aTruncated;
+end;
+
+procedure TvgVulkanDataStore.FreeStagingBuffers;
+var
+  I: Integer;
+begin
+  for I := 0 to High(FVertexStaging) do
+    FreeAndNil(FVertexStaging[I]);
+  for I := 0 to High(FInstanceStaging) do
+    FreeAndNil(FInstanceStaging[I]);
+  for I := 0 to High(FIndexStaging) do
+    FreeAndNil(FIndexStaging[I]);
+  SetLength(FVertexStaging,   0);
+  SetLength(FInstanceStaging, 0);
+  SetLength(FIndexStaging,    0);
 end;
 
 function TvgVulkanDataStore.GetDataDirty(aFrameIndex: Integer): Boolean;
@@ -3448,6 +3712,9 @@ begin
   end;
   
   fBuffersCreated := True;
+
+  //New buffers hold nothing yet.
+  NeedFullUpload;
 end;
 
 function TvgVulkanDataStore.GPUBuffersTooSmallLocked: Boolean;
@@ -3569,6 +3836,9 @@ begin
     for Frame := 0 to High(FIndexBuffers) do
       DestroyVulkanBuffer(FIndexBuffers[Frame]);
     SetLength(FIndexBuffers, 0);
+
+    //No frame is in flight now (FinishFramesInFlight above).
+    FreeStagingBuffers;
 
     fBuffersCreated := False;
 
@@ -3807,8 +4077,7 @@ var
   CopyRegion: TVkBufferCopy;
   BarrierCount: Integer;
   Barriers: array[0..2] of TVkBufferMemoryBarrier;
-  LocalStageBuffers: TList<TpvVulkanBuffer>;
-  VSize, ISize, XSize: TVkDeviceSize;
+  VOffset, VEnd, VSize, ISize, XSize: TVkDeviceSize;
   Truncated: Boolean;
 
   // Bytes of an array to copy into this frame's buffer: all of it, or as
@@ -3831,34 +4100,30 @@ var
     end;
   end;
 
-  procedure AddStageBuffer(const ABuffer: TpvVulkanBuffer);
-  begin
-    if Assigned(ABuffer) then
-      LocalStageBuffers.Add(ABuffer);
-  end;
-
-  procedure DoBufferCopy(const AData: TBytes; const ASize: TVkDeviceSize;
-    const ADstBuffer: TpvVulkanBuffer);
+  // Copies ASize bytes from AData[AOffset] to the same offset in ADstBuffer.
+  // AStage is this frame's staging buffer for the array, kept for the next
+  // upload; it is replaced only when too small.
+  procedure DoBufferCopy(const AData: TBytes; const AOffset, ASize: TVkDeviceSize;
+    const ADstBuffer: TpvVulkanBuffer; var AStage: TpvVulkanBuffer);
   var
-    StagingBuffer: TpvVulkanBuffer;
+    StageSize: TVkDeviceSize;
   begin
     if (not Assigned(ADstBuffer)) or (ASize = 0) then
       Exit;
 
-    CustomAssert(TVkDeviceSize(Length(AData)) >= ASize,
+    CustomAssert(TVkDeviceSize(Length(AData)) >= AOffset + ASize,
       'UploadAllDataUsingCommand: source byte array smaller than requested copy size');
-    CustomAssert(ASize <= ADstBuffer.Size,
+    CustomAssert(AOffset + ASize <= ADstBuffer.Size,
       'UploadAllDataUsingCommand: destination buffer too small');
 
     if (ADstBuffer.MemoryPropertyFlags and TVkMemoryPropertyFlags(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) <> 0 then
     begin
-      pData := ADstBuffer.Memory.MapMemory(0, ASize);
+      pData := ADstBuffer.Memory.MapMemory(AOffset, ASize);
       try
         if Assigned(pData) then
         begin
-          Move(AData[0], pData^, ASize);
-        //  if (ADstBuffer.MemoryPropertyFlags and TVkMemoryPropertyFlags(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) = 0 then
-            ADstBuffer.Memory.FlushMappedMemory;
+          Move(AData[AOffset], pData^, ASize);
+          ADstBuffer.Memory.FlushMappedMemory;
         end
         else
           raise EVulkanDataStoreException.Create('Vulkan buffer memory map failed');
@@ -3868,42 +4133,67 @@ var
     end
     else
     begin
+      if Assigned(AStage) and (AStage.Size < ASize) then
+      begin
+        // An earlier frame's commands may still read it: free it later, the
+        // way staging buffers were always freed.
+        StageBufferList.Add(AStage);
+        AStage := nil;
+      end;
 
-         StagingBuffer := TpvVulkanBuffer.Create(FVulkanDevice,
-                                          ASize,
-                                          TVkBufferUsageFlags(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
-                                          TVkSharingMode(VK_SHARING_MODE_EXCLUSIVE),
-                                          [],
-                                          TVkMemoryPropertyFlags(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) or
-                                          TVkMemoryPropertyFlags(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT),
-                                          0, 0, 0,
-                                          0,//TVkMemoryPropertyFlags(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT),
-                                          0, 0, 0,
-                                          [TpvVulkanBufferFlag.OwnSingleMemoryChunk]);
+      if not Assigned(AStage) then
+      begin
+        // Headroom, so a growing edit does not need a new one every time.
+        StageSize := ASize + ASize div 4;
+        if StageSize < 65536 then
+          StageSize := 65536;
+        AStage := TpvVulkanBuffer.Create(FVulkanDevice,
+                                         StageSize,
+                                         TVkBufferUsageFlags(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
+                                         TVkSharingMode(VK_SHARING_MODE_EXCLUSIVE),
+                                         [],
+                                         TVkMemoryPropertyFlags(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) or
+                                         TVkMemoryPropertyFlags(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT),
+                                         0, 0, 0,
+                                         0,
+                                         0, 0, 0,
+                                         [TpvVulkanBufferFlag.OwnSingleMemoryChunk]);
+      end;
 
-      AddStageBuffer(StagingBuffer);
-
-      pData := StagingBuffer.Memory.MapMemory(0, ASize);
+      pData := AStage.Memory.MapMemory(0, ASize);
       try
         if Assigned(pData) then
         begin
-          Move(AData[0], pData^, ASize);
-        //  if (StagingBuffer.MemoryPropertyFlags and TVkMemoryPropertyFlags(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) = 0 then
-            StagingBuffer.Memory.FlushMappedMemory;
+          Move(AData[AOffset], pData^, ASize);
+          AStage.Memory.FlushMappedMemory;
         end
         else
           raise EVulkanDataStoreException.Create('Vulkan staging buffer memory map failed');
       finally
-        StagingBuffer.Memory.UnMapMemory;
+        AStage.Memory.UnMapMemory;
       end;
 
       FillChar(CopyRegion, SizeOf(CopyRegion), 0);
       CopyRegion.srcOffset := 0;
-      CopyRegion.dstOffset := 0;
-      CopyRegion.size := ASize;
+      CopyRegion.dstOffset := AOffset;
+      CopyRegion.size      := ASize;
 
-      aCmd.CmdCopyBuffer(StagingBuffer.Handle, ADstBuffer.Handle, 1, @CopyRegion);
+      aCmd.CmdCopyBuffer(AStage.Handle, ADstBuffer.Handle, 1, @CopyRegion);
     end;
+  end;
+
+  procedure AddBarrier(aBuffer: TpvVulkanBuffer; aDstAccess: TVkAccessFlags;
+                       aOffset, aSize: TVkDeviceSize);
+  begin
+    Barriers[BarrierCount].sType := VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+    Barriers[BarrierCount].srcAccessMask := TVkAccessFlags(VK_ACCESS_TRANSFER_WRITE_BIT);
+    Barriers[BarrierCount].dstAccessMask := aDstAccess;
+    Barriers[BarrierCount].srcQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
+    Barriers[BarrierCount].dstQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
+    Barriers[BarrierCount].buffer := aBuffer.Handle;
+    Barriers[BarrierCount].offset := aOffset;
+    Barriers[BarrierCount].size := aSize;
+    Inc(BarrierCount);
   end;
 
 begin
@@ -3923,108 +4213,84 @@ begin
   if not FDataDirty[aFrameIndex] then
     Exit;
 
-  LocalStageBuffers := TList<TpvVulkanBuffer>.Create;
+  FCriticalSection.Enter;
   try
-    FCriticalSection.Enter;
-    try
-      Truncated := False;
-      VSize := CopySize(FVertexCount,   TVkDeviceSize(FVertexStride),   FVertexBuffers);
+    if Length(FVertexStaging) < FNumFrames then
+    begin
+      SetLength(FVertexStaging,   FNumFrames);
+      SetLength(FInstanceStaging, FNumFrames);
+      SetLength(FIndexStaging,    FNumFrames);
+    end;
+
+    Truncated := False;
+    VOffset   := 0;
+    VSize := CopySize(FVertexCount, TVkDeviceSize(FVertexStride), FVertexBuffers);
+
+    if FVertexDirtyAll[aFrameIndex] then
+    begin
       ISize := CopySize(FInstanceCount, TVkDeviceSize(FInstanceStride), FInstanceBuffers);
       XSize := CopySize(FIndexCount,    TVkDeviceSize(GetIndexElementSize(FIndexType)), FIndexBuffers);
+    end
+    else
+    begin
+      // Only vertices were written since this frame's last upload: send
+      // just that range, and leave instances and indices as they are.
+      ISize   := 0;
+      XSize   := 0;
+      VOffset := TVkDeviceSize(Max(FVertexDirtyLo[aFrameIndex], 0)) * TVkDeviceSize(FVertexStride);
+      VEnd    := TVkDeviceSize(Max(FVertexDirtyHi[aFrameIndex], 0)) * TVkDeviceSize(FVertexStride);
+      if VEnd > VSize then
+        VEnd := VSize;
+      if VEnd > VOffset then
+        VSize := VEnd - VOffset
+      else
+        VSize := 0;
+    end;
+
+    if VSize > 0 then
+      DoBufferCopy(FVertexData, VOffset, VSize, FVertexBuffers[aFrameIndex].Buffer,
+                   FVertexStaging[aFrameIndex]);
+
+    if ISize > 0 then
+      DoBufferCopy(FInstanceData, 0, ISize, FInstanceBuffers[aFrameIndex].Buffer,
+                   FInstanceStaging[aFrameIndex]);
+
+    if XSize > 0 then
+      DoBufferCopy(FIndexData, 0, XSize, FIndexBuffers[aFrameIndex].Buffer,
+                   FIndexStaging[aFrameIndex]);
+
+    if IncBarrier then
+    begin
+      FillChar(Barriers[0], SizeOf(Barriers), 0);
+      BarrierCount := 0;
 
       if VSize > 0 then
-        DoBufferCopy(FVertexData, VSize, FVertexBuffers[aFrameIndex].Buffer);
+        AddBarrier(FVertexBuffers[aFrameIndex].Buffer,
+                   TVkAccessFlags(VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT), VOffset, VSize);
 
       if ISize > 0 then
-        DoBufferCopy(FInstanceData, ISize, FInstanceBuffers[aFrameIndex].Buffer);
+        AddBarrier(FInstanceBuffers[aFrameIndex].Buffer,
+                   TVkAccessFlags(VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT), 0, ISize);
 
       if XSize > 0 then
-        DoBufferCopy(FIndexData, XSize, FIndexBuffers[aFrameIndex].Buffer);
+        AddBarrier(FIndexBuffers[aFrameIndex].Buffer,
+                   TVkAccessFlags(VK_ACCESS_INDEX_READ_BIT), 0, XSize);
 
-      if IncBarrier then
+      if BarrierCount > 0 then
       begin
-        FillChar(Barriers[0], SizeOf(Barriers), 0);
-        BarrierCount := 0;
-
-        if VSize > 0 then
-        begin
-          Barriers[BarrierCount].sType := VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-          Barriers[BarrierCount].srcAccessMask := TVkAccessFlags(VK_ACCESS_TRANSFER_WRITE_BIT);
-          Barriers[BarrierCount].dstAccessMask := TVkAccessFlags(VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT);
-          Barriers[BarrierCount].srcQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
-          Barriers[BarrierCount].dstQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
-          Barriers[BarrierCount].buffer := FVertexBuffers[aFrameIndex].Buffer.Handle;
-          Barriers[BarrierCount].offset := 0;
-          Barriers[BarrierCount].size := VSize;
-          Inc(BarrierCount);
-        end;
-
-        if ISize > 0 then
-        begin
-          Barriers[BarrierCount].sType := VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-          Barriers[BarrierCount].srcAccessMask := TVkAccessFlags(VK_ACCESS_TRANSFER_WRITE_BIT);
-          Barriers[BarrierCount].dstAccessMask := TVkAccessFlags(VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT);
-          Barriers[BarrierCount].srcQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
-          Barriers[BarrierCount].dstQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
-          Barriers[BarrierCount].buffer := FInstanceBuffers[aFrameIndex].Buffer.Handle;
-          Barriers[BarrierCount].offset := 0;
-          Barriers[BarrierCount].size := ISize;
-          Inc(BarrierCount);
-        end;
-
-        if XSize > 0 then
-        begin
-          Barriers[BarrierCount].sType := VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-          Barriers[BarrierCount].srcAccessMask := TVkAccessFlags(VK_ACCESS_TRANSFER_WRITE_BIT);
-          Barriers[BarrierCount].dstAccessMask := TVkAccessFlags(VK_ACCESS_INDEX_READ_BIT);
-          Barriers[BarrierCount].srcQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
-          Barriers[BarrierCount].dstQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
-          Barriers[BarrierCount].buffer := FIndexBuffers[aFrameIndex].Buffer.Handle;
-          Barriers[BarrierCount].offset := 0;
-          Barriers[BarrierCount].size := XSize;
-          Inc(BarrierCount);
-        end;
-
-        if BarrierCount > 0 then
-        begin
-          aCmd.CmdPipelineBarrier(
-            TVkPipelineStageFlags(VK_PIPELINE_STAGE_TRANSFER_BIT),
-            TVkPipelineStageFlags(VK_PIPELINE_STAGE_VERTEX_INPUT_BIT),
-            0,
-            0, nil,
-            BarrierCount, @Barriers[0],
-            0, nil);
-        end;
+        aCmd.CmdPipelineBarrier(
+          TVkPipelineStageFlags(VK_PIPELINE_STAGE_TRANSFER_BIT),
+          TVkPipelineStageFlags(VK_PIPELINE_STAGE_VERTEX_INPUT_BIT),
+          0,
+          0, nil,
+          BarrierCount, @Barriers[0],
+          0, nil);
       end;
-
-      // Cut short by buffers an edit outgrew: stay dirty, so the rest goes
-      // up once EnsureGPUCapacity has replaced them.
-      FDataDirty[aFrameIndex] := Truncated;
-    finally
-      FCriticalSection.Leave;
     end;
 
-    { IMPORTANT:
-      Staging buffers must stay alive until AFTER the recorded command buffer has
-      actually finished executing on the GPU.
-
-      Safe options:
-      1. If caller submits and waits immediately, free them right after submit.
-      2. Otherwise move these buffers to an owner list associated with the frame
-         and free them only when that frame fence signals.
-
-      For now, keep compatibility with your existing lifetime model by transferring
-      ownership to StageBufferList after recording. }
-    while LocalStageBuffers.Count > 0 do
-    begin
-      StageBufferList.Add(LocalStageBuffers[0]);
-      LocalStageBuffers.Delete(0);
-    end;
-
+    FrameUploaded(aFrameIndex, Truncated);
   finally
-    for var I := 0 to LocalStageBuffers.Count - 1 do
-      LocalStageBuffers[I].Free;
-    LocalStageBuffers.Free;
+    FCriticalSection.Leave;
   end;
 end;
 
@@ -4266,7 +4532,7 @@ begin
       end
       else
       begin
-        FDataDirty[aFrameIndex] := False;
+        FrameUploaded(aFrameIndex, False);
       end;
     finally
       aPool.ReleaseCommand(Cmd);
