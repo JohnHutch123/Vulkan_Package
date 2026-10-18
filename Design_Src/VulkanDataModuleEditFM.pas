@@ -501,14 +501,6 @@ begin
       AddOther(fModule.Scene);
       AddOther(fModule.SceneLoader);
       AddOther(fModule.ToolManager);
-    (*
-      For I := 0 to fModule.ComponentCount - 1 do
-      Begin
-        Comp := fModule.Components[I];
-        If (Comp is TvgBaseComponent) or (Comp is TvgWindowVCL) then
-          AddOther(Comp);
-      End;
-     *)
       tvObjects.FullCollapse;
       For I := 0 to tvObjects.Items.Count - 1 do
       Begin

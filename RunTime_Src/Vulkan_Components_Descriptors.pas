@@ -346,7 +346,6 @@ Type
      procedure ClearDataOnGPU(aIndex:Integer;aTransferPool: TvgCommandBufferPool; aCommandBuffer: TvgCommandBuffer = nil); Override;
 
 
-
     Function LoadTexture(aFileName:String;    Var aGLSLIndex:TvkUint32):Boolean;   Overload;
     Function LoadTexture(aFileStream:TStream; Var aGLSLIndex:TvkUint32):Boolean;   Overload; //owns the FileStream
 
@@ -863,8 +862,6 @@ TvgElementSamplingDimension = (esdLinear1D, esdGrid2D);
   End;
 
 
-
-
   //2x Unsigned Integer Push Constant (e.g. object/instance IDs, per-draw indices, etc.)
   //Shader-stage visibility is inherited from TvgPushConstant.ShaderFlags -
   //set that (design-time in the Object Inspector, or in code) to target
@@ -957,84 +954,6 @@ begin
   else if aTypeName = 'Cardinal'      then Result := 'uint'
   else Result := aTypeName;
 end;
-
-//Pipeline cache management
-
-procedure SavePipelineCacheDataToFile(Device: TVkDevice; PipelineCache: TVkPipelineCache; const FileName: string);
-var
-  DataSize: TvkUint32;
-  Data: Pointer;
-  FS: TFileStream;
-begin
-  // Query the size of the cache data
-  vkGetPipelineCacheData(Device, PipelineCache, @DataSize, nil);
-  if DataSize = 0 then Exit;
-
-  // Allocate memory for the cache data
-  GetMem(Data, DataSize);
-  try
-    // Retrieve the cache data
-    if vkGetPipelineCacheData(Device, PipelineCache, @DataSize, Data) = VK_SUCCESS then
-    begin
-      FS := TFileStream.Create(FileName, fmCreate);
-      try
-        FS.WriteBuffer(Data^, DataSize);
-      finally
-        FS.Free;
-      end;
-    end;
-  finally
-    FreeMem(Data);
-  end;
-end;
-
-function LoadPipelineCacheDataFromFile(const FileName: string; out Data: Pointer; out DataSize: TvkUint32): Boolean;
-var
-  FS: TFileStream;
-begin
-  Result := False;
-  if not FileExists(FileName) then Exit;
-  FS := TFileStream.Create(FileName, fmOpenRead or fmShareDenyWrite);
-  try
-    DataSize := FS.Size;
-    if DataSize = 0 then Exit;
-    GetMem(Data, DataSize);
-    FS.ReadBuffer(Data^, DataSize);
-    Result := True;
-  finally
-    FS.Free;
-  end;
-end;
-
-function CreatePipelineCacheWithData(Device: TVkDevice; const FileName: string): TVkPipelineCache;
-var
-  CacheData: Pointer;
-  CacheDataSize: TvkUint32;
-  PipelineCacheInfo: TVkPipelineCacheCreateInfo;
-  PipelineCache: TVkPipelineCache;
-begin
-  FillChar(PipelineCacheInfo, SizeOf(PipelineCacheInfo), 0);
-  PipelineCacheInfo.sType := VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
-  if LoadPipelineCacheDataFromFile(FileName, CacheData, CacheDataSize) then
-  begin
-    PipelineCacheInfo.initialDataSize := CacheDataSize;
-    PipelineCacheInfo.pInitialData := CacheData;
-  end
-  else
-  begin
-    PipelineCacheInfo.initialDataSize := 0;
-    PipelineCacheInfo.pInitialData := nil;
-  end;
-
-  if vkCreatePipelineCache(Device, @PipelineCacheInfo, nil, @PipelineCache) <> VK_SUCCESS then
-    raise Exception.Create('Failed to create pipeline cache');
-
-  if PipelineCacheInfo.pInitialData <> nil then
-    FreeMem(CacheData);
-
-  Result := PipelineCache;
-end;
-
 
 { TvgVector2 }
 constructor TvgVector2S.Create(const aX, aY: TvgScalarS);
@@ -2409,7 +2328,6 @@ begin
   CustomAssert(Assigned(Queue), 'Queue NOT available.');
 
 
-
   DSize := fData.GetDataSize;//GetStride;    //correct
   if DSize = 0 then exit;
 
@@ -3487,7 +3405,6 @@ begin
   fTextureSource := Default(TvgTextureSource);
 
 
-
 end;
 
 destructor TvgDescriptor_PerFrame_Texture.Destroy;
@@ -4046,27 +3963,6 @@ begin
     Result := IndexOfDescriptorData(aStorageImageData);
   End;
 end;
-(*
-procedure TvgDescriptorArray_StorageImage.ClearDescriptor( aCommandBuffer: TvgCommandBuffer);
-var
-  I: Integer;
-  DD: TvgDescriptor_Data_StorageImage;
-  FrameData: TvgDescriptorPerFrameData;
-begin
-  if not Assigned(aCommandBuffer) then
-    Exit;
-
-  for I := 0 to High(fDescriptorArray) do
-    if fDescriptorArray[I] is TvgDescriptor_Data_StorageImage then
-    begin
-      DD := TvgDescriptor_Data_StorageImage(fDescriptorArray[I]);
-      FrameData := DD.GetFrameData(fCurrentFrameIndex);
-      if FrameData is TvgDescriptor_PerFrame_StorageImage then
-        TvgDescriptor_PerFrame_StorageImage(FrameData).ClearDescriptor(
-          aCommandBuffer);
-    end;
-end;
-*)
 constructor TvgDescriptorArray_StorageImage.Create(AOwner: TComponent);
 begin
 
@@ -4407,7 +4303,6 @@ Initialization
 
 
 Finalization
-
 
 
 end.
