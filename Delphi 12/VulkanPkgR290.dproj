@@ -235,7 +235,6 @@
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_Camera.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_HUD.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_DataStore.pas"/>
-        <DCCReference Include="..\RunTime_Src\Vulkan_Components_Nodes.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_PointerValidation.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_CriticalSection.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Components_ShaderCompiler.pas"/>

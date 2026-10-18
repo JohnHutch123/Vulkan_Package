@@ -75,7 +75,6 @@ uses
   Vulkan_Assert,
   Vulkan_Components_Lookups,
   Vulkan_Components_Descriptors,
-  Vulkan_Components_Nodes,
   Vulkan_PixelInfo,
   Vulkan_Components_Scene_Renderer  ;
 

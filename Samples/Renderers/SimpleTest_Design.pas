@@ -13,7 +13,6 @@ uses
 //  PasVulkan.Math,
 //  Vulkan_Components_Lookups,
 //  Vulkan_Components,
-//  Vulkan_Components_Nodes,
 //  Vulkan_Components_Resources,
   Vulkan_Renderer_Single;
 //  Vulkan_Renderer_CommThread,
