@@ -27,7 +27,6 @@ Every package name ends with the version of the Delphi release it is built with:
 | Delphi | Core runtime | Core design | VCL runtime | VCL design | SDL2 | FMX |
 |---|---|---|---|---|---|---|
 | XE8 | `VulkanPkgR220` | `VulkanPkgD220` | `VulkanPkg_VCLR220` | `VulkanPkg_VCLD220` | `VulkanPkg_SDL2_220D` | `VulkanPkg_FMXR220` |
-| 11 | `VulkanPkgR280` | `VulkanPkgD280` | `VulkanPkg_VCLR280` | `VulkanPkg_VCLD280` | `VulkanPkg_SDL2R280` | `VulkanPkg_FMXR280` |
 | 12 | `VulkanPkgR290` | `VulkanPkgD290` | `VulkanPkg_VCLR290` | `VulkanPkg_VCLD290` | `VulkanPkg_SDL2R290` | `VulkanPkg_FMXR290` |
 | 13 | `VulkanPkgR370` | `VulkanPkgD370` | `VulkanPkg_VCLR370` | `VulkanPkg_VCLD370` | `VulkanPkg_SDL2R370` | `VulkanPkg_FMXR370` |
 
@@ -149,7 +148,7 @@ File: `RunTime_Src/Vulkan_WindowSDL2.pas`.
   The single-thread render engine `TvgRenderEngine_Single` and its packages.
 - `/home/runner/work/Vulkan_Package/Vulkan_Package/Tests`  
   Console `.dpr` tests (no external test framework), run by `RunTests.bat`.
-- `/home/runner/work/Vulkan_Package/Vulkan_Package/Delphi 11`, `Delphi 12`, `Delphi 13`, `Delphi XE8`  
+- `/home/runner/work/Vulkan_Package/Vulkan_Package/Delphi 12`, `Delphi 13`, `Delphi XE8`  
   Version-specific Delphi package/project files (`.dpk`, `.dproj`, `.groupproj`).
 
 ---

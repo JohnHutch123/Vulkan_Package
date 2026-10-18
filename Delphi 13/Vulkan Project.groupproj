@@ -18,7 +18,7 @@
         <Projects Include="VulkanPkg_VCLD370.dproj">
             <Dependencies />
         </Projects>
-        <Projects Include="..\Samples\Renderers\VulkanPkg_SingleR.dproj">
+        <Projects Include="VulkanPkg_SingleR370.dproj">
             <Dependencies />
         </Projects>
         <Projects Include="VulkanPkg_FMXR370.dproj">
@@ -77,14 +77,14 @@
     <Target Name="VulkanPkg_VCLD370:Make">
         <MSBuild Projects="VulkanPkg_VCLD370.dproj" Targets="Make" />
     </Target>
-    <Target Name="VulkanPkg_SingleR">
-        <MSBuild Projects="..\Samples\Renderers\VulkanPkg_SingleR.dproj" />
+    <Target Name="VulkanPkg_SingleR370">
+        <MSBuild Projects="VulkanPkg_SingleR370.dproj" />
     </Target>
-    <Target Name="VulkanPkg_SingleR:Clean">
-        <MSBuild Projects="..\Samples\Renderers\VulkanPkg_SingleR.dproj" Targets="Clean" />
+    <Target Name="VulkanPkg_SingleR370:Clean">
+        <MSBuild Projects="VulkanPkg_SingleR370.dproj" Targets="Clean" />
     </Target>
-    <Target Name="VulkanPkg_SingleR:Make">
-        <MSBuild Projects="..\Samples\Renderers\VulkanPkg_SingleR.dproj" Targets="Make" />
+    <Target Name="VulkanPkg_SingleR370:Make">
+        <MSBuild Projects="VulkanPkg_SingleR370.dproj" Targets="Make" />
     </Target>
     <Target Name="VulkanPkg_FMXR370">
         <MSBuild Projects="VulkanPkg_FMXR370.dproj" />
@@ -96,13 +96,13 @@
         <MSBuild Projects="VulkanPkg_FMXR370.dproj" Targets="Make" />
     </Target>
     <Target Name="Build">
-        <CallTarget Targets="VulcanTest;VulkanPkgR370;VulkanPkg_VCLR370;VulkanPkgD370;VulkanPkg_VCLD370;VulkanPkg_SingleR;VulkanPkg_FMXR370" />
+        <CallTarget Targets="VulcanTest;VulkanPkgR370;VulkanPkg_VCLR370;VulkanPkgD370;VulkanPkg_VCLD370;VulkanPkg_SingleR370;VulkanPkg_FMXR370" />
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="VulcanTest:Clean;VulkanPkgR370:Clean;VulkanPkg_VCLR370:Clean;VulkanPkgD370:Clean;VulkanPkg_VCLD370:Clean;VulkanPkg_SingleR:Clean;VulkanPkg_FMXR370:Clean" />
+        <CallTarget Targets="VulcanTest:Clean;VulkanPkgR370:Clean;VulkanPkg_VCLR370:Clean;VulkanPkgD370:Clean;VulkanPkg_VCLD370:Clean;VulkanPkg_SingleR370:Clean;VulkanPkg_FMXR370:Clean" />
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="VulcanTest:Make;VulkanPkgR370:Make;VulkanPkg_VCLR370:Make;VulkanPkgD370:Make;VulkanPkg_VCLD370:Make;VulkanPkg_SingleR:Make;VulkanPkg_FMXR370:Make" />
+        <CallTarget Targets="VulcanTest:Make;VulkanPkgR370:Make;VulkanPkg_VCLR370:Make;VulkanPkgD370:Make;VulkanPkg_VCLD370:Make;VulkanPkg_SingleR370:Make;VulkanPkg_FMXR370:Make" />
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')" />
     <ItemGroup Condition="'$(BuildGroup)'=='Vulkan Test Debug Build'">
@@ -142,8 +142,8 @@
             <Platforms>Win32</Platforms>
             <Enabled>True</Enabled>
         </BuildGroupProject>
-        <BuildGroupProject Include="..\Samples\Renderers\VulkanPkg_SingleR.dproj">
-            <ProjectGuid>{F2C9C16D-A9FB-45D1-8ED2-4441A200441C}</ProjectGuid>
+        <BuildGroupProject Include="VulkanPkg_SingleR370.dproj">
+            <ProjectGuid>{0976F9E5-E68E-491F-80A9-1A368D10A460}</ProjectGuid>
             <Configurations>Release</Configurations>
             <Platforms>Win32;Win64</Platforms>
             <Enabled>True</Enabled>
@@ -186,8 +186,8 @@
             <Platforms>Win32</Platforms>
             <Enabled>False</Enabled>
         </BuildGroupProject>
-        <BuildGroupProject Include="..\Samples\Renderers\VulkanPkg_SingleR.dproj">
-            <ProjectGuid>{F2C9C16D-A9FB-45D1-8ED2-4441A200441C}</ProjectGuid>
+        <BuildGroupProject Include="VulkanPkg_SingleR370.dproj">
+            <ProjectGuid>{0976F9E5-E68E-491F-80A9-1A368D10A460}</ProjectGuid>
             <Configurations>Release</Configurations>
             <Platforms>Win32;Win64</Platforms>
             <Enabled>True</Enabled>

@@ -54,7 +54,7 @@
 
   This unit is RUNTIME code - it uses no design-time units - so an
   application's data module can descend from it.  It is compiled into
-  VulkanPkg_VCLR280; the IDE side is in VulkanPkg_DataModuleReg and
+  VulkanPkg_VCLR290/R370; the IDE side is in VulkanPkg_DataModuleReg and
   VulkanDataModuleEditFM.
 
   At run time call EnableSession once the forms holding the windows have
