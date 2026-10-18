@@ -377,7 +377,11 @@ end;
 {$ENDIF}
 
 begin
+{$IFDEF FPC}
   TempDir := IncludeTrailingPathDelimiter(GetTempDir) + 'vg_stl_test' + PathDelim;
+{$ELSE}
+  TempDir := IncludeTrailingPathDelimiter(TPath.GetTempPath) + 'vg_stl_test' + PathDelim;
+{$ENDIF}
   ForceDirectories(TempDir);
   try
     TestFormat;
