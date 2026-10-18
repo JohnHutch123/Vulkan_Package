@@ -55,8 +55,7 @@
   loader (by SceneLoaderType, or by extension).  SceneLoaderType drops down
   the registered loaders; SceneFileName has a file-open button.  Any
   TvgScene also gets "Load Scene File..." / "Clear Scene" on its menu.
-  Loaders register themselves in Vulkan_SceneLoaders (the glTF loader is in
-  the PRO package).
+  Loaders register themselves in Vulkan_SceneLoaders.
 
   Extra windows: drop another TvgLinker (or use Add Linker), set its
   ScreenDevice, and set the second TvgWindowVCL's VulkanLink to it - all

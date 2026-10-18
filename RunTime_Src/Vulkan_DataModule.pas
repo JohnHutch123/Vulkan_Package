@@ -67,19 +67,18 @@
   Renderer of RendererType - blank takes the first registered.  Otherwise
   drop a renderer such as TvgRenderEngine_Single and assign Renderer.  LoadScene reads
   SceneFileName with a registered scene loader - SceneLoaderType names one
-  (e.g. 'glTF'), or leave it blank to pick by file extension - or with the
+  (e.g. 'OBJ'), or leave it blank to pick by file extension - or with the
   SceneLoader component if one is assigned.  LoadSceneOnEnable loads the file
   every time the session is enabled, at design time too, so the scene can be
   seen in the designer.  Loaders register in Vulkan_SceneLoaders.
 
-  ToolManager (a TvgToolManager, or a descendant such as PRO's
-  TvgEditToolManager) turns the window's mouse and keys into camera moves,
+  ToolManager (a TvgToolManager, or a descendant) turns the window's mouse and keys into camera moves,
   picking and selection.  It is connected to the primary Linker, Scene and
   Renderer; ZoomAllOnLoad frames each loaded scene with it.  A second window
   wants its own tool manager on its own linker - set that linker's
   ToolManager (or the tool manager's Linker) in the Object Inspector.
 
-  ShaderBuilder (optional, a TvgBaseShaderBuilder - PRO's TvgShaderBuilder)
+  ShaderBuilder (optional, a TvgBaseShaderBuilder descendant)
   lets the session editor show the GLSL it would write for each of the
   running session's pipelines.
 
@@ -292,7 +291,7 @@ type
       of SceneLoaderType - or picked by extension - is made for each load. }
     property SceneLoader    : TvgSceneLoaderStorer   read fSceneLoader    write SetSceneLoader;
 
-    { A registered loader name, e.g. 'glTF'.  Blank: by file extension. }
+    { A registered loader name, e.g. 'OBJ'.  Blank: by file extension. }
     property SceneLoaderType : string read fSceneLoaderType write fSceneLoaderType;
     property SceneFileName   : string read fSceneFileName   write fSceneFileName;
 
@@ -307,7 +306,7 @@ type
 
     { Optional: writes GLSL for the session's pipelines, so the session
       editor can show the generated shaders.  Not part of the session - it
-      is never enabled or required.  Drop a TvgShaderBuilder (PRO). }
+      is never enabled or required. }
     property ShaderBuilder  : TvgBaseShaderBuilder   read fShaderBuilder  write SetShaderBuilder;
 
     property OnSessionEnabled  : TNotifyEvent read fOnSessionEnabled  write fOnSessionEnabled;

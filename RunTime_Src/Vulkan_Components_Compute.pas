@@ -72,8 +72,7 @@ unit Vulkan_Components_Compute;
  *    - bind / push / dispatch recording, and the usual buffer barriers       *
  *                                                                            *
  *  A descendant supplies the GLSL by overriding GetShaderSource, then calls   *
- *  BuildPipeline once the device exists.  See TvgParticleCompute in          *
- *  Vulkan_Components_Particles for a worked descendant.                      *
+ *  BuildPipeline once the device exists.                                     *
  *                                                                            *
  *  zlib license - see the other units in this package.                       *
  ******************************************************************************)
