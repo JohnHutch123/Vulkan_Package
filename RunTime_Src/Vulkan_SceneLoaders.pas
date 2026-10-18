@@ -52,7 +52,8 @@ uses
   System.Classes,
   System.TypInfo,
   System.Generics.Collections,
-  Vulkan_Components_Scene_Renderer;
+  Vulkan_Components_Scene_Renderer,
+  Vulkan_Components_Lookups;
 
 type
   TvgSceneLoaderStorerClass = class of TvgSceneLoaderStorer;
@@ -137,8 +138,6 @@ resourcestring
 
 implementation
 
-uses
-  Vulkan_Components_Lookups;
 
 var
   gLoaders : TList<TvgSceneLoaderInfo> = nil;

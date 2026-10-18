@@ -29,7 +29,11 @@ uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   PasVulkan.Math, PasVulkan.Math.Double,
   Vulkan_Components_Descriptors, Vulkan_Components_Camera,
-  Vulkan_Components_DataStore, Vulkan_Components_Scene_Renderer;
+  Vulkan_Components_DataStore, Vulkan_Components_Scene_Renderer,
+  System.Math,
+  Vulkan_Components,
+  Vulkan_Components_Lookups,
+  Vulkan_WorldAxes;
 
 type
   EvgInstancingError = class(Exception);
@@ -147,9 +151,6 @@ type
 
 implementation
 
-uses
-  System.Math,
-  Vulkan_Components, Vulkan_Components_Lookups, Vulkan_WorldAxes;
 
 type
   TMat3 = array[0..2, 0..2] of Double;   // [row, column]

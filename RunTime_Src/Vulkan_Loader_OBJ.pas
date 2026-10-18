@@ -8,7 +8,18 @@ interface
 
 uses
   System.SysUtils, System.Classes, PasVulkan.Math, Vulkan_Components,
-  Vulkan_Components_Scene_Renderer, Vulkan_Components_Lookups;
+  Vulkan_Components_Scene_Renderer, Vulkan_Components_Lookups,
+  System.Math,
+  System.IOUtils,
+  System.Generics.Collections,
+  PasVulkan.Math.Double,
+  PasVulkan.Framework,
+  PasVulkan.Image.TGA,
+  Vulkan_Components_DataStore,
+  Vulkan_Components_Descriptors,
+  Vulkan_Components_TextureInspector,
+  Vulkan_SceneLoaders,
+  Vulkan_MeshUtils;
 
 type
   EvgOBJError = class(Exception);
@@ -104,13 +115,6 @@ type
 
 implementation
 
-uses
-  System.Math, System.IOUtils, System.Generics.Collections,
-  PasVulkan.Math.Double, PasVulkan.Framework,
-  PasVulkan.Image.TGA,
-  Vulkan_Components_DataStore,
-  Vulkan_Components_Descriptors, Vulkan_Components_TextureInspector,
-  Vulkan_SceneLoaders, Vulkan_MeshUtils;
 
 type
   TCorner = record

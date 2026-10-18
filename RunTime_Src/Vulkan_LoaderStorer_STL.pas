@@ -24,7 +24,12 @@ interface
 uses
   System.SysUtils, System.Classes, PasVulkan.Math, Vulkan_Components,
   Vulkan_Components_Scene_Renderer, Vulkan_Components_Lookups,
-  Vulkan_Loader_OBJ, Vulkan_STL;
+  Vulkan_Loader_OBJ, Vulkan_STL,
+  PasVulkan.Math.Double,
+  Vulkan_Components_DataStore,
+  Vulkan_SceneLoaders,
+  Vulkan_MeshUtils,
+  Vulkan_LOD;
 
 type
   // A store made from an STL mesh.  Shading and Ambient are inherited.
@@ -79,9 +84,6 @@ type
 
 implementation
 
-uses
-  PasVulkan.Math.Double, Vulkan_Components_DataStore, Vulkan_SceneLoaders,
-  Vulkan_MeshUtils, Vulkan_LOD;
 
 { TvgSceneLoaderStorer_STL }
 
