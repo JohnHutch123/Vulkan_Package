@@ -217,7 +217,9 @@ alternative folder as its first argument when building elsewhere.
 `Vulkan_STL` and `Vulkan_LoaderStorer_STL` without a Vulkan device. The
 format: a box's area, volume (positive, so facing out), bounds and normals;
 welding to eight corners without touching the source mesh, a tolerance weld,
-a collapsed triangle dropped, open edges counted; binary round trip, size,
+a collapsed triangle dropped, open edges counted; smoothing a copy (the
+source untouched, still watertight); parts largest first, a loose triangle
+removed by count or by size, nothing removed under the limits; binary round trip, size,
 name, attribute word, a binary header starting "solid" still read as binary,
 a truncated file refused, empty meshes; ASCII round trip exact under a comma
 locale, upper case, CRLF, several solids, a quad facet fanned, and malformed

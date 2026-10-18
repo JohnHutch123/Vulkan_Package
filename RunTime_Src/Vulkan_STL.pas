@@ -112,6 +112,27 @@ function vgSTLVolume(const aMesh: TvgSTLMesh): Double;
   (holes and non-manifold edges).  Zero for a watertight mesh. }
 function vgSTLOpenEdges(const aMesh: TvgSTLMesh): Integer;
 
+{ Taubin smoothing (a shrink step aLambda, then an inflate step aMu, per
+  iteration): takes the staircase off a surface from a voxel grid without
+  shrinking it the way plain averaging does.  Each vertex moves towards the
+  mean of its edge neighbours; border vertices (on an open edge) stay put.
+  For a welded mesh. }
+procedure vgSmoothSTL(var aMesh: TvgSTLMesh; aIterations: Integer;
+  aLambda: Single = 0.5; aMu: Single = -0.53);
+
+{ Connected parts (triangles joined by shared vertices) of a welded mesh:
+  aPart[t] is triangle t's part, numbered 0.. by size, largest first.
+  Returns the number of parts; aSizes[p] is part p's triangle count. }
+function vgSTLParts(const aMesh: TvgSTLMesh; out aPart: TArray<Integer>;
+  out aSizes: TArray<Integer>): Integer;
+
+{ Keeps the aKeep largest parts (0: no limit) and, of those, only parts with
+  at least aMinFraction (0..1) of the largest one's triangles.  Removes the
+  rest - the specks and loose fragments a threshold leaves - and their
+  vertices.  Returns the number of parts removed. }
+function vgSTLKeepParts(var aMesh: TvgSTLMesh; aKeep: Integer;
+  aMinFraction: Single = 0): Integer;
+
 implementation
 
 const
@@ -403,33 +424,259 @@ begin
   aMesh.Attributes := NewAttributes;
 end;
 
-function vgSTLOpenEdges(const aMesh: TvgSTLMesh): Integer;
+{ Smoothing and parts }
+
+{ Vertex neighbours of a welded mesh, without a hash table: each vertex's
+  triangles are listed first, then its neighbours read off them.  Neighbours
+  of v are aNbr[aFirst[v] .. aFirst[v+1]-1]; aUses[k] is how many triangles
+  share the edge (v, aNbr[k]) - 2 inside a closed surface. }
+procedure BuildNeighbours(const aMesh: TvgSTLMesh; out aFirst, aNbr, aUses: TArray<Integer>);
 var
-  Keys: array of Int64;     // (min shl 32) or max, -1 empty
-  Counts: array of Integer;
-  Mask, T, K, S: Integer;
-  A, B, Lo, Hi: Cardinal;
-  Key: Int64;
+  TFirst, TList: array of Integer; // triangles of v: TList[TFirst[v] .. TFirst[v+1]-1]
+  NV, NT, V, T, K, I, J, W, N, Start: Integer;
+  Local, LocalUses: array of Integer;
+  Found: Boolean;
+begin
+  NV := Length(aMesh.Positions); NT := aMesh.TriangleCount;
+  SetLength(TFirst, NV + 1);
+  for V := 0 to NV do TFirst[V] := 0;
+  for I := 0 to 3 * NT - 1 do Inc(TFirst[aMesh.Indices[I] + 1]);
+  for V := 1 to NV do Inc(TFirst[V], TFirst[V - 1]);
+  SetLength(TList, 3 * NT);
+  for T := 0 to NT - 1 do
+    for K := 0 to 2 do
+    begin
+      V := aMesh.Indices[3 * T + K];
+      TList[TFirst[V]] := T; Inc(TFirst[V]);
+    end;
+  for V := NV downto 1 do TFirst[V] := TFirst[V - 1];
+  TFirst[0] := 0;
+  SetLength(aFirst, NV + 1);
+  SetLength(aNbr, 6 * NV + 16); SetLength(aUses, Length(aNbr));
+  SetLength(Local, 32); SetLength(LocalUses, 32);
+  N := 0;
+  for V := 0 to NV - 1 do
+  begin
+    aFirst[V] := N;
+    Start := 0;
+    for I := TFirst[V] to TFirst[V + 1] - 1 do
+    begin
+      T := TList[I];
+      for K := 0 to 2 do
+      begin
+        W := aMesh.Indices[3 * T + K];
+        if W = V then Continue;
+        Found := False;
+        for J := 0 to Start - 1 do
+          if Local[J] = W then begin Inc(LocalUses[J]); Found := True; Break; end;
+        if not Found then
+        begin
+          if Start = Length(Local) then
+          begin
+            SetLength(Local, 2 * Start); SetLength(LocalUses, 2 * Start);
+          end;
+          Local[Start] := W; LocalUses[Start] := 1; Inc(Start);
+        end;
+      end;
+    end;
+    if N + Start > Length(aNbr) then
+    begin
+      SetLength(aNbr, 2 * Length(aNbr) + Start); SetLength(aUses, Length(aNbr));
+    end;
+    for J := 0 to Start - 1 do
+    begin
+      aNbr[N + J] := Local[J]; aUses[N + J] := LocalUses[J];
+    end;
+    Inc(N, Start);
+  end;
+  aFirst[NV] := N;
+  SetLength(aNbr, N); SetLength(aUses, N);
+end;
+
+function vgSTLOpenEdges(const aMesh: TvgSTLMesh): Integer;
+var First, Nbr, Uses_: TArray<Integer>; V, K: Integer;
 begin
   Result := 0;
   if aMesh.TriangleCount = 0 then Exit;
-  SetLength(Keys, TableSizeFor(3 * aMesh.TriangleCount));
-  SetLength(Counts, Length(Keys));
-  Mask := High(Keys);
-  for S := 0 to Mask do begin Keys[S] := -1; Counts[S] := 0; end;
+  BuildNeighbours(aMesh, First, Nbr, Uses_);
+  for V := 0 to High(First) - 1 do
+    for K := First[V] to First[V + 1] - 1 do
+      if (Nbr[K] > V) and (Uses_[K] <> 2) then Inc(Result);
+end;
+
+procedure vgSmoothSTL(var aMesh: TvgSTLMesh; aIterations: Integer; aLambda, aMu: Single);
+var
+  First, Nbr, Uses_: TArray<Integer>;
+  Fixed: array of Boolean;
+  P, Q, T: TArray<TvgSTLVector>;
+  It, Pass, E, V, K, NV: Integer; F, SX, SY, SZ, W: Double;
+begin
+  if (aIterations <= 0) or (aMesh.TriangleCount = 0) then Exit;
+  NV := Length(aMesh.Positions);
+  BuildNeighbours(aMesh, First, Nbr, Uses_);
+  // A vertex on an open edge stays put, so borders do not creep in.
+  SetLength(Fixed, NV);
+  for V := 0 to NV - 1 do
+  begin
+    Fixed[V] := False;
+    for K := First[V] to First[V + 1] - 1 do
+      if Uses_[K] <> 2 then begin Fixed[V] := True; Break; end;
+  end;
+  Uses_ := nil;
+  // Edit copies: a mesh assigned from another shares its arrays.
+  P := Copy(aMesh.Positions);
+  Q := Copy(P);
+  for It := 1 to aIterations do
+    for Pass := 0 to 1 do
+    begin
+      if Pass = 0 then F := aLambda else F := aMu;
+      for V := 0 to NV - 1 do
+      begin
+        if Fixed[V] or (First[V + 1] = First[V]) then begin Q[V] := P[V]; Continue; end;
+        SX := 0; SY := 0; SZ := 0;
+        for K := First[V] to First[V + 1] - 1 do
+        begin
+          E := Nbr[K];
+          SX := SX + P[E].X; SY := SY + P[E].Y; SZ := SZ + P[E].Z;
+        end;
+        W := 1 / (First[V + 1] - First[V]);
+        Q[V].X := P[V].X + F * (SX * W - P[V].X);
+        Q[V].Y := P[V].Y + F * (SY * W - P[V].Y);
+        Q[V].Z := P[V].Z + F * (SZ * W - P[V].Z);
+      end;
+      // Every Q[V] was written: swap the buffers.
+      T := P; P := Q; Q := T;
+    end;
+  aMesh.Positions := P;
+  SetLength(aMesh.FaceNormals, aMesh.TriangleCount);
+  for E := 0 to aMesh.TriangleCount - 1 do
+    aMesh.FaceNormals[E] := vgSTLTriangleNormal(P[aMesh.Indices[3 * E]],
+      P[aMesh.Indices[3 * E + 1]], P[aMesh.Indices[3 * E + 2]]);
+end;
+
+function vgSTLParts(const aMesh: TvgSTLMesh; out aPart: TArray<Integer>;
+  out aSizes: TArray<Integer>): Integer;
+var
+  Parent: array of Integer;
+  Root, Order, Rank: TArray<Integer>;
+  T, K, V, R, N, I, J, Tmp: Integer;
+
+  function Find(X: Integer): Integer;
+  begin
+    while Parent[X] <> X do
+    begin
+      Parent[X] := Parent[Parent[X]];
+      X := Parent[X];
+    end;
+    Result := X;
+  end;
+
+  procedure Union(X, Y: Integer);
+  begin
+    X := Find(X); Y := Find(Y);
+    if X <> Y then Parent[X] := Y;
+  end;
+
+begin
+  SetLength(Parent, Length(aMesh.Positions));
+  for V := 0 to High(Parent) do Parent[V] := V;
   for T := 0 to aMesh.TriangleCount - 1 do
+  begin
+    Union(aMesh.Indices[3 * T], aMesh.Indices[3 * T + 1]);
+    Union(aMesh.Indices[3 * T], aMesh.Indices[3 * T + 2]);
+  end;
+  // Number the roots in order of first use, counting triangles.
+  SetLength(Root, Length(Parent));
+  for V := 0 to High(Root) do Root[V] := -1;
+  SetLength(aPart, aMesh.TriangleCount);
+  SetLength(aSizes, 0);
+  N := 0;
+  for T := 0 to aMesh.TriangleCount - 1 do
+  begin
+    R := Find(aMesh.Indices[3 * T]);
+    if Root[R] < 0 then
+    begin
+      Root[R] := N; Inc(N);
+      if N > Length(aSizes) then SetLength(aSizes, 2 * N + 8);
+      aSizes[N - 1] := 0;
+    end;
+    aPart[T] := Root[R];
+    Inc(aSizes[Root[R]]);
+  end;
+  SetLength(aSizes, N);
+  // Renumber largest first (ties by first use).
+  SetLength(Order, N);
+  for I := 0 to N - 1 do Order[I] := I;
+  // Shell sort on size, descending; stable enough for ties via index.
+  K := 1; while K < N div 3 do K := 3 * K + 1;
+  while K >= 1 do
+  begin
+    for I := K to N - 1 do
+    begin
+      Tmp := Order[I]; J := I;
+      while (J >= K) and ((aSizes[Order[J - K]] < aSizes[Tmp]) or
+        ((aSizes[Order[J - K]] = aSizes[Tmp]) and (Order[J - K] > Tmp))) do
+      begin
+        Order[J] := Order[J - K]; Dec(J, K);
+      end;
+      Order[J] := Tmp;
+    end;
+    K := K div 3;
+  end;
+  SetLength(Rank, N);
+  for I := 0 to N - 1 do Rank[Order[I]] := I;
+  for T := 0 to High(aPart) do aPart[T] := Rank[aPart[T]];
+  Root := Copy(aSizes);
+  for I := 0 to N - 1 do aSizes[I] := Root[Order[I]];
+  Result := N;
+end;
+
+function vgSTLKeepParts(var aMesh: TvgSTLMesh; aKeep: Integer; aMinFraction: Single): Integer;
+var
+  Part, Sizes: TArray<Integer>;
+  N, Keep, T, K, NT, NV, V: Integer;
+  NewIndex: array of Integer;
+  Positions: TArray<TvgSTLVector>;
+  Indices: TArray<Cardinal>;
+  Normals: TArray<TvgSTLVector>;
+  Attributes: TArray<Word>;
+begin
+  N := vgSTLParts(aMesh, Part, Sizes);
+  Keep := N;
+  if (aKeep > 0) and (aKeep < Keep) then Keep := aKeep;
+  if aMinFraction > 0 then
+    while (Keep > 1) and (Sizes[Keep - 1] < aMinFraction * Sizes[0]) do Dec(Keep);
+  Result := N - Keep;
+  if Result = 0 then Exit;
+  SetLength(NewIndex, Length(aMesh.Positions));
+  for V := 0 to High(NewIndex) do NewIndex[V] := -1;
+  SetLength(Positions, Length(aMesh.Positions));
+  SetLength(Indices, Length(aMesh.Indices));
+  SetLength(Normals, aMesh.TriangleCount);
+  SetLength(Attributes, aMesh.TriangleCount);
+  NT := 0; NV := 0;
+  for T := 0 to aMesh.TriangleCount - 1 do
+  begin
+    if Part[T] >= Keep then Continue;
     for K := 0 to 2 do
     begin
-      A := aMesh.Indices[3 * T + K];
-      B := aMesh.Indices[3 * T + (K + 1) mod 3];
-      if A < B then begin Lo := A; Hi := B; end else begin Lo := B; Hi := A; end;
-      Key := (Int64(Lo) shl 32) or Hi;
-      S := HashCell(Lo, Hi, 0) and Mask;
-      while (Keys[S] <> -1) and (Keys[S] <> Key) do S := (S + 1) and Mask;
-      Keys[S] := Key; Inc(Counts[S]);
+      V := aMesh.Indices[3 * T + K];
+      if NewIndex[V] < 0 then
+      begin
+        NewIndex[V] := NV; Positions[NV] := aMesh.Positions[V]; Inc(NV);
+      end;
+      Indices[3 * NT + K] := NewIndex[V];
     end;
-  for S := 0 to Mask do
-    if (Keys[S] <> -1) and (Counts[S] <> 2) then Inc(Result);
+    if T < Length(aMesh.FaceNormals) then Normals[NT] := aMesh.FaceNormals[T]
+    else Normals[NT] := vgSTLVector(0, 0, 0);
+    if T < Length(aMesh.Attributes) then Attributes[NT] := aMesh.Attributes[T]
+    else Attributes[NT] := 0;
+    Inc(NT);
+  end;
+  SetLength(Positions, NV); SetLength(Indices, 3 * NT);
+  SetLength(Normals, NT); SetLength(Attributes, NT);
+  aMesh.Positions := Positions; aMesh.Indices := Indices;
+  aMesh.FaceNormals := Normals; aMesh.Attributes := Attributes;
 end;
 
 { Reading }

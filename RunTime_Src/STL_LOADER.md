@@ -82,3 +82,9 @@ millimetres with Z up; positions are written as they are in the scene.
 | `vgSTLVertexNormals` | Area-weighted unit normal per vertex |
 | `vgSTLBounds`, `vgSTLArea`, `vgSTLVolume` | Box, surface area, enclosed volume |
 | `vgSTLOpenEdges` | Edges not shared by exactly two triangles; 0 means watertight |
+| `vgSmoothSTL` | Taubin smoothing: removes the staircase of a voxel surface without shrinking it |
+| `vgSTLParts`, `vgSTLKeepParts` | Connected parts by size; keep the largest, drop specks |
+
+These work on any welded mesh. On a 4.3 million triangle surface (Free
+Pascal, one core) ten smoothing iterations take about 2 s and finding parts
+under 1 s.

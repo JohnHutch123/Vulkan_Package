@@ -120,6 +120,7 @@ var
   Bytes: TBytes;
   Normals: TArray<TvgSTLVector>;
   Dropped, I: Integer;
+  Part, Sizes: TArray<Integer>;
   OldSep: Char;
   Count: Cardinal;
   S: TFileStream;
@@ -169,6 +170,36 @@ begin
   W := R;
   Dropped := vgWeldSTL(W);
   Check('collapsed triangle dropped', (Dropped = 1) and (W.TriangleCount = 11));
+
+  Writeln('Smooth and parts');
+  W := CopyMesh(M); vgWeldSTL(W);
+  R := W;
+  vgSmoothSTL(R, 5);
+  Check('smoothing leaves the source', (W.Positions[0].X = 1) and (W.Positions[0].Y = 2));
+  Check('smoothing moves a closed mesh', (R.Positions[0].X <> 1) or (R.Positions[0].Y <> 2));
+  // An 8-corner box is all corners; volume on a fine surface is ScanModel's test.
+  Check('still encloses a positive volume', vgSTLVolume(R) > 0);
+  Check('still watertight', vgSTLOpenEdges(R) = 0);
+  // The box plus one loose triangle.
+  R := CopyMesh(M);
+  SetLength(R.Positions, 39); SetLength(R.Indices, 39);
+  SetLength(R.FaceNormals, 13); SetLength(R.Attributes, 13);
+  R.Positions[36] := V(50, 0, 0); R.Positions[37] := V(51, 0, 0); R.Positions[38] := V(50, 1, 0);
+  for I := 36 to 38 do R.Indices[I] := I;
+  vgWeldSTL(R);
+  Check('two parts', vgSTLParts(R, Part, Sizes) = 2);
+  Check('largest first', (Sizes[0] = 12) and (Sizes[1] = 1) and (Part[12] = 1) and (Part[0] = 0));
+  W := R;
+  Check('keep 1 removes the speck', vgSTLKeepParts(W, 1) = 1);
+  Check('box left, its 8 corners only', (W.TriangleCount = 12) and (W.VertexCount = 8));
+  Check('kept mesh unchanged', Near(vgSTLVolume(W), 24) and (vgSTLOpenEdges(W) = 0));
+  W := R;
+  Check('min fraction removes it too', (vgSTLKeepParts(W, 0, 0.5) = 1) and (W.TriangleCount = 12));
+  W := R;
+  Check('nothing removed under the limits', (vgSTLKeepParts(W, 5, 0.01) = 0) and (W.TriangleCount = 13));
+  Check('source of the removal untouched', R.TriangleCount = 13);
+  W := CopyMesh(R); W.Clear;
+  Check('empty mesh has no parts', (vgSTLParts(W, Part, Sizes) = 0) and (vgSTLKeepParts(W, 1) = 0));
 
   Writeln('Binary');
   FileName := TempDir + 'box.stl';
