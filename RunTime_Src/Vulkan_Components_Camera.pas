@@ -943,21 +943,6 @@ begin
     FCriticalSection.Leave;
   end;
 end;
-(*
-procedure TvgCamera.SetOrthBounds(aLeft, aRight, aTop, aBottom: Double);
-begin
-  FCriticalSection.Enter;
-  try
-    FOrthLeft := aLeft;
-    FOrthRight := aRight;
-    FOrthTop := aTop;
-    FOrthBottom := aBottom;
-    InvalidateMatrices([cfProjectionDirty, cfFrustumDirty]);
-  finally
-    FCriticalSection.Leave;
-  end;
-end;
-*)
 procedure TvgCamera.InvalidateMatrices(aFlags: TCameraUpdateFlags);
 begin
   FUpdateFlags := FUpdateFlags + aFlags;

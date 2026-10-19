@@ -1313,7 +1313,6 @@ TvgBaseComponent = class(TComponent)
   end;
 
 
-
   TvgLogicalDevice = class(TvgBaseComponent)
   private
     function GetInstance: TvgInstance;
@@ -1356,7 +1355,6 @@ TvgBaseComponent = class(TComponent)
 
     fOnLayerSetup       : TvgLayerSetupCallback;
     fOnExtensionSetup   : TvgExtensionSetupCallback;
-
 
 
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
@@ -2112,54 +2110,6 @@ TvgBaseComponent = class(TComponent)
     property Descriptor: TvgDescriptorArray read GetDescriptor write SetDescriptor  stored false;
   end;
 
-(*
-  TvgGenericDescriptorData<T> = record
-  Private
-    function GetCount: Integer;
-    function GetDescriptor(aDescriptorIndex: Integer): T;
-    procedure SetDescriptor(aDescriptorIndex: Integer; const Value: T);
-
-
-  Public
-     fCurrentDescriptorIndex : TvkUint32;
-     fDescriptorData         : Array of T;
-
-    procedure Add(const Item: T);
-    procedure Clear;
-    Procedure SetDescriptorCapacity(aCapacity:Integer);
-
-    function GetDataPointer: Pointer;
-    function GetDataSize: Integer;
-    function GetDataStride : Integer;
-
-    property DescriptorCount: Integer read GetCount;
-    Property CurrentDescriptor: TvkUint32 read fCurrentDescriptorIndex write fCurrentDescriptorIndex;
-    property DescriptorData[aDescriptorIndex: Integer]: T read GetDescriptor write SetDescriptor; default;
-  end;
-
-
-  TvgGenericFrameData<T> = record
-  private
-    function GetCount: Integer;
-    function GetFrame(Index: Integer): TvgGenericDescriptorData<T>;
-    procedure SetFrame(Index: Integer; const Value: TvgGenericDescriptorData<T>);
-
-
-  public
-
-    fCurrentFrameIndex : TvkUint32;
-    fFrameData: array of TvgGenericDescriptorData<T>;
-
-    procedure Add(const Item: T);
-    procedure Clear;
-    procedure SetFrameCapacity(const aCapacity: Integer);
-
-    property FrameCount: Integer read GetCount;
-    Property CurrentFrame : TvkUint32 read fCurrentFrameIndex write fCurrentFrameIndex;
-    property Frames[Index: Integer]: TvgGenericDescriptorData<T> read GetFrame write SetFrame; default;
- //   property DescriptorIndex: TvkUint32 read fCurrentDescriptorIndex write fCurrentDescriptorIndex;
-  end;
- *)
 
   TvgGenericDescriptorObject<T: Class> = record
   Public
@@ -2610,7 +2560,6 @@ TvgBaseComponent = class(TComponent)
   End;
 
 
-
   TvgShaderObject = class(TvgDescriptorArray)   // or a sibling of TvgDescriptor
     // holds VkShaderEXT handles (one per stage, or a set)
     // Create / Destroy / Bind / SetSpecialization etc.
@@ -2744,7 +2693,6 @@ TvgBaseComponent = class(TComponent)
     Property ShaderFlags : TvgShaderStageFlagBits Read GetShaderFlags write SetShaderFlags ;
     Property DataStride  : TVkUInt32 Read GetDataStride;      //size of data record
   End;
-
 
 
   TvgSwapChain = class(TvgBaseComponent)
@@ -4808,7 +4756,6 @@ TvgBaseComponent = class(TComponent)
     Property SubPassSet          : TvgSubPassSet Read fRenderPassSet write SetSubPassSet;
 
 
-
   End;
 
 
@@ -5595,7 +5542,6 @@ TvgBaseComponent = class(TComponent)
     Property EditON    : Boolean Read GetEditable  ;
 
 
-
   End;
 
  //Render worker run one per thread and carry out tasks using Parrelel-For Each pattern
@@ -6163,9 +6109,6 @@ TvgBaseComponent = class(TComponent)
   function vgLinkable(aComponent: TComponent): Boolean;
 
 
-
-
-
 implementation
 
 //uses   Vulkan_Components_Descriptors;
@@ -6313,27 +6256,6 @@ Begin
       Exit;
 End;
 
-Procedure Matrix4x4_SetIdentity(Var aMat : TpvMatrix4x4);
-Begin
-   aMat.RawComponents[0,0]:=1.0;
-   aMat.RawComponents[0,1]:=0.0;
-   aMat.RawComponents[0,2]:=0.0;
-   aMat.RawComponents[0,3]:=0.0;
-   aMat.RawComponents[1,0]:=0.0;
-   aMat.RawComponents[1,1]:=1.0;
-   aMat.RawComponents[1,2]:=0.0;
-   aMat.RawComponents[1,3]:=0.0;
-   aMat.RawComponents[2,0]:=0.0;
-   aMat.RawComponents[2,1]:=0.0;
-   aMat.RawComponents[2,2]:=1.0;
-   aMat.RawComponents[2,3]:=0.0;
-   aMat.RawComponents[3,0]:=0.0;
-   aMat.RawComponents[3,1]:=0.0;
-   aMat.RawComponents[3,2]:=0.0;
-   aMat.RawComponents[3,3]:=1.0;
-End;
-
-
 Procedure RankPhysicalDevice(aPhysicalDevice       : TpvVulkanPhysicalDevice;
                                  aSurface          : TvgSurface;
                                  var SupportSurface: Boolean;
@@ -6468,15 +6390,6 @@ Begin
      Result:=0
   else
      Result:=High(TvkUint32);
-End;
-
-Procedure WriteTvkUint64(Writer:TWriter;Value:TvkUint64);
-  Var S:String;
-      I:UInt64;
-Begin
-  I := Value ;
-  S := UIntToStr(I);
-  Writer.WriteString(S);
 End;
 
 Function ReadTvkUint64(Reader:TReader):TvkUint64;
@@ -7773,7 +7686,6 @@ begin
   If not fDescriptorIndexing then exit;
 
 
-
  (*       must be 1.2
 
   fdescriptorBindingUniformBufferUpdateAfterBind
@@ -7789,27 +7701,6 @@ begin
  *)
 
 
-
- (*
-
-
-     If not assigned(fLayers) or (fLayers.count=0) then exit;
-
-
-     For I:=0 to fLayers.Count-1 do
-     Begin
-       L:=TvgLayer(fLayers.Items[I]);
-         If assigned(L) then
-         Begin
-         If fValidation and (CompareText(String(L.fLayerName),S1)=0) then
-           L.fLayerMode    := VGL_MUST_HAVE;
-
-         If CompareText(String(L.fLayerName),S2)=0 then
-           L.fLayerMode    := VGL_MUST_HAVE;            //don't enable RenderDoc Layer
-       end;
-     End;
-
-  *)
 end;
 
 function TvgInstance.ValidationLayerActive: Boolean;
@@ -8046,28 +7937,6 @@ begin
 
 end;
 
-(*
-procedure TvgInstance.SetUpPortabilityExtensions;
-  Var S1    : String;
-         E  : TvgExtension;
-         I  : Integer;
-
-begin
-     if not PortabilityOn then exit;
-
-     If not assigned(fExtensions) or (fExtensions.count=0) then exit;
-
-     S1:= VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME;
-
-     For I:=0 to fExtensions.Count-1 do
-     Begin
-       E:=TvgExtension(fExtensions.Items[I]);
-       If (CompareText(String(E.fExtensionName),S1)=0) then
-         E.fExtMode:= VGE_MUST_HAVE;
-     End;
-
-end;
-*)
 procedure TvgInstance.SetValidation(const Value: Boolean);
 begin
   If fValidation=Value then exit;
@@ -9474,8 +9343,6 @@ Function TvgFeatures.SetDisabled:Boolean;
 begin
 
 
-
-
   Result := Inherited;
   CustomAssert(Result,Format('%s : inherited state change failed',[self.ClassName]),self);
 
@@ -10008,25 +9875,6 @@ begin
       fLogicalDevice.SetPhysicalDevice(Self);
   end;
 end;
-(*
-procedure TvgPhysicalDevice.SetLogicalDevice(const Value: TvgLogicalDevice);
-begin
-  If fLogicalDevice = Value then exit;
-  InvalidateStates;
-  fLogicalDevice := Value;
-
-  If Not assigned(fScreenRenderDevice) and (fLogicalDevice Is TvgScreenRenderDevice) then
-  Begin
-     fScreenRenderDevice :=  TvgScreenRenderDevice(fLogicalDevice);
-     fInstance.RenderToScreen := True;
-  End;
-
-  If assigned(fLogicalDevice)  and (fLogicalDevice.fPhysicalDevice<>self) then
-     fLogicalDevice.fPhysicalDevice := self;
-
-
-end;
-*)
 procedure TvgPhysicalDevice.setPhysicalDeviceName(const Value: String);
 begin
 
@@ -10034,20 +9882,6 @@ begin
   InvalidateStates;
   fPhysicalDeviceName := Value;
 end;
-(*
-procedure TvgPhysicalDevice.SetScreenRenderDevice(  const Value: TvgScreenRenderDevice);
-begin
-  If fScreenRenderDevice = Value then exit;
-  InvalidateStates ;
-  fScreenRenderDevice := Value;
-
-  If not assigned(fLogicalDevice) then
-     fLogicalDevice := fScreenRenderDevice;
-
-  If assigned(fLogicalDevice) then
-     fLogicalDevice.PhysicalDevice := self;
-end;
-*)
 procedure TvgPhysicalDevice.WriteActiveStatus(Writer: TWriter);
 begin
  // Writer.WriteBoolean(fActive);
@@ -10272,8 +10106,6 @@ begin
 
 
   inherited;
-
-
 
 
 end;
@@ -10725,30 +10557,6 @@ begin
   if (csDesigning in ComponentState) then
     CompleteSetUp;
 end;
-(*
-procedure TvgLogicalDevice.SetPhysicalDevice(const Value: TvgPhysicalDevice);
-begin
-  If fPhysicalDevice = Value then exit;
-  InvalidateStates;
-  fPhysicalDevice := Value;
-
-  If assigned(fPhysicalDevice) then
-  Begin
-     If  fPhysicalDevice.LogicalDevice<>self then
-        fPhysicalDevice.LogicalDevice := self;
-
-     If assigned(fPhysicalDevice.Instance) then
-        fInstance :=  fPhysicalDevice.Instance;
-
-  End;
-
-  fSetUpComplete:=False;
-
-  If (csDesigning in ComponentState) then
-    CompleteSetUp;
-
-end;
-*)
 procedure TvgLogicalDevice.SetShaderObjectsON(const Value: Boolean);
 begin
   fShaderObjectsON := Value;
@@ -11392,12 +11200,6 @@ begin
             CustomAssert(fView<>0 , 'View not defined',Self);
             fVulkanSurface := TpvVulkanSurface.CreateMoltenVK_MacOS(fPhysicalDevice.fInstance.VulkanInstance,fView);
           {$ifend}
-       (*
-          If assigned(self.fDevice) and assigned(fDevice.fPhysicalDevice) and not fDevice.SurfaceSupport(self,fDevice.VulkanDevice.GraphicsQueueFamilyIndex) then
-          Begin
-            FreeAndNil(fVulkanSurface);
-          End;
-       *)
     end;
 
     Result:=  fVulkanSurface<>Nil;
@@ -14279,16 +14081,6 @@ begin
   if assigned(Value) then
     Value.ConnectRenderEngine(Self);
 end;
-(*
-procedure TvgBaseRenderEngine.SetSelectON(const Value: Boolean);
-begin
-  If not (fState = vgcsInactive) then exit;
-
-  fSelectON := Value;
-
-
-end;
-*)
 
 procedure TvgBaseRenderEngine.SetUpDepthAndMSAA(  aPipe: TvgGraphicPipeline);
 begin
@@ -15865,191 +15657,8 @@ Begin
       fCommandCount := 0;
   End;
 
-(*
-var
-  ResetFlags : TVkCommandBufferResetFlags;
-begin
-  If not fActive then exit;
-
-  CustomAssert(assigned(fVulkanCommandBuffer), 'VulkanCommandBuffer not created');
-
-  if Assigned(fBufferFence) then
-  Begin
-       If (fBufferFence.GetStatus=VK_SUCCESS) then
-         fBufferFence.Reset;
-  End;
-
-  // If this buffer was used as single-use, we ALWAYS release resources
-  if fIsSingleUse or aReleaseResources then
-    ResetFlags := TVkCommandBufferResetFlags(VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT)
-  else
-    ResetFlags := 0;   // normal lightweight reset
-
-  fVulkanCommandBuffer.Reset(ResetFlags);
-
-  SetBufferState(BS_INITIAL);
- // fActive      := False;
-
-  // Clear single-use flag after reset (so next use starts fresh)
-  fIsSingleUse := False;
-
-  // Optional debug output (comment out in release)
-  // if DesignerTest then
-  //   DebugString := Format('Reset %s (SingleUse=%s)', [Name, BoolToStr(fIsSingleUse, True)]);
-  *)
 end;
 
-(*
-procedure TvgCommandBuffer.Reset(const aFlags: TVkCommandBufferResetFlags);
-   Var ResetOK :boolean;
-
-begin
-  if not assigned(fVulkanCommandBuffer) then exit;
-  if (fVulkanCommandBuffer.Handle=VK_NULL_HANDLE) then exit;
-
-  ResetOK :=  NOT self.IsSingleUseCommand;
-
-  If (fBufferState=BS_PENDING) and
-      WaitOnFence then                   //waitfor will reset the fBufferFence
-  Begin
-     If ResetOK then
-        SetBufferState(BS_EXECUTABLE)
-     else
-        SetBufferState(BS_INVALID) ;
-  End;
-
-  if Assigned(fBufferFence) then
-  Begin
-       If (fBufferFence.GetStatus=VK_SUCCESS) then
-         fBufferFence.Reset;
-  End;
-
-  if (fBufferState in [BS_RECORDING,
-                       BS_EXECUTABLE]) then
-  Begin
-
-    Try
-
-        if ResetOK then
-        Begin
-          fVulkanCommandBuffer.Reset(aFlags) ;
-          SetBufferState(BS_INITIAL) ;
-
-        end else
-          SetBufferState(BS_INVALID) ;
-
-    Except
-      SetBufferState(BS_INVALID);
-    End;
- End ;
-
-  //else
-  //  CustomAssert((fBufferState = BS_RECORDING) ,'Not valid Buffer State');
-
-end;
-*)
-(*
-Function TvgCommandBuffer.SetBufferState(aState: TvgBufferState; ForceState:Boolean=False):Boolean;
- // Var FR:Boolean;
-
-begin
-  Result := True;
-
-  if ForceState then
-  Begin
-    if assigned(fBufferFence) and (fBufferFence.GetStatus=VK_SUCCESS) and
-      (aState in [BS_INITIAL,BS_INVALID,BS_INACTIVE,BS_PENDING]) then
-       fBufferFence.Reset;
-  end;
-
-  if fBufferState = aState then exit;
-
-  Result := False;
-
-  case aState of
-       BS_INACTIVE,
-       BS_INITIAL   :Begin
-                       If fBufferState in [BS_RECORDING, BS_EXECUTABLE]  then
-                          Begin
-                            if (fBufferState=BS_RECORDING) then
-                            Begin
-                               if assigned(fVulkanCommandBuffer)  then
-                                  fVulkanCommandBuffer.EndRecording;
-                               fBufferState := BS_EXECUTABLE;
-                            end;
-
-                            if assigned(fVulkanCommandBuffer) then
-                            Begin
-                              if (fBufferState=BS_EXECUTABLE) and NOT TestCommandBufferUsageFlagsValue(fBufferUse,
-                                                    TVkCommandBufferUsageFlags(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) ) then
-                                fVulkanCommandBuffer.Reset(1)
-                              else
-                                fBufferState := BS_INVALID;
-                            End else
-                              fBufferState := BS_INACTIVE;
-                          end;
-                       If fBufferState in [BS_PENDING]  then
-                          Begin
-                           // need to wait until back in INITIAL or INVALID
-                              if WaitOnFence then
-                                 fBufferState := BS_INITIAL
-                              else
-                                 fBufferState := BS_INVALID;
-                          end;
-                     end;
-       BS_RECORDING :if (ForceState = False) and NOT (fBufferState in [BS_INITIAL])     then exit;
-       BS_EXECUTABLE:if (ForceState = False) and (NOT (fBufferState in [BS_RECORDING])  or (fCommandCount=0)) then exit;
-       BS_PENDING   :if (ForceState = False) and (NOT (fBufferState in [BS_EXECUTABLE]) or (fCommandCount=0)) then exit;
-       BS_INVALID   :;//If aState in [] then fBufferState := aState;
-  end;
-
-  If  fBufferState=aState then
-  Begin
-    Result := True;
-    exit;
-  End;
-
-  case fBufferState of
-       BS_INACTIVE  :If (aState in [BS_INITIAL]) or ForceState  then
-                        Begin
-                          fBufferState := aState;
-                          Result       := True;
-                          fCommandCount:= 0;
-                        End;
-       BS_INITIAL   :If (aState in [BS_INACTIVE, BS_RECORDING]) or ForceState then
-                        Begin
-                          fBufferState := aState;
-                          Result       := True;
-                          fCommandCount:= 0;
-                        End;
-       BS_RECORDING :If (aState in [BS_INITIAL,BS_EXECUTABLE]) or ForceState  then
-                        Begin
-                          fBufferState := aState;
-                          Result       := True;
-                        End;
-       BS_EXECUTABLE:If (aState in [BS_INITIAL, BS_PENDING]) or ForceState   then
-                        Begin
-                          fBufferState := aState;
-                          Result       := True;
-                        End;
-       BS_PENDING   :If (aState in [BS_INITIAL, BS_EXECUTABLE]) or ForceState  then
-                        Begin
-                          if WaitOnFence then      //will check if fence is set then wait
-                          Begin
-                            fBufferState := aState;
-                            Result       := True;
-                          End else
-                            fBufferState := BS_INVALID;
-                        End;
-       BS_INVALID   :If (aState in [BS_INACTIVE]) or ForceState   then
-                        Begin
-                          fBufferState := aState;
-                          Result       := True;
-                        End;
-  end;
-
-end;
-*)
 
 procedure TvgCommandBuffer.SetCommandBufferLevel(  const Value: TvgCommandBufferLevel);
 begin
@@ -16401,21 +16010,6 @@ begin
 end;
 
 procedure TvgGraphicPipeline.ClearRenderNodes;
-(*
-  Procedure ClearNodeList(aList: TvgObjectDataList) ;
-    Var I :Integer;
-       RN :TvgObjectStore_Base;
-  Begin
-    If aList.Count=0 then exit;
-    For I:=0 to aList.count-1 do
-    Begin
-      RN := aList.Items[I];
-      If assigned(RN) then
-        RN.DisconnectGraphicPipeline(self);
-    End;
-    aList.Clear;
-  End;
- *)
 begin
 (*
   If assigned(fUnderlayNodes) then fUnderlayNodes.clear;
@@ -17215,45 +16809,6 @@ begin
   End;
 
 end;
-(*
-procedure TvgGraphicPipeline.SetUpPipeLinePushConstants;
-   Var L,I : Integer;
-       PC     : TvgPushConstant;
-
-       Offset : TvkUint32;
-       Stride : TvkUInt32;
-begin
-  fPushConstantRangeCount := 0;
-
-  Setlength(fPushConstantRanges,0);
-
-  If not assigned(fPushConstantCol) then exit;
-
-  L:= fPushConstantCol.count;
-  If L=0 then exit;
-
-  Offset := 0;
-
-  For I:=0 to L-1 do
-  Begin
-    PC := fPushConstantCol.Items[I].PushConstant;
-    If assigned(PC) and (PC.ShaderFlags<>[]) and (PC.DataStride>0) then
-    Begin
-      Stride := PC.DataStride ;
-
-      PC.Active := True;
-      Inc(fPushConstantRangeCount);
-      Setlength(fPushConstantRanges, fPushConstantRangeCount);
-
-      fPushConstantRanges[fPushConstantRangeCount-1].stageFlags := GetVKStageFlags(PC.ShaderFlags);//  TVkShaderStageFlags(VK_SHADER_STAGE_VERTEX_BIT);
-      fPushConstantRanges[fPushConstantRangeCount-1].offset     := Offset;
-      fPushConstantRanges[fPushConstantRangeCount-1].size       := Stride;
-
-      OffSet := Offset + Stride;
-    End;
-  End;
-end;
-*)
 procedure TvgGraphicPipeline.SetUpPipeLinePushConstants;
 var
   I: Integer;
@@ -17420,7 +16975,6 @@ begin
   inherited;
   fUseShaderObjects:=True;
 end;
-
 
 
 { TvgVertexBindingDesc }
@@ -18501,30 +18055,6 @@ begin
         atCustom     :;
     end;          //a manual setup attachment resource
 
-    (*
-      mmColors:
-        begin
-          Result.Add('Red');
-          Result.Add('Green');
-          Result.Add('Blue');
-          Result.Add('Yellow');
-        end;
-      mmFormats:
-        begin
-          Result.Add('VK_FORMAT_R8G8B8A8_UNORM');
-          Result.Add('VK_FORMAT_R32_SFLOAT');
-          Result.Add('VK_FORMAT_B8G8R8A8_UNORM');
-        end;
-      mmEmpty:
-        begin
-          // leave empty or add a specific "None" entry
-          Result.Add('<None>');
-        end;
-    end;
-    // caller owns the returned TStringList
-  //  Result := Result;
-
-    *)
   except
   //  Result.Free;
     raise;
@@ -19017,13 +18547,6 @@ begin
 
   end; //case
 
-  (*
-  If (Length(fImageBufferArray)>0) then
-  Begin
-       fFormat := fImageBufferArray[0].fFormat;
-       fSamples:= fImageBufferArray[0].fSamples;
-  End;
-  *)
 end;
 
 { TvgRenderPassAttachmentCol }
@@ -21130,26 +20653,6 @@ procedure TvgSubPass.SubPassConfigureGraphicPipeline(GP: TvgGraphicPipeline);
 var
   hasDepth : Boolean;
 begin
- (*
-  // Name and resource use from SubPassMode
-  case fSubPassMode of
-    SPT_SIMPLE,
-    SPT_G_BUFFER:
-      begin
-        GP.ResourceUse := [RU_GLOBAL, RU_GRAPHICPIPE];
-      end;
-    SPT_UI,
-    SPT_OFFSCREENTOSCREEN:
-      begin
-        GP.ResourceUse := [RU_GLOBAL];
-      end;
-    SPT_TRANSPARENCY:
-      begin
-        GP.ResourceUse := [RU_GLOBAL, RU_GRAPHICPIPE];
-        // transparency needs blend enabled — can set default here
-      end;
-  end;
-  *)
   // Depth: only if this subpass actually has a depth attachment
   hasDepth := fDepthStencilAttachmentRef.Count > 0;
   if not hasDepth then
@@ -22005,7 +21508,6 @@ begin
 end;
 
 
-
 { TvgImageBufferAsset }
 
 procedure TvgResourceImageBuffer.CheckFormat(aInstance : TpvVulkanInstance; aPhysicalDevice : TpvVulkanPhysicalDevice);
@@ -22355,7 +21857,6 @@ Function TvgResourceImageBuffer.SetEnabled : Boolean;
   End;
 
 
-
 begin
 
   Result := Inherited;
@@ -22383,7 +21884,6 @@ begin
 
      exit;
    end;
-
 
 
  Try
@@ -23121,37 +22621,6 @@ begin
     fDescriptor.FrameCount := DescriptorSet.FrameCount;
 end;
 
-(*
-procedure TvgDescriptorItem.SetDescriptor(aValue: TvgDescriptorArray);
-begin
-
-  if fDescriptor = aValue then
-    Exit;
-
-  DisableParentToRoot(False);
-
-  if Assigned(fDescriptor) then
-  begin
-    fDescriptor.SetSubComponent(False);
-    FreeAndNil(fDescriptor);
-  end;
-
-  fDescriptor := aValue;
-
-  if Assigned(fDescriptor) then
-  begin
-    fDescriptor.SetSubComponent(True);
-    fDescriptor.DescriptorItem := Self;
-    fDescriptor.Device         := Device;
-    fDescriptor.Name           := fName;
-
-    If assigned(DescriptorSet) then
-      fDescriptor.FrameCount   := DescriptorSet.FrameCount;
-
-    SyncDescriptorMetadata;
-  end;
-end;
-*)
 
 procedure TvgDescriptorItem.SetDescriptor(aValue: TvgDescriptorArray);
 var
@@ -23245,108 +22714,6 @@ begin
   SetDescriptorType(NewType);
 end;
 
-(*
-
-procedure TvgDescriptorItem.SetDescriptorType( const Value: TvgDescriptorArrayType);
-var
-  NewDescriptor: TvgDescriptorArray;
-begin
-
-// Strong early exit – covers the “already correct” case completely
-  if (fDescriptorArrayType = Value) and Assigned(fDescriptor) and
-     (fDescriptor.ClassType = Value) then
-    Exit;
-
-  if not Assigned(Value) then
-  begin
-    if Assigned(fDescriptor) then
-    begin
-      fDescriptor.SetSubComponent(False);
-      FreeAndNil(fDescriptor);
-    end;
-    fDescriptorArrayType := nil;
-    Exit;
-  end;
-
-  if not Assigned(DescriptorSet) then
-    raise EInvalidOperation.Create(
-      'Cannot create a descriptor before the item has a descriptor-set owner.'
-    );
-
-  {---------------------------------------------------------------
-    VERY IMPORTANT:
-    If a descriptor already exists and it is the requested class,
-    reuse it.  Do NOT destroy and recreate it.
-
-    This is what makes the property setters safe during Delphi
-    component streaming.
-  ---------------------------------------------------------------}
-  if Assigned(fDescriptor) and
-     (fDescriptor.ClassType = Value) then
-  begin
-    fDescriptorArrayType := Value;
-
-    fDescriptor.SetSubComponent(True);
-    fDescriptor.DescriptorItem := Self;
-    fDescriptor.Device         := fDevice;
-    fDescriptor.Name           := fName;
-    fDescriptor.Binding        := Index;
-
-    SyncDescriptorMetadata;
-
-    if (fDescriptor.FrameCount = 0) and Assigned(DescriptorSet) then
-      fDescriptor.FrameCount := DescriptorSet.FrameCount;
-
-    Exit;
-  end;
-
-  {---------------------------------------------------------------
-    Create the new descriptor BEFORE destroying the old one.
-
-    This also avoids leaving the item with a nil descriptor if the
-    constructor raises an exception.
-  ---------------------------------------------------------------}
-  NewDescriptor := CreateDescriptorFromType(Value, DescriptorSet);
-
-  if not Assigned(NewDescriptor) then
-    raise EInvalidOperation.CreateFmt(
-      'Unable to create descriptor type "%s".',
-      [Value.GetPropertyName]
-    );
-
-  try
-    NewDescriptor.SetSubComponent(True);
-    NewDescriptor.DescriptorItem := Self;
-    NewDescriptor.Device         := fDevice;
-    NewDescriptor.Name           := fName;
-    NewDescriptor.Binding        := Index;
-
-    if Assigned(DescriptorSet) then
-      NewDescriptor.FrameCount := DescriptorSet.FrameCount;
-
-    { Only commit the new state after creation succeeded. }
-    if Assigned(fDescriptor) then
-    begin
-      fDescriptor.SetSubComponent(False);
-      FreeAndNil(fDescriptor);
-    end;
-
-    fDescriptor := NewDescriptor;
-    NewDescriptor := nil;
-
-    fDescriptorArrayType := Value;
-
-    SyncDescriptorMetadata;
-
-    if (fDescriptor.FrameCount = 0) and Assigned(DescriptorSet) then
-      fDescriptor.FrameCount := DescriptorSet.FrameCount;
-
-  finally
-    if Assigned(NewDescriptor) then
-      NewDescriptor.Free;
-  end;
-end;
-*)
 
 procedure TvgDescriptorItem.SetDescriptorType(const Value: TvgDescriptorArrayType);
 var
@@ -23541,7 +22908,6 @@ end;
 
 Function TvgDepthStencilImageBufferAsset.SetDisabled:Boolean;
 begin
-
 
 
   Result := Inherited;
@@ -24372,7 +23738,6 @@ begin
     If fToolManager.Linker <> self then
       fToolManager.Linker := self;
   End;
-
 
 
 end;
@@ -26235,8 +25600,6 @@ begin
                                                 1, @ImageMemoryBarrier);
 
 
-
-
        // Blit the image from the offscreen buffer to the swapchain image
               CurrentBuffer.CmdBlitImage( fFrameImageBuffer.FrameBufferAttachment.Image.Handle,
                                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
@@ -26336,7 +25699,6 @@ begin
     //UI Buffer ON
     fUIImageBuffer              : TvgResourceImageBuffer;
     //used to hold UI image eg cursor, screen text etc
-
 
 
   // Destroy framebuffer
@@ -27264,9 +26626,6 @@ begin
         End;
 
 
-
-
-
   Finally
     {$IFDEF TIMINGON}
        Stopwatch.Stop;
@@ -27621,7 +26980,6 @@ Function TvgTessellationState.SetDisabled:Boolean;
 begin
 
 
-
   Result := Inherited;
   CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 end;
@@ -27770,7 +27128,6 @@ Function TvgRasterizerState.SetDisabled : Boolean;
 begin
 
 
-
   Result := Inherited;
   CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 end;
@@ -27898,7 +27255,6 @@ Function TvgMultisamplingState.SetDisabled : Boolean;
 begin
 
 
-
   Result := Inherited;
   CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
 end;
@@ -27914,7 +27270,6 @@ Function TvgMultisamplingState.SetEnabled :Boolean;
 begin
   Result := Inherited;
   CustomAssert(Result,System.SysUtils.Format('%s : inherited state change failed',[self.ClassName]),self);
-
 
 
    FillChar(fpipelineMSCreateInfo,SizeOf(fpipelineMSCreateInfo),#0);
@@ -28240,25 +27595,6 @@ begin
   Result:=GetVGBlendFactor(self.fSrcColorBlendFactor);
 end;
 
-(*
-
-procedure TvgColorBlendAttachment.SetActive(const Value: Boolean);
-begin
-  If fActive = Value then exit;
-
-  If Value then
-  Begin
-     SetEnabled ;
-      CustomAssert(fActive=True,'TvgColorBlendAttachment NOT active');
-  end else
-  Begin
-     SetActiveState(False);
-     CustomAssert(fActive=False,'TvgColorBlendAttachment active');
-  End;
-
-
-end;
- *)
 procedure TvgColorBlendAttachment.SetAlphaBlendOp(const Value: TvgBlendOp);
   var CB:TVkBlendOp;
 begin
@@ -28986,50 +28322,6 @@ begin
   fResourceUse := Value;
 
 
-(*
-  If fResourceUse = Value  then exit;
-
-  SetActiveState(False);
-
-  fResourceUse := Value;
-
-  If (RU_GRAPHICPIPE in fResourceUse) then
-  Begin
-    If not assigned(FGraphicPipeRes) then
-    Begin
-       FGraphicPipeRes     := TvgDescriptorSet.Create(Self);
-       FGraphicPipeRes.SetSubComponent(True);
-       FGraphicPipeRes.Name:='GPR';
-    End;
-  End else
-    If assigned(FGraphicPipeRes) then
-       FreeAndNil(FGraphicPipeRes);
-
-  If (RU_MATERIAL in fResourceUse) then
-  Begin
-    If not assigned(fGPMaterialRes) then
-    Begin
-       fGPMaterialRes     := TvgDescriptorSet.Create(Self);
-       fGPMaterialRes.SetSubComponent(True);
-       fGPMaterialRes.Name:='MaR';
-    End;
-  End else
-    If assigned(fGPMaterialRes) then
-       FreeAndNil(fGPMaterialRes);
-
-  If (RU_MODEL in fResourceUse) then
-  Begin
-    If not assigned(fGPModelRes) then
-    Begin
-       fGPModelRes     := TvgDescriptorSet.Create(Self);
-       fGPModelRes.SetSubComponent(True);
-       fGPModelRes.Name:='MoR';
-    End;
-  End else
-    If assigned(fGPModelRes) then
-       FreeAndNil(fGPModelRes);
- *)
-
 end;
 
 procedure TvgBaseObjectStore.SetShaderFragtName(const Value: String);
@@ -29096,32 +28388,6 @@ begin
 
 end;
 
-(*
-procedure TvgBaseObjectStore.UpdateGraphicPipelines;
-var
-  GP:TvgGraphicPipeline;
-  Pair: TPair<TvgGraphicPipeRecord, TvgGraphicpipeline>;
-begin
-  // Update all pipelines that use this data store
-
-  If Not assigned(fGraphicPipes) then exit;
-  If fGraphicPipes.Count = 0 then exit;
-
-  For Pair in fGraphicPipes do
-  Begin
-    If assigned(Pair.Value) then
-    Begin
-      GP := Pair.Value;
-      If not assigned (GP.fRenderEngine) then
-        GP.fRenderEngine := Pair.key.Renderer;
-
-      UpdateGraphicPipeline(GP);
-      GP.Active := True;
-    End;
-  End;
-
-end;
-*)
 { TvgDescriptorCol }
 
 function TvgDescriptorCol.Add: TvgDescriptorItem;
@@ -29319,64 +28585,6 @@ begin
   fSetCurrent := True;
 end;
 
-(*
-
-procedure TvgDescriptorArraySet.BuildDescriptorSetLayout;
-  Var I,VDI  : Integer;
-      SD     : TvgDescriptorArray;
-      VD     : TvgDescriptorEnumType;
-      CountArrayL : Integer;
-
-begin
-  fSetCurrent := False;     //important
-
-  CustomAssert(Assigned(fLinker),'Logical Device NOT assigned',Self);
-  CustomAssert(Assigned(fLinker.ScreenDevice),'Logical Device NOT assigned',Self);
-  CustomAssert(Assigned(fLinker.ScreenDevice),'Vulkan Logical Device NOT assigned',Self);
-
-  If (fDescriptorCol.Count=0) then exit    ;    //cant handle an empty set
-
-  CountArrayL := Ord(High(TvgDescriptorEnumType)) - Ord(Low(TvgDescriptorEnumType)) + 1 ;
-
-  Setlength(fCountArray, CountArrayL);
-  FillChar(fCountArray[0],CountArrayL,#0);
-
-  fSetCount                  := 0;
-  fVulkanDescriptorSetLayout := TpvVulkanDescriptorSetLayout.Create(Linker.ScreenDevice.VulkanDevice);
-
-  For I:=0 to fDescriptorCol.Count-1 do
-  Begin
-    If Not assigned(fDescriptorCol.Items[I].Device) or (fDescriptorCol.Items[I].Device<>Linker.ScreenDevice) then
-       fDescriptorCol.Items[I].Device :=  Linker.ScreenDevice;
-
-    SD:= fDescriptorCol.Items[I].fDescriptor;
-    If assigned(SD) then
-    Begin
-        fVulkanDescriptorSetLayout.AddBinding(I,                     //binding
-                                              SD.fDescriptorType,
-                                              1,                     //count
-                                              SD.fStageFlags,
-                                              [],
-                                              SD.fBindingFlags);
-
-        VD  := GeTvgDescriptorArrayType(SD.fDescriptorType);
-        VDI := Ord(VD);
-
-        fCountArray[VDI] :=  fCountArray[VDI] + 1;
-        //getting the number of Descriptor Types    to be able to build Pool
-        Inc(fSetCount);
-    end;
-
-  End;
-
-   //If no Descriptor Items then create EMPTY set
-  fVulkanDescriptorSetLayout.Initialize;
-
-  fSetCurrent := True;
-
-end;
-
-*)
 
 procedure TvgDescriptorSet.BuildVariableDescriptorCounts;
 var
@@ -29979,147 +29187,6 @@ begin
   end;
 end;
 
-(*
-procedure TvgDescriptorSet.UploadDescriptorSetData(aFrameIndex: TvkUint32);
-var
-  I: Integer;
-  SD: TvgDescriptorItem;
-  D: TvgDescriptorArray;
-  NeedsReflush: Boolean;
-  WriteCount: TvkUint32;
-begin
-  if not fSetCurrent then begin
-    Exit;
-  end;
-  if fDescriptorCol.Count = 0 then begin
-    Exit;
-  end;
-
-  CustomAssert(Assigned(fVulkanDescriptorSets[aFrameIndex]), 'Vulkan Descriptor Set not created', Self);
-
-  SetCurrentFrame(aFrameIndex);
-
-  CustomAssert(Assigned(fDSGraphicCommandPool), 'Graphic Command Pool not assigned', Self);
-  CustomAssert(Assigned(fDSTransferCommandPool), 'Transfer Command Pool not assigned', Self);
-
-  for I := 0 to fDescriptorCol.Count - 1 do begin
-    SD := fDescriptorCol.Items[I];
-    if not SD.Active then begin
-      SD.Active := True;
-    end;
-  end;
-
-  for I := 0 to fDescriptorCol.Count - 1 do begin
-    SD := fDescriptorCol.Items[I];
-    if Assigned(SD) and Assigned(SD.Descriptor) then begin
-      SD.Descriptor.UpLoadDescriptorData(aFrameIndex, fDSGraphicCommandPool, fDSTransferCommandPool);
-    end;
-  end;
-
-  NeedsReflush := False;
-
-  if (aFrameIndex < TvkUint32(Length(fVulkanDescriptorSets))) and
-     Assigned(fVulkanDescriptorSets[aFrameIndex]) then begin
-
-    for I := 0 to fDescriptorCol.Count - 1 do begin
-      SD := fDescriptorCol.Items[I];
-      D := nil;
-      if Assigned(SD) then begin
-        D := SD.Descriptor;
-      end;
-
-      if Assigned(D) and D.fUploadNeeded[aFrameIndex] then
-      begin
-        if D.Active then begin
-          WriteCount := D.GetDescriptorCountForWrite(aFrameIndex);
-          if (WriteCount > 0) or not D.PartiallyBound then begin
-            D.WriteToVulkanDescriptorSet(
-              fVulkanDescriptorSets[aFrameIndex],
-              aFrameIndex,
-              D.Binding,
-              D.GetFirstArrayElementForWrite(aFrameIndex),
-              WriteCount,
-              vgdmWriteActiveRange
-            );
-            NeedsReflush := True;
-          end;
-        end;
-        D.fUploadNeeded[aFrameIndex] := False;
-      end;
-    end;
-
-    if NeedsReflush then
-    begin
-      fVulkanDescriptorSets[aFrameIndex].Flush;
-    end;
-  end;
-end;
-*)
-(*
-procedure TvgDescriptorSet.UploadDescriptorSetData(aFrameIndex: TvkUint32);
-  Var I           : Integer;
-      SD          : TvgDescriptorItem;
-      NeedsReflush: Boolean;
-begin
-  If not fSetCurrent then exit;
-
-  If fDescriptorCol.Count = 0 then exit;
-
-  CustomAssert(Assigned(fVulkanDescriptorSets[aFrameIndex]),'Vulkan Descriptor Set not created',self);
-
-
-  SetCurrentFrame(aFrameIndex);
-
-  CustomAssert(assigned(fDSGraphicCommandPool),  'Graphic Command Pool not assigned',  Self);
-  CustomAssert(assigned(fDSTransferCommandPool), 'Transfer Command Pool not assigned', Self);
-
-  For I := 0 to fDescriptorCol.Count - 1 do
-  Begin
-    SD              := fDescriptorCol.Items[I];
-    If not SD.Active then
-       SD.Active := True;
-  End;
-
-  // Normal per-frame data upload pass
-  For I := 0 to fDescriptorCol.Count - 1 do
-  Begin
-    SD := fDescriptorCol.Items[I];
-    If Assigned(SD) and Assigned(SD.Descriptor) then
-      SD.Descriptor.UpLoadDescriptorData(aFrameIndex,
-                                         fDSGraphicCommandPool,
-                                         fDSTransferCommandPool);
-  End;
-
-  // Re-write any binding whose descriptor just became active this frame.
-  NeedsReflush := False;
-  If (aFrameIndex < TvkUint32(Length(fVulkanDescriptorSets))) and
-     Assigned(fVulkanDescriptorSets[aFrameIndex]) then
-  Begin
-    For I := 0 to fDescriptorCol.Count - 1 do
-    Begin
-
-      SD :=  fDescriptorCol.Items[I];
-
-      If Assigned (SD) and
-         Assigned(SD.Descriptor) and
-         (SD.fDescriptor.fUploadNeeded[I]) then
-      Begin
-
-        If SD.Descriptor.Active then
-        Begin
-          SD.Descriptor.WriteToVulkanDescriptorSet(fVulkanDescriptorSets[aFrameIndex],
-                                             aFrameIndex,
-                                             TvkUint32(I));
-          NeedsReflush := True;
-        End;
-      End;
-    End;
-
-    If NeedsReflush then
-      fVulkanDescriptorSets[aFrameIndex].Flush;
-  End;
-end;
- *)
 
 procedure TvgDescriptorSet.WriteInitialDescriptorBindings(  aFrameIndex: TvkUint32; aSet: TpvVulkanDescriptorSet);
 var
@@ -30846,35 +29913,6 @@ begin
  // Result := fBindingMode = vgdbmVariableArray;
 end;
 
-(*
-procedure TvgDescriptorArray.SetActiveDescriptorCount(const Value: TvkUint32);
-var V: TvkUint32;
-begin
-  V := Value;
-
-  if fBindingMode = vgdbmSingle then
-    V := 1
-  else
-  if fBindingMode = vgdbmFixedArray then
-  begin
-    if V = 0 then
-       V := 1;
-
-    if V > fBindingCount then
-       V := fBindingCount;
-  end else
-  begin
-    if V > fBindingCount then
-       V := fBindingCount;
-  end;
-
-  if fActiveDescriptorCount = V then exit;
-
-  fActiveDescriptorCount := V;
-  SetUploadFlags;
-
-end;
-*)
 procedure TvgDescriptorArray.SetBinding(const Value: TvkUint32);
 begin
   if fBinding = Value then
@@ -31165,7 +30203,6 @@ begin
   fLayoutFlags := 0;
 
 
-
   if dioUpdateAfterBind in fIndexingOptions then
     fLayoutFlags := fLayoutFlags or TVkDescriptorBindingFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT);
 end;
@@ -31437,20 +30474,6 @@ var
     Result := (aIndex < 0) or (aIndex >= L) or (not Assigned(fDescriptorArray[aIndex]));
   end;
 
-  // Assigned, but this frame's payload isn't built yet (still streaming,
-  // multi-buffer upload lagging, etc). A transient per-frame condition,
-  // never a layout/configuration problem - so never gated by PartiallyBound.
-  function IsPendingUpload(aIndex: Integer): Boolean;
-  var
-    LDF: TvgDescriptorPerFrameData;
-  begin
-    if IsVacant(aIndex) then
-      Exit(False);
-
-    LDF := fDescriptorArray[aIndex].FrameData[aFrameIndex];
-    Result := (not assigned(LDF)) or (not LDF.IsWriteReady);
-  end;
-
   function HasPayload(aIndex: Integer): Boolean;
   var
     LDF: TvgDescriptorPerFrameData;
@@ -31531,7 +30554,7 @@ begin
         CustomAssert(AllowGaps,
           Format('Descriptor array has an unwritten slot at index %d (binding %d) but PartiallyBound is not set', [I, aBinding]),
           Self);
-      // else: IsPendingUpload(I) - assigned, just not ready for this frame.
+      // else: assigned, just not ready for this frame.
       // Nothing to write yet; not an error, just move on.
     end;
   end;
@@ -31668,32 +30691,6 @@ end;
 
 procedure TvgRenderWorker.UploadObjectStoreResourceDataToVulkan;
 begin
-(*
-  If assigned(fTaskData.RenderObject) then
-  Begin
-
-     If assigned(fTaskData.RenderObject.MaterialRes[fSubPassIndex])  then
-     Begin
-        If assigned(fEngineCriticalSection) then fEngineCriticalSection.Acquire;
-       Try
-         fTaskData.RenderObject.MaterialRes[fSubPassIndex].UploadDescriptorSetData(fFrameIndex)  ;
-       Finally
-        If assigned(fEngineCriticalSection) then fEngineCriticalSection.Release;
-       End;
-     End;
-
-     If assigned(fTaskData.RenderObject.ModelRes[fSubPassIndex]) then
-     Begin
-        If assigned(fEngineCriticalSection) then fEngineCriticalSection.Acquire;
-       Try
-         fTaskData.RenderObject.ModelRes[fSubPassIndex].UploadDescriptorSetData(fFrameIndex)
-       Finally
-        If assigned(fEngineCriticalSection) then fEngineCriticalSection.Release;
-       End;
-     End;
-
-  End;
- *)
 end;
 
 procedure TvgRenderWorker.UploadPushConstantDataToVulkan;
@@ -31735,74 +30732,7 @@ begin
     End;
   End;
 
-  (*
-  If Assigned(fTaskData.ObjectStore) then
-  Begin
-    If Assigned(fEngineCriticalSection) then fEngineCriticalSection.Acquire;
-    Try
-      fTaskData.ObjectStore.UploadResourceDataToVulkan(fTransferCommandPool, fFrameIndex, fSubPassIndex);
-    Finally
-      If Assigned(fEngineCriticalSection) then fEngineCriticalSection.Release;
-    End;
-  End;
-
-  *)
 end;
-(*
-
-procedure TvgRenderWorker.UploadResourceDataToVulkan;
-  Var CB,TB:Boolean;
-begin
-
-  CustomAssert(assigned(fLinker),'Window Link not assigned to Worker');
-  CustomAssert(assigned(fLinker.ScreenDevice),'Window Link Screen Device not assigned to Worker');
-  CustomAssert(assigned(fLinker.ScreenDevice.VulkanDevice),'Window Link Screen Device not Active');
-  CustomAssert(assigned(fFrame),'Frame not connected');
-
-  CB:=False;
-  TB:=False;
-
-  If assigned(fTaskData.Resources) then
-  Begin
-      If assigned(fEngineCriticalSection) then fEngineCriticalSection.Acquire;
-     Try
-
-       If not assigned(fTaskData.Resources.fDSGraphicCommandPool) then
-       Begin
-           fTaskData.Resources.fDSGraphicCommandPool := self.fWorkerCommandPool;
-           CB:=True;
-       End;
-
-       If not assigned(fTaskData.Resources.fDSTransferCommandPool) then
-       Begin
-           fTaskData.Resources.fDSGraphicCommandPool := self.fTransferCommandPool;
-           TB := True;
-       End;
-
-       fTaskData.Resources.UploadDescriptorSetData(fFrameIndex) ;
-
-       If CB then fTaskData.Resources.fDSGraphicCommandPool := nil;
-       If TB then fTaskData.Resources.fDSGraphicCommandPool := nil;
-
-
-     Finally
-      If assigned(fEngineCriticalSection) then fEngineCriticalSection.Release;
-     End;
-  end;
-
-  If assigned(fTaskData.ObjectStore) then
-  Begin
-
-       If assigned(fEngineCriticalSection) then fEngineCriticalSection.Acquire;
-       Try
-          fTaskData.ObjectStore.UploadResourceDataToVulkan(fTransferCommandPool , fFrameIndex, fSubPassIndex);
-       Finally
-          If assigned(fEngineCriticalSection) then fEngineCriticalSection.Release;
-       End;
-  End;
-
-end;
-*)
 
 function TvgRenderWorker.BuildCommandAndStartRecording: Boolean;
   Var  SPI : TvkUint32;
@@ -32378,7 +31308,6 @@ end;
 Function TvgSampler.SetDisabled:Boolean;
   Var I,L:Integer;
 begin
-
 
 
   L:= Length(fVulkanSampler);
@@ -33247,7 +32176,6 @@ begin
 end;
 
 
-
 { TvgShaderSpecialisationCol }
 
 function TvgShaderSpecialisationCol.Add: TvgShaderSpecialisationItem;
@@ -33474,21 +32402,6 @@ begin
   If fGraphicPipelineDict.ContainsKey(aPipe) then exit;
 
   PR :=  Default(TvgPipelineRec);
- (*
-  If (RU_MATERIAL in  aPipe.ResourceUse) and assigned(aPipe.MaterialRes) then
-  Begin
-   //  PR.MaterialRes :=  aPipe.MaterialRes
-   //finish
-  End;
-
-  If (RU_MODEL in  aPipe.ResourceUse) and assigned(aPipe.ModelRes) then
-  Begin
-   //  PR.MaterialRes :=  aPipe.MaterialRes
-   //finish
-  End;
-
-  fGraphicPipelineDict.AddOrSetValue(aPipe, PR);
-  *)
 end;
 
 constructor TvgObject_Base.Create;
@@ -33805,117 +32718,6 @@ begin
   fMouseButtons := [];
 end;
 
-(*
-{ TvgGenericDescriptorData<T> }
-
-procedure TvgGenericDescriptorData<T>.Add(const Item: T);
-  Var L:Integer;
-begin
-  L:=  Length(fDescriptorData)  ;
-  SetLength(fDescriptorData,L + 1);
-
-  fDescriptorData[L] := Item;
-
-end;
-
-procedure TvgGenericDescriptorData<T>.Clear;
-  Var I:Integer;
-begin
- // For I:=0 to Length(fDescriptorData)-1 do
- //    fDescriptorData[I].Clear;
-  SetLength(fDescriptorData, 0);
-end;
-
-function TvgGenericDescriptorData<T>.GetCount: Integer;
-begin
-  Result := 0;
-  If Length(fDescriptorData)=0 then exit;
-  Result := Length(fDescriptorData);
-end;
-
-function TvgGenericDescriptorData<T>.GetDataPointer: Pointer;
-begin
-  Result := @fDescriptorData[fCurrentDescriptorIndex];
-end;
-
-function TvgGenericDescriptorData<T>.GetDataSize: Integer;
-begin
-  Result := SizeOf(fDescriptorData[fCurrentDescriptorIndex]);
-end;
-
-function TvgGenericDescriptorData<T>.GetDataStride: Integer;
-begin
-  Result := SizeOf(fDescriptorData[fCurrentDescriptorIndex]);
-end;
-
-function TvgGenericDescriptorData<T>.GetDescriptor(aDescriptorIndex: Integer): T;
-
-begin
-  Result := Default(T);
-  If Length(fDescriptorData)=0 then exit;
-  If (aDescriptorIndex>=Length(fDescriptorData)) then exit;
-  Result := fDescriptorData[aDescriptorIndex];
-end;
-
-procedure TvgGenericDescriptorData<T>.SetDescriptor(aDescriptorIndex: Integer;   const Value: T);
-begin
-  If Length(fDescriptorData)=0 then exit;
-  If (aDescriptorIndex>=Length(fDescriptorData)) then exit;
-  fDescriptorData[aDescriptorIndex] := Value;
-end;
-
-procedure TvgGenericDescriptorData<T>.SetDescriptorCapacity(aCapacity: Integer);
-begin
-  if aCapacity=Length(fDescriptorData) then exit;
-  SetLength(fDescriptorData, aCapacity);
-end;
-
-{ TvgGenericFrameData<T> }
-
-procedure TvgGenericFrameData<T>.Add(const Item: T);
-begin
-  SetLength(fFrameData, Length(fFrameData) + 1);
-  fFrameData[High(fFrameData)].Add(Item);
-end;
-
-procedure TvgGenericFrameData<T>.Clear;
-  Var I:Integer;
-begin
-  For I:=0 to Length(fFrameData)-1 do
-     fFrameData[I].Clear;
-  SetLength(fFrameData, 0);
-end;
-function TvgGenericFrameData<T>.GetCount: Integer;
-begin
-  Result := Length(fFrameData);
-end;
-
-function TvgGenericFrameData<T>.GetFrame( Index: Integer): TvgGenericDescriptorData<T>;
-begin
-  Result := Default(TvgGenericDescriptorData<T>);
-  If Index>= Length(fFrameData) then exit;
-  Result := fFrameData[Index];
-end;
-
-procedure TvgGenericFrameData<T>.SetFrame(Index: Integer;  const Value: TvgGenericDescriptorData<T>);
-begin
-  If Length(fFrameData)=0 then exit;
-  If (Index>=Length(fFrameData)) then exit;
-  fFrameData[Index] := Value;
-end;
-
-procedure TvgGenericFrameData<T>.SetFrameCapacity(const aCapacity: Integer);
-  Var L:Integer;
-begin
-  L:= Length(fFrameData) ;
-
-  If L=aCapacity then
-    exit
-  else
-    SetLength(fFrameData,aCapacity);
-
-end;
-*)
 
 { TvgGenericDescriptorObject<T> }
 
@@ -34214,7 +33016,6 @@ begin
   end;
 
 end;
-
 
 
 function TvgDescriptorData.GetStaging: Boolean;
