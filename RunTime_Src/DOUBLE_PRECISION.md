@@ -72,7 +72,7 @@ this, the matrix is small-valued and survives narrowing to a float32 `mat4`.
 | `TvgCamera`: position, target, up, lens, every cached matrix | vertex, colour, normal, texcoord data |
 | `TvgFrustrumPlanes` | `TvgAABB` (built from float32 vertices) |
 | `IvgGlobalDataTarget.SetViewProjectMatrix` | instance matrices (`TvgMatrix4x4S`) |
-| ToolManager drag point, plane normal, ray maths, events | particle GPU records |
+| ToolManager drag point, plane normal, ray maths, events | |
 | `Vulkan_WorldAxes` vectors, matrices and scalars | |
 
 ### dmat4 or mat4 on the GPU
@@ -181,11 +181,8 @@ Done on this branch:
   turns every accidental narrowing into a compile error. All seven tests and
   `Samples\TestVulkan\VulcanTest` compile against it.
 - **Full sample build.** `Samples\TestVulkan\VulcanTest.dpr` compiles with
-  `dcc32`. It pulls in every runtime unit except seven (`DetectImageFormat`,
-  `ToolManagerDraft`, `Vulkan_Components_Scene_GLTF`,
-  `Vulkan_Components_ShaderCompiler_DLL`, `Vulkan_MemoryPool`,
-  `Vulkan_OMNIThread_Renderer`, `Vulkan_WindowSDL2`), and none of those seven
-  use an API this branch changed.
+  `dcc32`. It pulls in every runtime unit except a few unused ones and
+  `Vulkan_WindowSDL2`, none of which use an API this branch changed.
 - **Shaders.** Vertex shaders generated for both paths were compiled with
   `glslangValidator` and passed `spirv-val`. The `mat4` shader declares no
   `Float64` capability, including with a leftover `USE_DOUBLE` header; the
@@ -195,7 +192,7 @@ Done on this branch:
 
 1. Install the Delphi 12/13 packages in the IDE (only command-line builds of
    the tests and `VulcanTest` were done).
-2. Run `VulcanTest` / `ParticleDemo` with `ShaderUseDouble` on and off: the
+2. Run `VulcanTest` with `ShaderUseDouble` on and off: the
    image must not move or flip between them.
 3. Run one orthographic view and check it is the right way up.
 4. On an Intel Xe or Arc GPU with `ShaderUseDouble` on: the renderer should
@@ -219,7 +216,4 @@ Done on this branch:
 - **The camera's own projection** (`GetProjectionMatrix`,
   `GetViewProjectionMatrix`, `GetFrustumPlanes`) is still OpenGL-style (Y up,
   the camera's stored aspect), unlike the render path. Consider aligning it.
-- **Particles** simulate in float32 on the GPU, so a particle system at survey
-  coordinates needs its emitter and bounds expressed relative to
-  `WorldOrigin`.
 - The legacy `Delphi XE8` package lists were not updated.

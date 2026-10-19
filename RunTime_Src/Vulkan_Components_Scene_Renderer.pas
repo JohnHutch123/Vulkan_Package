@@ -40,7 +40,6 @@ uses
   Vulkan_Components,
   Vulkan_Components_Descriptors,
   Vulkan_Components_DataStore,
-  Vulkan_Components_Nodes,
   Vulkan_Components_Camera,
   Vulkan_Components_Light,
   Vulkan_WorldAxes,
@@ -616,7 +615,7 @@ type
    { While True, AddDataStoreLive and ConnectStoreLive build a store's
      pipelines but leave them inactive, so they draw nothing and have not
      loaded their shaders yet.  For stores whose SPIR-V is generated from
-     their own pipelines (TvgShaderBuilder): a pipeline activated with a
+     their own pipelines (a TvgBaseShaderBuilder): a pipeline activated with a
      missing or empty shader file fails in Vulkan.  Set it, add the stores
      (GetEditStore, ShowPreview...), clear it, write the shaders, then
      ConnectStoreLive each store to activate it.  Default False. }
@@ -669,7 +668,7 @@ type
      so what is drawn into it can be picked.  Its shaders are named
      EditShaderPrefix + 'Points' / 'Lines' / 'Triangles' - EditLines_vert.spv
      and EditLines_frag.spv by default - built from its layout like any
-     store's (TvgShaderBuilder).  EditColor, EditLineWidth and EditPointSize
+     store's (TvgBaseShaderBuilder).  EditColor, EditLineWidth and EditPointSize
      are applied when it is made. }
    Function GetEditStore(aKind: TvgEditLayerKind): TvgObjectStore;
 
@@ -821,8 +820,8 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
                                      aImageFileName  : String); Overload;
 
      // aImageStream is read (not owned/freed) - the caller frees it once this
-     // returns.  For glTF images that are embedded (a data: URI, or a GLB
-     // bufferView) rather than a file on disk - see TPasGLTF.TImage.GetResourceData.
+     // returns.  For images embedded in a scene file rather than stored
+     // as a file on disk.
      Procedure AddDescriptor_Texture( aDescriptorName : String;
                                      aImageStream    : TStream); Overload;
 
@@ -997,7 +996,7 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
   //  raw mouse plumbing from TvgBaseToolManager.
   //
   //  Interactive editing - edit tools, undo/redo, snapping - is added by a
-  //  descendant (TvgEditToolManager in the PRO package) through the virtual
+  //  descendant through the virtual
   //  hooks below.  The scene talks to every tool manager through them:
   //  ForgetObject before an object is freed, StoreGone before a store is,
   //  SceneCleared when the scene's data goes.
@@ -1286,8 +1285,7 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
 
   { A component that writes GLSL for a graphic pipeline.  The core only
     declares it, so a TvgVulkanDataModule can hold one and the session editor
-    can show what it generates; the implementation (TvgShaderBuilder) is in
-    the PRO package. }
+    can show what it generates; a descendant supplies the implementation. }
   TvgBaseShaderBuilder = Class(TvgBaseComponent)
   Public
     { The vertex, geometry and fragment source for aGP; a stage aGP does not
@@ -2354,7 +2352,7 @@ begin
 
   //Frees this store's pipeline(s) and GPU buffers, which a frame still
   //recording or executing uses - a live PointSize change comes this way
-  //(TvgDelaunayDisplay.RebuildStorePipeline).
+  //(a descendant rebuilding its pipeline, say).
   FinishFramesInFlight;
 
   ToRemove := TList<TvgGraphicPipeRecord>.Create;
@@ -4275,7 +4273,7 @@ end;
 
 procedure TvgToolManager.StoreGone(aStore: TvgObjectStore);
 begin
-  // Nothing held per store here; see TvgEditToolManager.
+  // Nothing held per store here; a descendant may override.
 end;
 
 procedure TvgToolManager.SceneCleared;
@@ -4285,7 +4283,7 @@ end;
 
 procedure TvgToolManager.ViewChanged(aPlane: Boolean);
 begin
-  // Nothing drawn in screen terms here; see TvgEditToolManager.
+  // Nothing drawn in screen terms here; a descendant may override.
 end;
 
 // ---------------------------------------------------------------------------

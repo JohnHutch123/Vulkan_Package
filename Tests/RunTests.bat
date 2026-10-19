@@ -61,11 +61,11 @@ echo.
 
 if not exist "%OUT%" mkdir "%OUT%"
 
-set "UNITS=-U"%BDS%\lib\win32\release" -U"%PASVULKAN%\src" -U"%PASVULKAN%" -U"%PASVULKAN%\externals\pasmp\src" -U"%PASVULKAN%\externals\pucu\src" -U"%PASVULKAN%\externals\pasdblstrutils\src" -U"%PASVULKAN%\externals\pasjson\src" -U"%PASVULKAN%\externals\pasgltf\src" -U"%REPO%\RunTime_Src" -U"%REPO%\Samples\Renderers""
+set "UNITS=-U"%BDS%\lib\win32\release" -U"%PASVULKAN%\src" -U"%PASVULKAN%" -U"%PASVULKAN%\externals\pasmp\src" -U"%PASVULKAN%\externals\pucu\src" -U"%PASVULKAN%\externals\pasdblstrutils\src" -U"%PASVULKAN%\externals\pasjson\src" -U"%REPO%\RunTime_Src" -U"%REPO%\Samples\Renderers""
 
 set FAILED=0
 
-for %%T in (FrustumTest AABBTest BoundsTest DataStoreEditTest SceneEditTest CullTest AxisConventionTest CameraTest ZoomAllTest DynamicRenderingTest SceneLinkTest DataModuleWindowTest OBJLoaderTest OBJMaterialTest STLTest InstancingTest AppendSceneTest ShaderFileNameTest LodTest) do (
+for %%T in (FrustumTest AABBTest BoundsTest DataStoreEditTest SceneEditTest CullTest AxisConventionTest CameraTest ZoomAllTest DynamicRenderingTest SceneLinkTest DataModuleWindowTest OBJLoaderTest OBJMaterialTest STLTest InstancingTest AppendSceneTest ShaderFileNameTest LodTest MeshBuilderTest) do (
   echo === %%T ===
 
   "%DCC%" -Q -B --no-config -NSSystem;System.Win;Winapi;Vcl;Vcl.Imaging;Data;Xml ^

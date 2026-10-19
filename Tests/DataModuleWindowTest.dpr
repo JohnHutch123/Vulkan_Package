@@ -54,7 +54,7 @@ type
   end;
 
 type
-  //stands in for PRO's TvgShaderBuilder
+  //stands in for a real TvgBaseShaderBuilder descendant
   TFakeShaderBuilder = class(TvgBaseShaderBuilder)
   public
     function BuildSources(aGP: TvgGraphicPipeline; out aVert, aGeom, aFrag: String): Boolean; override;

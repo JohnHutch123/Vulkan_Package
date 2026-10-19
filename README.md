@@ -5,17 +5,13 @@ The root `README.md` is minimal, so most real documentation is in `RunTime_Src/*
 
 ---
 
-### Public and PRO packages
-This repository is the **public** core. Extras live in the private
-[**Vulkan_Package_PRO**](https://github.com/JohnHutch123/Vulkan_Package_PRO)
-repository, which builds on this one. It is available under licence from
-Datavis (johnh@datavis.com.au); the link works once you have been given access.
-
-| Public (this repo) | PRO |
-|---|---|
-| Instance/device/swapchain/pipeline components, descriptors, data stores, scene and render engine base, `TvgRenderEngine_Single`, camera, lights, HUD, compute, shader compiler, VCL/SDL2 windows, hand-built shaders (`VulkanShaders/`) | Particle system, glTF scene loader, shader builder (unit and app), `TvgCommThread_RenderEngine` (multi-threaded recording) |
-| `TvgToolManager`: camera control, CPU/GPU picking, selection, zoom to all | `TvgEditToolManager` (a `TvgToolManager` descendant): edit tools, undo/redo, snapping, work plane |
-| `TvgSceneLoaderStorer` (abstract loader base), `TvgSceneLoader_OBJ` (load-only OBJ geometry) | Natural neighbour, spring system, Delaunay display |
+### What is in it
+Instance/device/swapchain/pipeline components, descriptors, data stores, the scene and
+render engine base, `TvgRenderEngine_Single`, camera, lights, HUD, compute, the shader
+compiler, VCL/SDL2/FMX windows and the hand-built shaders (`VulkanShaders/`).
+`TvgToolManager` gives camera control, CPU/GPU picking, selection and zoom to all.
+`TvgSceneLoaderStorer` is the abstract scene loader base, with `TvgSceneLoader_OBJ`
+(OBJ geometry and materials) and `TvgSceneLoaderStorer_STL` (STL read and write).
 
 `TvgToolManager` exposes virtual hooks (`ToolMouseDown/Move/Up`,
 `DoCameraDrag`, `DoSelectionChanged`, `ForgetObject`, `StoreGone`,
@@ -30,23 +26,9 @@ Every package name ends with the version of the Delphi release it is built with:
 | 12 | `VulkanPkgR290` | `VulkanPkgD290` | `VulkanPkg_VCLR290` | `VulkanPkg_VCLD290` | `VulkanPkg_SDL2R290` | `VulkanPkg_FMXR290` |
 | 13 | `VulkanPkgR370` | `VulkanPkgD370` | `VulkanPkg_VCLR370` | `VulkanPkg_VCLD370` | `VulkanPkg_SDL2R370` | `VulkanPkg_FMXR370` |
 
-To use PRO, clone both repositories side by side and build the public
-packages first:
-
-```
-<parent>\Vulkan_Package        (public)
-<parent>\Vulkan_Package_PRO    (PRO packages require the matching VulkanPkgRxxx)
-```
-
-```
-git clone https://github.com/JohnHutch123/Vulkan_Package.git
-git clone https://github.com/JohnHutch123/Vulkan_Package_PRO.git
-```
-
 ### Licence
-The public package is released under the **zlib licence** - see `LICENSE`.
-It may be used in closed-source and commercial applications. The PRO
-repository is not covered by this licence.
+This package is released under the **zlib licence** - see `LICENSE`.
+It may be used in closed-source and commercial applications.
 
 ---
 
@@ -72,13 +54,13 @@ and connects it to a `TvgWindowVCL` on any form.
   `SceneLoaderType` drops down the registered loaders (blank = choose by file extension), `SceneFileName`
   has a file-open button, and `LoadSceneOnEnable` reloads it whenever the session is enabled, at design
   time too. Any `TvgScene` also gets *Load Scene File...* / *Clear Scene* on its menu. In code:
-  `DM.LoadScene('model.glb')`.
+  `DM.LoadScene('model.obj')`.
 - **Tool manager:** right-click > *Add Tool Manager* creates a `TvgToolManager` (camera orbit mode) connected
   to the primary linker, scene and renderer, so the window can be orbited/picked; `ZoomAllOnLoad` (default on)
-  frames each loaded scene. A PRO `TvgEditToolManager` can be assigned to `ToolManager` instead. Each extra
+  frames each loaded scene. Any `TvgToolManager` descendant can be assigned to `ToolManager` instead. Each extra
   window gets its own tool manager: set its linker's `ToolManager` (or the tool manager's `Linker`).
-- **Scene loaders** register themselves in `Vulkan_SceneLoaders` (core package), e.g. in the PRO glTF unit:
-  `RegisterSceneLoader(TvgSceneLoaderStorer_GLTF, 'glTF', 'glTF 2.0 scene', '.gltf;.glb', 'FileName');`
+- **Scene loaders** register themselves in `Vulkan_SceneLoaders` (core package), e.g. the STL unit:
+  `RegisterSceneLoader(TvgSceneLoaderStorer_STL, 'STL', 'STL mesh', '.stl', 'FileName');`
   where the last argument is the loader's published file-name property.
 - **Edit everything:** right-click > *Edit Vulkan Session...* opens an editor showing the session as it is
   connected (Instance > devices > linkers > windows, plus anything not yet connected) and the published

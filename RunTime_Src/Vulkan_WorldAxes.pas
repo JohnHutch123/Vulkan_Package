@@ -106,7 +106,7 @@ begin
   CustomAssert(Result,
     Format('vgSetAxisConvention: %d object(s) created under the current axis ' +
            'convention are still alive.  Set the convention at start-up, ' +
-           'before creating cameras or particle systems.', [gAxisUsers]));
+           'before creating cameras or other objects that follow it.', [gAxisUsers]));
   if Result then
     gAxisConvention := aValue;
 end;
