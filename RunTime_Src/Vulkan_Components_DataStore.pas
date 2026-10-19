@@ -637,6 +637,9 @@ type
     procedure SetObjectInstanceIndex(ObjectIndex, LocalIndex: Integer; I: Cardinal);
 
     procedure SetObjectIndex(ObjectIndex, LocalIndex: Integer; AValue: Cardinal);
+    { Writes indices AFirst.. of an object under one lock.  Each value must fit
+      the store's index type. }
+    procedure SetObjectIndices(ObjectIndex, AFirst: Integer; const AData: array of Cardinal);
     procedure SetObjectTriangle(ObjectIndex, TriangleIndex: Integer; I1, I2, I3: Cardinal);
 
     // --- Frustum culling -------------------------------------------------
@@ -715,6 +718,11 @@ type
       call per element would take the lock millions of times. }
     function GetObjectVertexPositions(ObjectIndex: Integer): TArray<TpvVector3>;
     function GetObjectIndices(ObjectIndex: Integer): TArray<Cardinal>;
+    { Every vertex's value of one float attribute, packed (3 Singles a vertex
+      for vdtPosition, 4 for vdtColor, ...).  Empty if the store does not
+      have it.  vdtIndex is not a float: use GetObjectVertexIndices. }
+    function GetObjectVertexAttribute(ObjectIndex: Integer; ADataType: TvgVertexDataType): TArray<Single>;
+    function GetObjectVertexIndices(ObjectIndex: Integer): TArray<Cardinal>;
 
     function GetBindingDescriptions: TArray<TVkVertexInputBindingDescription>;
     function GetAttributeDescriptions: TArray<TVkVertexInputAttributeDescription>;
@@ -2909,6 +2917,100 @@ begin
     GlobalIndex := InstanceGlobalIndex(ObjectIndex, LocalIndex);
     SetInstanceAttributeData(GlobalIndex, idtIndex, I);
     SetDataDirty;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+procedure TvgVulkanDataStore.SetObjectIndices(ObjectIndex, AFirst: Integer;
+  const AData: array of Cardinal);
+var
+  Obj    : TvgVulkanObjectRecord;
+  I      : Integer;
+  Offset : Integer;
+begin
+  if Length(AData) = 0 then Exit;
+  FCriticalSection.Enter;
+  try
+    Obj := CheckLiveObject(ObjectIndex);
+    if (AFirst < 0) or (Length(AData) > Obj.IndexCount - AFirst) then
+      raise EVulkanDataStoreException.CreateFmt(
+        'Indices %d..%d are out of range for object %d (it has %d)',
+        [AFirst, AFirst + Length(AData) - 1, ObjectIndex, Obj.IndexCount]);
+
+    Offset := (Obj.IndexStart + AFirst) * Integer(GetIndexElementSize(FIndexType));
+    case FIndexType of
+      itUInt16:
+        for I := 0 to High(AData) do
+        begin
+          if AData[I] > $FFFF then
+            raise EVulkanDataStoreException.CreateFmt(
+              'Index %d does not fit a 16-bit index buffer', [AData[I]]);
+          PWord(@FIndexData[Offset + I * 2])^ := Word(AData[I]);
+        end;
+      itUInt32:
+        Move(AData[0], FIndexData[Offset], Length(AData) * SizeOf(Cardinal));
+    else
+      raise EVulkanDataStoreException.Create('The store has no index buffer');
+    end;
+
+    SetDataDirty;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+function TvgVulkanDataStore.GetObjectVertexAttribute(ObjectIndex: Integer;
+  ADataType: TvgVertexDataType): TArray<Single>;
+var
+  Obj    : TvgVulkanObjectRecord;
+  I      : Integer;
+  Offset : Integer;
+  Size   : Integer;
+  Count  : Integer;
+begin
+  Result := nil;
+  if ADataType = vdtIndex then
+    raise EVulkanDataStoreException.Create('vdtIndex is not a float attribute: use GetObjectVertexIndices');
+  FCriticalSection.Enter;
+  try
+    Obj := CheckLiveObject(ObjectIndex);
+    if not (ADataType in FVertexTypes) or (Obj.VertexStart < 0) or (Obj.VertexCount <= 0) then
+      Exit;
+
+    Size  := Integer(GetVertexSize(ADataType));
+    Count := Size div SizeOf(Single);
+    SetLength(Result, Obj.VertexCount * Count);
+    Offset := Obj.VertexStart * Integer(FVertexStride) + Integer(FVertexOffsets[ADataType]);
+    for I := 0 to Obj.VertexCount - 1 do
+    begin
+      Move(FVertexData[Offset], Result[I * Count], Size);
+      Inc(Offset, Integer(FVertexStride));
+    end;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+function TvgVulkanDataStore.GetObjectVertexIndices(ObjectIndex: Integer): TArray<Cardinal>;
+var
+  Obj    : TvgVulkanObjectRecord;
+  I      : Integer;
+  Offset : Integer;
+begin
+  Result := nil;
+  FCriticalSection.Enter;
+  try
+    Obj := CheckLiveObject(ObjectIndex);
+    if not (vdtIndex in FVertexTypes) or (Obj.VertexStart < 0) or (Obj.VertexCount <= 0) then
+      Exit;
+    SetLength(Result, Obj.VertexCount);
+    Offset := Obj.VertexStart * Integer(FVertexStride) + Integer(FVertexOffsets[vdtIndex]);
+    for I := 0 to Obj.VertexCount - 1 do
+    begin
+      Move(FVertexData[Offset], Result[I], SizeOf(Cardinal));
+      Inc(Offset, Integer(FVertexStride));
+    end;
   finally
     FCriticalSection.Leave;
   end;
