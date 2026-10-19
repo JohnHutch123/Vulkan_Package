@@ -17,7 +17,6 @@ type
     vgRenderEngine_Single1: TvgRenderEngine_Single;
     vgScene1: TvgScene;
     vgToolManager1: TvgToolManager;
-    vgSceneLoader_OBJ1: TvgSceneLoader_OBJ;
   private
     { Private declarations }
   public
