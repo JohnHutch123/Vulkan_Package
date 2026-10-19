@@ -64,7 +64,7 @@ begin
     [0, 1, 2, 0, 2, 3]));
   Check('degenerate kept by default', Length(vgTriangleIndices(TRIANGLE_STRIP, Idx([0, 1, 1, 2]))) = 6);
   Check('degenerate dropped on request', SameIndices(
-    vgTriangleIndices(TRIANGLE_STRIP, Idx([0, 1, 2, 2, 3, 4]), True), [0, 1, 2, 2, 3, 4]));
+    vgTriangleIndices(TRIANGLE_STRIP, Idx([0, 1, 2, 2, 3, 4]), True), [0, 1, 2, 3, 2, 4]));
   Check('lines are not triangles', Length(vgTriangleIndices(LINE_LIST, Idx([0, 1]))) = 0);
   Check('line strip to segments', SameIndices(vgLineIndices(LINE_STRIP, Idx([0, 1, 2])), [0, 1, 1, 2]));
   Check('line list stays', SameIndices(vgLineIndices(LINE_LIST, Idx([0, 1, 2, 3])), [0, 1, 2, 3]));

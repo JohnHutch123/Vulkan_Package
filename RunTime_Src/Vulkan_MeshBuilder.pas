@@ -285,6 +285,7 @@ var
   Idx, Tris: TArray<Cardinal>;
   TanIdx: TArray<Integer>;
   Tan, Bit: TArray<TpvVector3D>;
+  Rewrite: Boolean;
 begin
   N := Length(aMesh.Positions);
   if (Length(aMesh.Normals) <> 0) and (Length(aMesh.Normals) <> N) then
@@ -297,10 +298,18 @@ begin
     if aMesh.Indices[I] >= Cardinal(N) then
       raise EvgMeshError.CreateFmt('Mesh index %d is out of range (%d vertices)', [aMesh.Indices[I], N]);
 
-  aStore.AllocateVertices(aObjIndex, N);
+  // A first write allocates; a rewrite resizes the object in place.
+  Rewrite := aStore.GetObjectVertexStart(aObjIndex) >= 0;
+  if Rewrite then
+    aStore.SetObjectVertexCount(aObjIndex, N)
+  else
+    aStore.AllocateVertices(aObjIndex, N);
   if aStore.GetIndexType <> itNONE then
   begin
-    aStore.AllocateIndices(aObjIndex, Length(aMesh.Indices), amUninitialized);
+    if aStore.GetObjectIndexStart(aObjIndex) >= 0 then
+      aStore.SetObjectIndexCount(aObjIndex, Length(aMesh.Indices))
+    else
+      aStore.AllocateIndices(aObjIndex, Length(aMesh.Indices), amUninitialized);
     aStore.SetObjectIndices(aObjIndex, 0, aMesh.Indices);
   end
   else if Length(aMesh.Indices) > 0 then
@@ -317,6 +326,9 @@ begin
       Buf[3 * I + 2] := aMesh.Positions[I].z;
     end;
     aStore.SetObjectVertexPositions(aObjIndex, 0, Buf);
+    // The bounds only ever grow as positions are written: start them afresh.
+    if Rewrite then
+      aStore.RebuildObjectBounds(aObjIndex);
   end;
 
   if Length(aMesh.Normals) = N then
