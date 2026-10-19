@@ -101,9 +101,9 @@ the HUD then had to go `PRESENT_SRC → TRANSFER_DST` with a `BOTTOM_OF_PIPE`
 source, which drains the whole pipeline every frame. `CmdEndDynamicRendering`
 takes an `aHUDFollows` flag. Only pass True when `TvgFrame.RecordPresentAndHUD`
 really runs next. `StartRenderEnginePrepare` passes `Linker.HUDEnabled` and
-then calls it. The comm-thread sample renderer's `FinishPrepare` passes
-`TvgFrame.HUDEnabledForFrame`, the value `CaptureHUD` took on the main thread,
-and then calls it. `RecordPresentAndHUD` is public so that renderers which
+then calls it. A threaded renderer passes `TvgFrame.HUDEnabledForFrame`, the
+value `CaptureHUD` took on the main thread, and then calls it.
+`RecordPresentAndHUD` is public so that renderers which
 end their frames outside `StartRenderEnginePrepare` can do so.
 
 `TvgFrame.fSwapImageLayout` tracks the swapchain image's layout through the
@@ -136,7 +136,7 @@ These came to light once validation really ran (see section 4). They affect
 | | |
 |---|---|
 | `Tests/DynamicRenderingTest.dpr` | CPU only, in `RunTests.bat`. Defaults, switching Dynamic ↔ Standard before enabling, every fallback to Standard, the device's request semantics. |
-| `Tests/DynamicRenderingGPUTest.dpr` | Real frames on a real GPU, run by `Tests/RunGPUTests.bat`. |
+| `DynamicRenderingGPUTest` | Real frames on a real GPU. |
 
 The GPU test builds the same component chain as the sample, on a small
 window. It runs the matrix [Standard, Dynamic] × [screen, offscreen] ×
@@ -163,32 +163,22 @@ are two pipelines and two draws, and every offscreen case checks the square
 was drawn too.
 
 That matrix runs on `TvgRenderEngine_Single`, which records through
-`StartRenderEnginePrepare`. The comm-thread sample renderer,
-`TvgCommThread_RenderEngine` (PRO package), records on its own threads, so it has a second
-matrix: [Standard, Dynamic] × [screen, offscreen] × [HUD off, on], run in
-`TM_SINGLE` and again in `TM_MULTITASK` with two workers, where each worker
-records one of the two stores. It uses the same checks, and its offscreen
-images must also match the single-thread renderer's. A missing present blit
-shows up as `VUID-VkPresentInfoKHR-pImageIndices-01430`: the swapchain image
-is presented still `UNDEFINED`.
+`StartRenderEnginePrepare`. A renderer that records on its own threads should
+run the same matrix in each of its thread modes, and its offscreen images must
+match the single-thread renderer's. A missing present blit shows up as
+`VUID-VkPresentInfoKHR-pImageIndices-01430`: the swapchain image is presented
+still `UNDEFINED`.
 
 Each mode also runs one case under `Linker.UseThread`, where a frame's
-completion starts the next frame before it returns. Non-HUD comm-thread cases
-also switch the HUD on while a frame is recording, and check that frame is
-recorded without it. That only pins the new contract: the old code read the
-flag on the recording thread, which usually finished first, so it could not
-reliably fail. `DynamicRenderingGPUTest.exe [gpu] comm` runs just the
-comm-thread cases.
+completion starts the next frame before it returns.
 
-The comm-thread renderer's frames come back to the main thread through
-`TThread.Queue`, so the test pumps the queue until the linker is free. A
+A
 `WM_PAINT` and `TvgScene.ClearScene` each start a frame too, so the test
 waits for any frame in flight before a resize or a read-back. Teardown
 deliberately does not wait. It starts a frame of the scene, runs `ClearScene`
 while that frame is recording, then disables the instance straight away, as
 the sample's `Button2Click` does. It checks that a frame really is in flight
-at each step. Each comm-thread case also disables the renderer with a frame
-in flight, re-enables it and renders again.
+at each step.
 
 Object picking has its own cases: [storage buffer, storage image] ×
 [Standard, Dynamic] × [screen, offscreen] (`DynamicRenderingGPUTest.exe [gpu]
@@ -211,17 +201,13 @@ old pixel sampler this fails for every pick of slots 1 and 2 (graphics
 queue 0 against 1 or 2). On a GPU with a single graphics queue it holds
 trivially.
 
-Results, 2026-09-22, both renderers (`Tests\RunGPUTests.bat 0 1`):
+Results, 2026-09-22:
 
 | GPU | Build | Validation | Result | Standard vs Dynamic images |
 |---|---|---|---|---|
 | NVIDIA RTX 3080 Laptop (driver 581.95) | Win64 | on + sync | all pass, 0 messages | byte-identical |
 | Intel UHD (CometLake, 101.2137) | Win64 | on + sync | all pass, 0 messages | byte-identical |
 | both | Win32 | off | all pass | byte-identical |
-
-Before the comm-thread fix (section 5), every comm-thread offscreen case
-failed `VUID-VkPresentInfoKHR-pImageIndices-01430`, and every comm-thread HUD
-case recorded the HUD in 0 of 3 frame slots.
 
 Timing, validation off, 400 frames, screen, MSAA 4×, depth, mean wall time of
 recording plus submit plus present:
@@ -235,104 +221,17 @@ With a GPU that is not the bottleneck, dynamic rendering is cheaper per frame.
 There is no `VkRenderPass` or `VkFramebuffer` to begin, and fewer layout
 transitions. On a GPU-bound frame the two paths do identical GPU work.
 
-## 5. The comm-thread sample renderer
+## 5. Editing while a frame is in flight
 
-`Vulkan_Renderer_CommThread.pas` (PRO, `Samples/Renderers`) used to end its frames
-with `CmdEndRenderPass` or `CmdEndDynamicRendering` and go straight to
-`EndRecording`. It never called `RecordPresentAndHUD`, on either path, so an
-offscreen target never reached the screen and the HUD was never drawn.
-`FinishPrepare` now does what `StartRenderEnginePrepare` does: it ends dynamic
-rendering with `aHUDFollows = HUDEnabledForFrame`, then calls
-`RecordPresentAndHUD`.
-
-Two more things kept it from presenting at all:
-
-| Problem | Effect | Fix |
-|---|---|---|
-| `Render_RenderLoop` asserted on `fCurrentGraphicPipeline`, which only commented-out code sets | the manager thread died on the first frame, before `FinishPrepare`; no frame ever came back | replaced by `Render_Draws` (see *Recording*) |
-| Classic path: the present/graphics queue-family barriers ran for an offscreen target too, on its image **view** handle | on a GPU with a separate present family, an invalid barrier, and the offscreen image left `PRESENT_SRC` where the blit expects `COLOR_ATTACHMENT_OPTIMAL` | screen target only, as in `StartRenderEnginePrepare`. Neither GPU here has a separate present family, so this branch is not exercised |
-
-### Teardown
-
-Disabling used to race the manager thread. `SetDisabled` called `inherited`
-(render pass, workers, global resources) and only then stopped the manager,
-and nothing waited for a frame the manager was still recording. That is the
-usual case: `TvgScene.ClearScene` and every `WM_PAINT` start a frame, and the
-sample's `Button2Click` disables the instance straight after `ClearScene`.
-Sync and threading validation reported the frame's command buffer written from
-two threads at once, recording into a destroyed render pass, command buffers
-freed while in use and pools never destroyed. Then the process crashed, in the
-validation layer or the driver, or hung.
-
-Now:
-
-- `TvgCommThread_RenderEngine.ApplyState` finishes the frame in flight
-  before any transition out of Active starts. That covers `Active := False`,
-  the destructor, the linker's teardown and the swapchain rebuild. It pumps
-  `CheckSynchronize` until `HandlePrepareFrameMessage` has had the frame back,
-  so the frame is submitted and presented through the linker as usual.
-  Dropping it instead would leave a swapchain image acquired and its acquire
-  semaphore signalled, which the next enable's frames would trip over. It
-  happens before the transition because the present can rebuild the
-  swapchain, which disables this renderer, and `ApplyState` raises on
-  re-entry.
-- `SetDisabled` waits for the device, stops the manager thread, runs any
-  messages it still has queued while their queue exists, and only then calls
-  `inherited`.
-- `SetThreadMode` called `SetDisabled` directly, which tore everything down
-  and left the renderer marked Active. It now uses `Active := False`.
-
-If the manager thread dies with a frame, the wait gives up after 5 s rather
-than hang.
-
-The scene has to wait too, now that frames draw its stores. `TvgScene.ClearScene`
-and `TvgBaseScene.SetDisabled` (and so `Load_Begin`) call
-`FinishFramesInFlight` before they free or deactivate anything. That calls the
-new virtual `TvgBaseRenderEngine.FinishFrameInFlight` on each connected
-renderer: a no-op for a renderer that records synchronously, the drain above
-for this one. It then waits for the device, because finished recording is not
-finished executing (`VUID-vkDestroyBuffer-buffer-00922` without it). The wait
-for the device also covers a synchronous renderer's recent frames, which
-`ClearScene` never waited for.
-
-### Recording
-
-The render loop never recorded a draw: its pipeline and node tasks had been
-commented out, so the renderer presented only its clear colour. It now records
-what `TvgRenderEngine_Single` records, split by thread:
-
-- **Main thread**, in `PrepareFrameOnMainThread`, before the frame is handed
-  over: `PrepareGlobalAndSceneDescriptors` (camera, cull volume), the object
-  stores' uploads through a worker of its own, store activation, and
-  `TvgFrame.CaptureHUD`. It snapshots the pipeline/store pairs to draw into
-  the frame task, so the recording threads never walk the scene.
-- **Manager and worker threads** only record. `Render_Draws` sends each
-  pipeline's bind and draw to the same worker, since a draw uses the pipeline
-  its worker bound last. In `TM_MULTITASK` each worker records one unbroken
-  run of the draw list into its own secondary, worker 0 the first. Once all
-  are done, `FinishPrepare` executes the secondaries in worker order
-  (`ExecuteSecondariesInOrder`), so the frame draws in exactly the list's
-  order, as `TvgRenderEngine_Single` does. Dealing draws round the workers
-  and letting each execute its own secondary did not: overlapping stores
-  came out in the wrong order without depth testing.
-
-Also fixed in the manager:
-
-| Problem | Effect | Fix |
-|---|---|---|
-| queues drained with `while Receive(x) do ...; if not Receive(x) then ResetEvent` | the trailing `Receive` threw away whatever it caught, and the reset could clear the event over an item still queued. In `TM_MULTITASK` a lost completion stalled the frame within the first few frames | reset, then drain (all three queues) |
-| `TM_MULTITASK` sent each frame's completion twice | the second reached the next frame, released the renderer's lock, and that frame's own completion was then ignored: every multitask case stalled | `FinishPrepare` sends it, once |
-| `SendSpecific_MULTI` counted into `MinIndex`, never set on that path | wrong task counts | `SendIndex` |
-| worker queues sized from the object count, pushed with no timeout | a full queue drops a task or its completion | at least 1024 |
-| tasks took the frame from `Linker.CurrentPrepareFrame` | only right while nothing moves the linker on | the frame handed over |
-
-The HUD's inputs used to be read on the manager thread: `HUDEnabled`,
-`HUDText`, `HUDPanelOpaque`, the cursor, the camera and the window's
-crosshair, with the atlas even created there on first use.
-`TvgFrame.CaptureHUD` now takes them on the main thread, and creates the
-atlas. `RecordPresentAndHUD` and `HUDEnabledForFrame` then use the capture
-and consume it. Without a capture they read the linker as before, so
-`StartRenderEnginePrepare` is unchanged.
+A renderer may record on threads of its own, so the scene cannot assume a
+frame is finished when the main thread is idle. `TvgScene.ClearScene`,
+`Load_Begin` and disabling call `FinishFramesInFlight` before they free or
+deactivate anything. That calls the virtual
+`TvgBaseRenderEngine.FinishFrameInFlight` on each connected renderer: a no-op
+for a renderer that records synchronously, such as `TvgRenderEngine_Single`,
+and a drain of its threads for one that does not. It then waits for the
+device, because finished recording is not finished executing
+(`VUID-vkDestroyBuffer-buffer-00922` without it).
 
 Editing a store in place, with no `Load_Begin`/`Load_End`, is safe while a
 frame that draws it is recording or executing:
@@ -342,7 +241,7 @@ frame that draws it is recording or executing:
   everything it reads, the buffer handles, frame count and strides as well as
   the objects. So a draw sees the store before an edit or after it.
 - **Freeing what a frame uses**: deactivating a store (`ShowPoints := False`),
-  a live pipeline rebuild (`TvgDelaunayDisplay.RebuildStorePipeline`),
+  a live pipeline rebuild,
   `DeleteVulkanDataBuffers`, `ClearAll`, `SetFrameCount`. These first call the
   new `TvgBaseObjectStore.FinishFramesInFlight`, which is the scene's: the
   frame in flight is finished and the device waited on. The wait happens

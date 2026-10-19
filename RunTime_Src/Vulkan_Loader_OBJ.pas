@@ -8,7 +8,19 @@ interface
 
 uses
   System.SysUtils, System.Classes, PasVulkan.Math, Vulkan_Components,
-  Vulkan_Components_Scene_Renderer, Vulkan_Components_Lookups;
+  Vulkan_Components_Scene_Renderer, Vulkan_Components_Lookups,
+  System.Math,
+  System.IOUtils,
+  System.Generics.Collections,
+  PasVulkan.Math.Double,
+  PasVulkan.Framework,
+  PasVulkan.Image.TGA,
+  Vulkan_Components_DataStore,
+  Vulkan_Components_Descriptors,
+  Vulkan_Components_TextureInspector,
+  Vulkan_SceneLoaders,
+  Vulkan_MeshUtils,
+  Vulkan_MeshBuilder;
 
 type
   EvgOBJError = class(Exception);
@@ -104,13 +116,6 @@ type
 
 implementation
 
-uses
-  System.Math, System.IOUtils, System.Generics.Collections,
-  PasVulkan.Math.Double, PasVulkan.Framework,
-  PasVulkan.Image.TGA,
-  Vulkan_Components_DataStore,
-  Vulkan_Components_Descriptors, Vulkan_Components_TextureInspector,
-  Vulkan_SceneLoaders, Vulkan_MeshUtils;
 
 type
   TCorner = record
@@ -200,7 +205,7 @@ end;
 
 // Shading and Ambient are specialization constants, baked into the pipeline:
 // a store already drawing gets its own pipelines built again, every other
-// store's left alone (as TvgDelaunayDisplay does for a live PointSize).  One
+// store's left alone (as for a live PointSize change).  One
 // not yet drawing picks the values up when its pipelines are first built.
 procedure TvgOBJShadedStore.RebuildPipelines;
 var I: Integer;
@@ -798,8 +803,8 @@ type
   end;
 var
   Store: TvgOBJObjectStore;
-  Obj: TvgObject;
   M: TMaterial;
+  Mesh: TvgMeshData;
   Vertices: TDictionary<TVertexKey, Integer>;
   StoreVertices: TList<TStoreVertex>;
   Indices: TList<Cardinal>;
@@ -834,33 +839,6 @@ var
     if V.C.N >= 0 then Result := Normals.List[V.C.N]
     else if Q.Kind = TRIANGLE_LIST then
       Result := UnitNormal(SmoothNormals[SmoothKey(States.List[Q.State].SmoothID, V.C.P)]);
-  end;
-
-  // Tangent frames for the current store, once its vertices are written
-  // (vgBuildTangents: lines and points get any frame about the normal).
-  // Its input arrays live only for the call.
-  procedure WriteTangents;
-  var
-    Pos, Nrm, UV: TArray<TpvVector3>;
-    Idx: TArray<Integer>;
-    Tan, Bit: TArray<TpvVector3D>;
-    K: Integer;
-  begin
-    SetLength(Pos, StoreVertices.Count); SetLength(Nrm, StoreVertices.Count);
-    SetLength(UV, StoreVertices.Count); SetLength(Idx, Indices.Count);
-    for K := 0 to StoreVertices.Count - 1 do
-    begin
-      Pos[K] := Positions.List[StoreVertices.List[K].C.P];
-      Nrm[K] := VertexNormal(K); UV[K] := VertexUV(K);
-    end;
-    for K := 0 to Indices.Count - 1 do Idx[K] := Indices.List[K];
-    vgBuildTangents(Pos, Nrm, UV, Idx, Store.Topology = TRIANGLE_LIST, Tan, Bit);
-    Pos := nil; Nrm := nil; UV := nil; Idx := nil;
-    for K := 0 to StoreVertices.Count - 1 do
-    begin
-      Store.SetObjectVertexTangent(0, K, Tan[K].x, Tan[K].y, Tan[K].z);
-      Store.SetObjectVertexBiTangent(0, K, Bit[K].x, Bit[K].y, Bit[K].z);
-    end;
   end;
 
   procedure AddCorner(CornerIndex: Integer);
@@ -933,24 +911,20 @@ begin
         else if FirstState.MaterialName <> '' then
           Warn(Format('Material "%s" (usemtl, line %d) is in no material library loaded - drawn grey',
             [FirstState.MaterialName, P.LineNo]), Format('Material "%s" ', [FirstState.MaterialName]));
-        Store.SetupVertexAttributes([vdtPosition, vdtColor, vdtNormal, vdtTexCoord,
-                                     vdtTangent, vdtBiTangent]);
-        Store.SetupInstanceAttributes([idtObjID]); Store.SetIndexType(itUInt32);
-        Store.Topology := P.Kind;
         HasDiffuseMap := False;
         for Map in Store.fMaterial.Maps do if Map.Kind = 'map_Kd' then HasDiffuseMap := True;
-        Store.PrebuiltShaderVariants := True;
-        Store.BaseVertName := 'OBJ';
-        Store.BaseFragName := 'OBJ';
-        if HasDiffuseMap then Store.BaseFragName := 'OBJTexture';
-        Obj := Store.AddObject(True); Obj.AddObjectID;
+        vgSetupShadedStore(Store, P.Kind, HasDiffuseMap);
         // The OBJ format's own shading: flat where faces have no normals and
         // smoothing is off.  The shader ignores it on lines and points.
         if HasFlatFaces and not SmoothWhenNoNormals then Store.fShading := osFlat
         else Store.fShading := osSmooth;
 
-        Store.AllocateVertices(0, StoreVertices.Count);
-        Store.AllocateIndices(0, Indices.Count, amUninitialized);
+        Mesh.Clear;
+        Mesh.Topology := P.Kind;
+        SetLength(Mesh.Positions, StoreVertices.Count);
+        SetLength(Mesh.Normals, StoreVertices.Count);
+        SetLength(Mesh.Colors, StoreVertices.Count);
+        SetLength(Mesh.TexCoords, StoreVertices.Count);
         for K := 0 to StoreVertices.Count - 1 do
         begin
           J := StoreVertices.List[K].C.P;
@@ -965,15 +939,18 @@ begin
           end;
           Normal := VertexNormal(K);
           UV := VertexUV(K);
-          Store.SetObjectVertexPosition(0, K, Position.x, Position.y, Position.z);
-          Store.SetObjectVertexColor(0, K, Color.x, Color.y, Color.z, Store.fMaterial.Opacity);
-          Store.SetObjectVertexNormal(0, K, Normal.x, Normal.y, Normal.z);
+          Mesh.Positions[K] := Position;
+          Mesh.Colors[K] := TpvVector4.Create(Color.x, Color.y, Color.z, Store.fMaterial.Opacity);
+          Mesh.Normals[K] := Normal;
           // Retain source UVs; each map may have its own transform. The diffuse
           // shader applies its transform and the image-origin V flip at sampling.
-          Store.SetObjectVertexTexCoord(0, K, UV.x, UV.y);
+          Mesh.TexCoords[K] := TpvVector2.Create(UV.x, UV.y);
         end;
-        for K := 0 to Indices.Count - 1 do Store.SetObjectIndex(0, K, Indices.List[K]);
-        WriteTangents;
+        Mesh.Indices := Indices.ToArray;
+        // Bulk write, and tangent frames (vgBuildTangents: lines and points
+        // get any frame about the normal).
+        vgWriteMesh(Store, 0, Mesh, TpvVector4.Create(1, 1, 1, 1));
+        Mesh.Clear;
         First := Last + 1;
       end;
     except Result.Free; raise; end;

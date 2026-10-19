@@ -141,16 +141,6 @@ type
 
 { Helpers }
 
-function BytesEqual(const A: array of Byte; Buffer: PByte; Count: Integer): Boolean;
-var
-  i: Integer;
-begin
-  if Count > Length(A) then Exit(False);
-  for i := 0 to Count - 1 do
-    if A[i] <> Buffer[i] then Exit(False);
-  Result := True;
-end;
-
 function PeekBytes(AStream: TStream; Buffer: Pointer; Count: NativeInt): NativeInt;
 var
   PosSaved: Int64;
@@ -171,11 +161,6 @@ begin
     raise Exception.Create('Stream is nil');
   if AStream.Read(Buffer, Count) <> Count then
     raise Exception.Create('Unexpected EOF while reading header');
-end;
-
-function LEToUInt32(const B: array of Byte): Cardinal;
-begin
-  Result := Cardinal(B[0]) or (Cardinal(B[1]) shl 8) or (Cardinal(B[2]) shl 16) or (Cardinal(B[3]) shl 24);
 end;
 
 function BEToUInt32(const B: array of Byte): Cardinal;

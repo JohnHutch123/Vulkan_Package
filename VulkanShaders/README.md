@@ -1,8 +1,7 @@
 # VulkanShaders
 
 Hand-built GLSL shaders for the public package (sources, and the compiled
-`.spv` files). The particle system and glTF mesh shaders are in the PRO
-package.
+`.spv` files).
 
 ## Where the package looks for them
 
@@ -17,7 +16,7 @@ sibling `RunTime_Src` holds `Vulkan_Components.pas` - found by walking up from:
 At each level both `<dir>\VulkanShaders` and a sibling checkout's
 `<dir>\Vulkan_Package\VulkanShaders` are tried, so builds anywhere in this
 checkout (the IDE's `Tests\Test Vulkan\23.0\Win64\Debug`, `Tests\Win32`) and in
-a `Vulkan_Package_PRO` checkout beside it find this folder with no setup.
+another project's checkout beside it find this folder with no setup.
 Failing those, a `VulkanShaders` folder next to the exe is used (a deployed
 application: ship this folder beside it).
 
@@ -40,15 +39,15 @@ back to `''` finds this folder again):
 ShaderFolderPath := 'D:\MyApp\Shaders\';
 ```
 
-Another package's own shaders (e.g. PRO's glTF and particle shaders) go in
+Another package's own shaders go in
 `AdditionalShaderFolders`, searched after `ShaderFolderPath`:
 
 ```pascal
-AdditionalShaderFolders := ['D:\Vulkan_Package_PRO\VulkanShaders'];
+AdditionalShaderFolders := ['D:\MyPackage\VulkanShaders'];
 ```
 
-Shaders generated at run time (the PRO `TvgShaderBuilder`) are written to
-`ShaderFolderPath`, i.e. into this folder.
+Shaders generated at run time (by a `TvgBaseShaderBuilder` descendant) are
+written to `ShaderFolderPath`, i.e. into this folder.
 
 ## Compiling
 

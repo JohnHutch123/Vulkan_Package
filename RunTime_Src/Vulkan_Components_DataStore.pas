@@ -421,7 +421,6 @@ type
     // CreateVulkanDataBuffers.  Descendants that let a compute shader write
     // straight into the render buffers set this to
     // VK_BUFFER_USAGE_STORAGE_BUFFER_BIT before the buffers are created.
-    // See TvgParticleStore in Vulkan_Components_Particles.
     FExtraBufferUsage  : TVkBufferUsageFlags;
 
     FVertexBuffers     : TArray<TVulkanBufferInfo>;    // Per frame
@@ -637,6 +636,9 @@ type
     procedure SetObjectInstanceIndex(ObjectIndex, LocalIndex: Integer; I: Cardinal);
 
     procedure SetObjectIndex(ObjectIndex, LocalIndex: Integer; AValue: Cardinal);
+    { Writes indices AFirst.. of an object under one lock.  Each value must fit
+      the store's index type. }
+    procedure SetObjectIndices(ObjectIndex, AFirst: Integer; const AData: array of Cardinal);
     procedure SetObjectTriangle(ObjectIndex, TriangleIndex: Integer; I1, I2, I3: Cardinal);
 
     // --- Frustum culling -------------------------------------------------
@@ -715,6 +717,11 @@ type
       call per element would take the lock millions of times. }
     function GetObjectVertexPositions(ObjectIndex: Integer): TArray<TpvVector3>;
     function GetObjectIndices(ObjectIndex: Integer): TArray<Cardinal>;
+    { Every vertex's value of one float attribute, packed (3 Singles a vertex
+      for vdtPosition, 4 for vdtColor, ...).  Empty if the store does not
+      have it.  vdtIndex is not a float: use GetObjectVertexIndices. }
+    function GetObjectVertexAttribute(ObjectIndex: Integer; ADataType: TvgVertexDataType): TArray<Single>;
+    function GetObjectVertexIndices(ObjectIndex: Integer): TArray<Cardinal>;
 
     function GetBindingDescriptions: TArray<TVkVertexInputBindingDescription>;
     function GetAttributeDescriptions: TArray<TVkVertexInputAttributeDescription>;
@@ -2914,6 +2921,100 @@ begin
   end;
 end;
 
+procedure TvgVulkanDataStore.SetObjectIndices(ObjectIndex, AFirst: Integer;
+  const AData: array of Cardinal);
+var
+  Obj    : TvgVulkanObjectRecord;
+  I      : Integer;
+  Offset : Integer;
+begin
+  if Length(AData) = 0 then Exit;
+  FCriticalSection.Enter;
+  try
+    Obj := CheckLiveObject(ObjectIndex);
+    if (AFirst < 0) or (Length(AData) > Obj.IndexCount - AFirst) then
+      raise EVulkanDataStoreException.CreateFmt(
+        'Indices %d..%d are out of range for object %d (it has %d)',
+        [AFirst, AFirst + Length(AData) - 1, ObjectIndex, Obj.IndexCount]);
+
+    Offset := (Obj.IndexStart + AFirst) * Integer(GetIndexElementSize(FIndexType));
+    case FIndexType of
+      itUInt16:
+        for I := 0 to High(AData) do
+        begin
+          if AData[I] > $FFFF then
+            raise EVulkanDataStoreException.CreateFmt(
+              'Index %d does not fit a 16-bit index buffer', [AData[I]]);
+          PWord(@FIndexData[Offset + I * 2])^ := Word(AData[I]);
+        end;
+      itUInt32:
+        Move(AData[0], FIndexData[Offset], Length(AData) * SizeOf(Cardinal));
+    else
+      raise EVulkanDataStoreException.Create('The store has no index buffer');
+    end;
+
+    SetDataDirty;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+function TvgVulkanDataStore.GetObjectVertexAttribute(ObjectIndex: Integer;
+  ADataType: TvgVertexDataType): TArray<Single>;
+var
+  Obj    : TvgVulkanObjectRecord;
+  I      : Integer;
+  Offset : Integer;
+  Size   : Integer;
+  Count  : Integer;
+begin
+  Result := nil;
+  if ADataType = vdtIndex then
+    raise EVulkanDataStoreException.Create('vdtIndex is not a float attribute: use GetObjectVertexIndices');
+  FCriticalSection.Enter;
+  try
+    Obj := CheckLiveObject(ObjectIndex);
+    if not (ADataType in FVertexTypes) or (Obj.VertexStart < 0) or (Obj.VertexCount <= 0) then
+      Exit;
+
+    Size  := Integer(GetVertexSize(ADataType));
+    Count := Size div SizeOf(Single);
+    SetLength(Result, Obj.VertexCount * Count);
+    Offset := Obj.VertexStart * Integer(FVertexStride) + Integer(FVertexOffsets[ADataType]);
+    for I := 0 to Obj.VertexCount - 1 do
+    begin
+      Move(FVertexData[Offset], Result[I * Count], Size);
+      Inc(Offset, Integer(FVertexStride));
+    end;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+function TvgVulkanDataStore.GetObjectVertexIndices(ObjectIndex: Integer): TArray<Cardinal>;
+var
+  Obj    : TvgVulkanObjectRecord;
+  I      : Integer;
+  Offset : Integer;
+begin
+  Result := nil;
+  FCriticalSection.Enter;
+  try
+    Obj := CheckLiveObject(ObjectIndex);
+    if not (vdtIndex in FVertexTypes) or (Obj.VertexStart < 0) or (Obj.VertexCount <= 0) then
+      Exit;
+    SetLength(Result, Obj.VertexCount);
+    Offset := Obj.VertexStart * Integer(FVertexStride) + Integer(FVertexOffsets[vdtIndex]);
+    for I := 0 to Obj.VertexCount - 1 do
+    begin
+      Move(FVertexData[Offset], Result[I], SizeOf(Cardinal));
+      Inc(Offset, Integer(FVertexStride));
+    end;
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
 procedure TvgVulkanDataStore.SetObjectIndex(ObjectIndex, LocalIndex: Integer; AValue: Cardinal);
 var
   Obj: TvgVulkanObjectRecord;
@@ -3647,7 +3748,7 @@ var
 
 begin
   // Load_End / the first upload task can run while the store is still empty
-  // (TvgParticleStore is added to the scene before AllocateVertices).  The
+  // (a compute-driven store is added to the scene before AllocateVertices).  The
   // old latch set FBuffersCreated True with Length(FVertexBuffers)=0, so the
   // later real allocation was a silent no-op and VulkanDraw bound nothing.
   if fBuffersCreated then
@@ -3751,7 +3852,7 @@ var
   Short, Outgrown : Boolean;
 
   // A buffer that exists and is too small - as opposed to an array that had
-  // no data when the buffers were made, as a TvgParticleStore's has.
+  // no data when the buffers were made, as a compute-driven store's has.
   function Outgrew(const aBuffers: TArray<TVulkanBufferInfo>; aCount, aElementSize: Integer): Boolean;
   begin
     Result := (Length(aBuffers) > 0) and (aCount > 0) and (aElementSize > 0) and
@@ -3850,227 +3951,7 @@ begin
     FCriticalSection.Leave;
   end;
 end;
-(*
-procedure TvgVulkanDataStore.CopyBufferToDevice(aTransferPool: TvgCommandBufferPool;
-                                                const ASrcData: TBytes; ASize, AOffset: TVkDeviceSize; aFrameIndex: Integer;
-                                                ABuffer: TpvVulkanBuffer);
-var
-  StagingBuffer: TpvVulkanBuffer;
-  TransferCmd: TvgCommandBuffer;
-  CopyRegion: TVkBufferCopy;
-  pData: Pointer;
-  RequiredSize: NativeUInt;
-begin
-  if ASize = 0 then
-    Exit;
 
-  CustomAssert(Assigned(FVulkanDevice), 'Vulkan device not assigned');
-  CustomAssert(Assigned(aTransferPool), 'Transfer command pool not assigned');
-  CustomAssert(Assigned(ABuffer), 'Destination buffer not assigned');
-
-  RequiredSize := NativeUInt(ASize);
-  CustomAssert(Length(ASrcData) >= Integer(RequiredSize),  Format('CopyBufferToDevice source array too small. Need %d bytes, have %d', [RequiredSize, Length(ASrcData)]));
-
-        StagingBuffer := TpvVulkanBuffer.Create(FVulkanDevice,
-                                                ASize,
-                                                TVkBufferUsageFlags(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
-                                                TVkSharingMode(VK_SHARING_MODE_EXCLUSIVE),
-                                                [],
-                                                TVkMemoryPropertyFlags(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) or
-                                                TVkMemoryPropertyFlags(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT),
-                                                0, 0, 0,
-                                                0,//TVkMemoryPropertyFlags(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT),
-                                                0, 0, 0,
-                                                [TpvVulkanBufferFlag.OwnSingleMemoryChunk]);
-
-  TransferCmd := nil;
-  try
-    StageBufferList.Add(StagingBuffer);
-
-    pData := StagingBuffer.Memory.MapMemory(0, ASize);
-    try
-      CustomAssert(Assigned(pData), 'Failed to map staging buffer memory');
-      Move(ASrcData[0], pData^, RequiredSize);
-    //  if (StagingBuffer.MemoryPropertyFlags and TVkMemoryPropertyFlags(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) = 0 then
-        //The base is the mapped pointer: PasVulkan takes the range's offset as
-        //aBase minus the mapping, so nil produced a garbage offset.
-        StagingBuffer.Memory.FlushMappedMemoryRange(pData, ASize);
-    finally
-      StagingBuffer.Memory.UnmapMemory;
-    end;
-
-    TransferCmd := aTransferPool.AcquireUploadCommand(aFrameIndex);
-    CustomAssert(Assigned(TransferCmd), 'Failed to acquire upload command buffer');
-
-    if not TransferCmd.Active then
-      TransferCmd.Active := True;
-
-    if TransferCmd.BufferState <> cbsRecording then
-    begin
-      if TransferCmd.BufferState = cbsPending then
-        TransferCmd.WaitOnFence;
-
-      if TransferCmd.BufferState <> cbsInitial then
-        TransferCmd.Reset;
-
-      TransferCmd.BeginRecordingPrimary;
-    end;
-
-    FillChar(CopyRegion, SizeOf(CopyRegion), 0);
-    CopyRegion.srcOffset := 0;
-    CopyRegion.dstOffset := AOffset;
-    CopyRegion.size := ASize;
-
-    TransferCmd.CmdCopyBuffer(StagingBuffer.Handle, ABuffer.Handle, 1, @CopyRegion);
-    TransferCmd.EndRecording;
-
-    //On the pool's own queue: a command buffer may only be submitted to a
-    //queue of the family its pool was created for
-    //(VUID-vkQueueSubmit-pCommandBuffers-00074).  The render workers pass
-    //their graphics pool, so TransferQueue was wrong wherever the transfer
-    //family is a separate one.
-    TransferCmd.ExecuteCommand( aTransferPool.Queue[-1],
-                                TVkPipelineStageFlags(VK_PIPELINE_STAGE_TRANSFER_BIT),
-                                nil,
-                                nil,
-                                True,
-                                True
-                              );
-
-  finally
-    if Assigned(TransferCmd) then
-      aTransferPool.ReleaseCommand(TransferCmd);
-  end;
-end;
-*)
-
-(*
-
-procedure TvgVulkanDataStore.CopyBufferToDevice(aTransferPool: TvgCommandBufferPool;
-                                               const ASrcData: TBytes;
-                                               ASize, AOffset: TVkDeviceSize;
-                                               aFrameIndex: Integer;
-                                               ABuffer: TpvVulkanBuffer);
-var
-  StagingBuffer: TpvVulkanBuffer;
-  TransferCmd  : TvgCommandBuffer;
-  CopyRegion   : TVkBufferCopy;
-    pData: Pointer;
-begin
-  if ASize = 0 then
-    Exit;
-
-  CustomAssert(Assigned(FVulkanDevice), 'Vulkan device not assigned');
-  CustomAssert(Assigned(aTransferPool), 'Transfer pool not assigned');
-  CustomAssert(Assigned(ABuffer), 'Destination buffer not assigned');
-  CustomAssert(AOffset + ASize <= ABuffer.Size, 'Copy exceeds destination buffer size');
-  CustomAssert(Length(ASrcData) > 0, 'Source byte array is empty');
-  CustomAssert(TVkDeviceSize(Length(ASrcData)) >= ASize, 'CopyBufferToDevice: source byte array smaller than requested copy size');
-
-  StagingBuffer := nil;
-  TransferCmd := nil;
-
-  Try
-  // Create staging buffer
-
-        StagingBuffer := TpvVulkanBuffer.Create(FVulkanDevice,
-                                                ASize,
-                                                TVkBufferUsageFlags(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
-                                                TVkSharingMode(VK_SHARING_MODE_EXCLUSIVE),
-                                                [],
-                                                TVkMemoryPropertyFlags(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) or
-                                                TVkMemoryPropertyFlags(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT),
-                                                0, 0, 0,
-                                                TVkMemoryPropertyFlags(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT),
-                                                0, 0, 0,
-                                                [TpvVulkanBufferFlag.OwnSingleMemoryChunk]);
-
-
-         pData := StagingBuffer.Memory.MapMemory(0, ASize);
-         CustomAssert(Assigned(pData), 'Failed to map staging buffer');
-        try
-          Move(ASrcData[0], pData^, ASize);
-          StagingBuffer.Memory.FlushMappedMemory;
-        finally
-          StagingBuffer.Memory.UnmapMemory;
-        end;
-
-
-        TransferCmd := aTransferPool.AcquireUploadCommand(aFrameIndex);// RequestCommand(aFrameIndex, CB_PRIMARY,  [{BU_ONE_TIME_SUBMIT_BIT}]);
-        CustomAssert(Assigned(TransferCmd), 'Failed to acquire transfer command buffer');
-       Try
-        If not TransferCmd.Active then
-           TransferCmd.Active:=True;
-
-        TransferCmd.PrepareForRecording;
-        TransferCmd.BeginRecording;
-
-        CopyRegion := Default(TVkBufferCopy);
-        CopyRegion.srcOffset := 0;
-        CopyRegion.dstOffset := AOffset;
-        CopyRegion.size      := ASize;
-
-        TransferCmd.CmdCopyBuffer(StagingBuffer.Handle, ABuffer.Handle, 1, @CopyRegion);
-
-        TransferCmd.EndRecording;
-
-        TransferCmd.ExecuteCommand(aTransferPool.Queue[-1],   //the pool's own family
-                               TVkPipelineStageFlags(VK_PIPELINE_STAGE_TRANSFER_BIT),
-                               nil,     //wait for
-                               nil,     //signal when finished
-                               true,          //MUST be TRUE
-                               true) ;        //MUST be TRUE
-
-       Finally
-          if Assigned(TransferCmd) then
-            aTransferPool.ReleaseCommand(TransferCmd);
-          FreeAndNil(StagingBuffer);
-       End;
-
-  Finally
-
-  End;
-end;
-*)
-(*
-procedure TvgVulkanDataStore.UploadAllData(aTransferPool: TvgCommandBufferPool; aFrameIndex: Integer);
-var
-  Size: TVkDeviceSize;
-begin
-//  if not fBuffersCreated then
-//    CreateVulkanDataBuffers(FVulkanDevice);
-
-  CustomAssert(assigned(FVulkanDevice),'Vulkan Device NOT assigned');
-
-  FCriticalSection.Enter;
-  try
-    // Upload vertex data
-    if (Length(FVertexBuffers) > aFrameIndex) and (FVertexCount > 0) then
-    begin
-      Size := TVkDeviceSize(FVertexCount) * FVertexStride;
-      CopyBufferToDevice(aTransferPool, FVertexData, Size, 0, aFrameIndex, FVertexBuffers[aFrameIndex].Buffer);
-    end;
-    
-    // Upload instance data
-    if (Length(FInstanceBuffers) > aFrameIndex) and (FInstanceCount > 0) then
-    begin
-      Size := TVkDeviceSize(FInstanceCount) * FInstanceStride;
-      CopyBufferToDevice(aTransferPool, FInstanceData, Size, 0, aFrameIndex, FInstanceBuffers[aFrameIndex].Buffer);
-    end;
-    
-    // Upload index data
-    if (Length(FIndexBuffers) > aFrameIndex) and (FIndexCount > 0) then
-    begin
-      Size := TVkDeviceSize(FIndexCount) * GetIndexElementSize(FIndexType);
-      CopyBufferToDevice(aTransferPool, FIndexData, Size, 0, aFrameIndex, FIndexBuffers[aFrameIndex].Buffer);
-    end;
-    
-    FDataDirty[aFrameIndex] := False;
-  finally
-    FCriticalSection.Leave;
-  end;
-end;
-*)
 procedure TvgVulkanDataStore.UploadAllDataUsingCommand(aCmd: TvgCommandBuffer; aFrameIndex: Integer; IncBarrier: Boolean = True);
 var
   pData: TpvPointer;
@@ -4294,186 +4175,6 @@ begin
   end;
 end;
 
-
- (*
-
-procedure TvgVulkanDataStore.UploadAllDataUsingCommand(aCmd: TvgCommandBuffer;  aFrameIndex: Integer; IncBarrier: Boolean);
-var
-  pData: TpvPointer;
-  CopyRegion: TVkBufferCopy;
-  StagingBuffer: TpvVulkanBuffer;
-  Size: TVkDeviceSize;
-  Barriers: array[0..2] of TVkBufferMemoryBarrier;
-  BarrierCount: Integer;
-
-  procedure DoBufferCopy(const AData: TBytes; ASize: TVkDeviceSize; ADstBuffer: TpvVulkanBuffer);
-  begin
-    if (not Assigned(ADstBuffer)) or (ASize = 0) then
-      Exit;
-
-    // Check if destination is host-visible (can write directly)
-    if (ADstBuffer.MemoryPropertyFlags and TVkMemoryPropertyFlags(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) <> 0) then
-    begin
-      // Direct mapping (rare for vertex buffers but possible)
-      pData := ADstBuffer.Memory.MapMemory(0, ASize);
-      try
-        if Assigned(pData) then
-        begin
-          Move(AData[0], pData^, ASize);
-          ADstBuffer.Memory.FlushMappedMemory;
-        end
-        else
-          raise EpvVulkanException.Create('Vulkan buffer memory block map failed');
-      finally
-        ADstBuffer.Memory.UnMapMemory;
-      end;
-    end
-    else
-    begin
-
-     StagingBuffer := TpvVulkanBuffer.Create(FVulkanDevice,
-                                          ASize,
-                                          TVkBufferUsageFlags(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
-                                          TVkSharingMode(VK_SHARING_MODE_EXCLUSIVE),
-                                          [],
-                                          TVkMemoryPropertyFlags(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) or
-                                          TVkMemoryPropertyFlags(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT),
-                                          0, 0, 0, 0, 0, 0, 0,
-                                          [TpvVulkanBufferFlag.OwnSingleMemoryChunk]);
-
-      StageBufferList.Add(StagingBuffer);
-
-      // Map and copy to staging buffer
-      pData := StagingBuffer.Memory.MapMemory(0, ASize);
-      try
-        if Assigned(pData) then
-        begin
-          Move(AData[0], pData^, ASize);
-          StagingBuffer.Memory.FlushMappedMemory;
-        end
-        else
-          raise EpvVulkanException.Create('Vulkan staging buffer memory map failed');
-      finally
-        StagingBuffer.Memory.UnMapMemory;
-      end;
-
-      // Record copy command
-      CopyRegion.srcOffset := 0;
-      CopyRegion.dstOffset := 0;
-      CopyRegion.size := ASize;
-
-      aCmd.CmdCopyBuffer(StagingBuffer.Handle, ADstBuffer.Handle, 1, @CopyRegion);
-    end;
-  end;
-
-begin
-  if not Assigned(aCmd) then
-    Exit;
-  if not aCmd.Active then
-    Exit;
-
-  if not fBuffersCreated then
-    raise EVulkanDataStoreException.Create('Buffers must be created before uploading data');
-
-  if (aFrameIndex < 0) or (aFrameIndex >= FNumFrames) then
-    raise EVulkanDataStoreException.CreateFmt('Invalid frame index: %d (must be 0..%d)',
-      [aFrameIndex, FNumFrames - 1]);
-
-  if not FDataDirty[aFrameIndex] then
-    Exit; // Don't upload if not dirty
-
-  FCriticalSection.Enter;
-  try
-    // Upload vertex data
-    if (Length(FVertexBuffers) > aFrameIndex) and (FVertexCount > 0) then
-    begin
-      Size := TVkDeviceSize(FVertexCount) * FVertexStride;
-      DoBufferCopy(FVertexData, Size, FVertexBuffers[aFrameIndex].Buffer);
-    end;
-
-    // Upload instance data
-    if (Length(FInstanceBuffers) > aFrameIndex) and (FInstanceCount > 0) then
-    begin
-      Size := TVkDeviceSize(FInstanceCount) * FInstanceStride;
-      DoBufferCopy(FInstanceData, Size, FInstanceBuffers[aFrameIndex].Buffer);
-    end;
-
-    // Upload index data
-    if (Length(FIndexBuffers) > aFrameIndex) and (FIndexCount > 0) then
-    begin
-      Size := TVkDeviceSize(FIndexCount) * GetIndexElementSize(FIndexType);
-      DoBufferCopy(FIndexData, Size, FIndexBuffers[aFrameIndex].Buffer);
-    end;
-
-    // Memory barriers (if requested)
-    if IncBarrier then
-    begin
-      FillChar(Barriers[0], SizeOf(Barriers), 0);
-      BarrierCount := 0;
-
-      // Vertex buffer barrier
-      if (Length(FVertexBuffers) > aFrameIndex) and Assigned(FVertexBuffers[aFrameIndex].Buffer) then
-      begin
-        Barriers[BarrierCount].sType := VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        Barriers[BarrierCount].srcAccessMask := TVkAccessFlags(VK_ACCESS_TRANSFER_WRITE_BIT);
-        Barriers[BarrierCount].dstAccessMask := TVkAccessFlags(VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT);
-        Barriers[BarrierCount].srcQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
-        Barriers[BarrierCount].dstQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
-        Barriers[BarrierCount].buffer := FVertexBuffers[aFrameIndex].Buffer.Handle;
-        Barriers[BarrierCount].offset := 0;
-        Barriers[BarrierCount].size := FVertexBuffers[aFrameIndex].Buffer.Size;
-        Inc(BarrierCount);
-      end;
-
-      // Instance buffer barrier
-      if (Length(FInstanceBuffers) > aFrameIndex) and Assigned(FInstanceBuffers[aFrameIndex].Buffer) then
-      begin
-        Barriers[BarrierCount].sType := VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        Barriers[BarrierCount].srcAccessMask := TVkAccessFlags(VK_ACCESS_TRANSFER_WRITE_BIT);
-        Barriers[BarrierCount].dstAccessMask := TVkAccessFlags(VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT);
-        Barriers[BarrierCount].srcQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
-        Barriers[BarrierCount].dstQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
-        Barriers[BarrierCount].buffer := FInstanceBuffers[aFrameIndex].Buffer.Handle;
-        Barriers[BarrierCount].offset := 0;
-        Barriers[BarrierCount].size := FInstanceBuffers[aFrameIndex].Buffer.Size;
-        Inc(BarrierCount);
-      end;
-
-      // Index buffer barrier
-      if (Length(FIndexBuffers) > aFrameIndex) and Assigned(FIndexBuffers[aFrameIndex].Buffer) then
-      begin
-        Barriers[BarrierCount].sType := VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        Barriers[BarrierCount].srcAccessMask := TVkAccessFlags(VK_ACCESS_TRANSFER_WRITE_BIT);
-        Barriers[BarrierCount].dstAccessMask := TVkAccessFlags(VK_ACCESS_INDEX_READ_BIT);
-        Barriers[BarrierCount].srcQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
-        Barriers[BarrierCount].dstQueueFamilyIndex := VK_QUEUE_FAMILY_IGNORED;
-        Barriers[BarrierCount].buffer := FIndexBuffers[aFrameIndex].Buffer.Handle;
-        Barriers[BarrierCount].offset := 0;
-        Barriers[BarrierCount].size := FIndexBuffers[aFrameIndex].Buffer.Size;
-        Inc(BarrierCount);
-      end;
-
-      // Issue pipeline barrier if we have any buffers to synchronize
-      if BarrierCount > 0 then
-      begin
-        aCmd.CmdPipelineBarrier(
-          TVkPipelineStageFlags(VK_PIPELINE_STAGE_TRANSFER_BIT),
-          TVkPipelineStageFlags(VK_PIPELINE_STAGE_VERTEX_INPUT_BIT),
-          0,
-          0, nil,
-          BarrierCount, @Barriers[0],
-          0, nil);
-      end;
-    end;
-
-    // Clear dirty flag for this frame
-    FDataDirty[aFrameIndex] := False;
-  finally
-    FCriticalSection.Leave;
-  end;
-
-end;
-*)
 
 Procedure TvgVulkanDataStore.UploadAllData(aPool: TvgCommandBufferPool; aFrameIndex: Integer);
 var

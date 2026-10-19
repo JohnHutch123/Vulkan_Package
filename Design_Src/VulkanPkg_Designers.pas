@@ -166,15 +166,6 @@ Type
     end;
 
 
-  (*
-    TvgImageColorSpaceEditor = class(TEnumProperty)
-    public
-    function GetAttributes: TPropertyAttributes; override;
-    function GetValue: string; override;
-    procedure GetValues(Proc: TGetStrProc); override;
-    procedure SetValue(const Value: string); override;
-    end;
-  *)
     TvgDeviceEditor = class(TComponentEditor)
      Public
         function GetVerbCount: Integer; override;
@@ -228,21 +219,6 @@ Type
   End;
 
 
-(*
-  TvgPipesPropEditor = class(TComponentProperty)
-  private
-    function GetComponentReference: TComponent;
-  protected
-    Function GetPipe : TvgGraphicPipe ;
-    Function GetGraphicsPipeline : TvgGraphicsPipeline;
-  public
-    function AllEqual: Boolean; override;
-    function GetAttributes: TPropertyAttributes; override;
-    function GetValue: string; override;
-    procedure GetValues(Proc: TGetStrProc); override;
-    procedure SetValue(const Value: string); override;
-  End;
-  *)
 procedure Register;
 
 //Function GetVGFormatAsString(Value:TVkFormat):String;
@@ -260,7 +236,6 @@ implementation
 
 
    Result := GetEnumName(TypeInfo(TVkFormat), Ord(Value));
-
 
 
  End;

@@ -69,7 +69,22 @@ uses
   PasVulkan.Types,
   Vulkan_Components,
   Vulkan_Assert,
-  Vulkan_Components_Lookups;
+  Vulkan_Components_Lookups
+{$IFDEF MSWINDOWS}
+  , FMX.Platform.Win
+{$ENDIF}
+{$IFDEF ANDROID}
+  , System.Math,
+  System.Generics.Collections,
+  Androidapi.JNI.JavaTypes,
+  Androidapi.JNI.Widget,
+  Androidapi.Helpers,
+  Androidapi.NativeWindowJni,
+  FMX.Platform.Android,
+  FMX.Platform.UI.Android,
+  FMX.ZOrder.Android
+{$ENDIF}
+  ;
 
 type
 
@@ -231,9 +246,6 @@ type
 implementation
 
 {$IFDEF MSWINDOWS}
-uses
-  FMX.Platform.Win;
-
 const
   cWndClassName = 'TvgWindowFMX';
 
@@ -305,17 +317,6 @@ end;
 {$ENDIF}
 
 {$IFDEF ANDROID}
-uses
-  System.Math,
-  System.Generics.Collections,
-  Androidapi.JNI.JavaTypes,
-  Androidapi.JNI.Widget,
-  Androidapi.Helpers,
-  Androidapi.NativeWindowJni,
-  FMX.Platform.Android,
-  FMX.Platform.UI.Android,
-  FMX.ZOrder.Android;
-
 const
   // Pinch distance, in pixels, that counts as one wheel notch
   cPinchPixelsPerNotch = 40;

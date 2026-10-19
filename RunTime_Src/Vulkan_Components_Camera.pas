@@ -266,10 +266,8 @@ type
 
     // --- Initialization ---
     procedure InitializeAsDefault;
-    // glTF camera import lives in Vulkan_LoaderStorer_glTF.TvgSceneLoaderStorer_GLTF
-    // (ImportNodeCamera), built against SetPerspective/SetOrthographic/LookAt
-    // below rather than as a method here, so this core unit does not need to
-    // depend on PasGLTF.
+    // Scene loaders that import cameras build them with
+    // SetPerspective/SetOrthographic/LookAt below.
     procedure InitializeFromParameters(const aPosition,
                                              aTarget,
                                              aUpVector: TpvVector3D;
@@ -945,21 +943,6 @@ begin
     FCriticalSection.Leave;
   end;
 end;
-(*
-procedure TvgCamera.SetOrthBounds(aLeft, aRight, aTop, aBottom: Double);
-begin
-  FCriticalSection.Enter;
-  try
-    FOrthLeft := aLeft;
-    FOrthRight := aRight;
-    FOrthTop := aTop;
-    FOrthBottom := aBottom;
-    InvalidateMatrices([cfProjectionDirty, cfFrustumDirty]);
-  finally
-    FCriticalSection.Leave;
-  end;
-end;
-*)
 procedure TvgCamera.InvalidateMatrices(aFlags: TCameraUpdateFlags);
 begin
   FUpdateFlags := FUpdateFlags + aFlags;

@@ -25,7 +25,8 @@ uses
   Vulkan_Components_DataStore,
   Vulkan_Components_Camera,
   Vulkan_SceneLoaders,
-  Vulkan_Loader_OBJ;
+  Vulkan_Loader_OBJ,
+  VulkanTestDM;
 
 type
   TTestVulkan = class(TForm)
@@ -108,9 +109,6 @@ var
 implementation
 
 {$R *.dfm}
-
-uses
-  VulkanTestDM;
 
 function IsRenderDocActive: Boolean;
 type
@@ -780,7 +778,7 @@ begin
     Scene := vgVulkanDataModule1.vgScene1;
   If not assigned(Scene) then exit;
 
-  //every registered scene loader (OBJ, and glTF with the PRO package)
+  //every registered scene loader
   OpenDialog1.Title  := 'Load Scene File';
   OpenDialog1.Filter := SceneLoaderDialogFilter;
   If not OpenDialog1.Execute then exit;

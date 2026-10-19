@@ -1453,8 +1453,6 @@ Type
          );
 
 
-
-
    TvgDescriptorBindingMode = ( vgdbmSingle,          //only a single descriptor fBindingCount = 1
                                 vgdbmFixedArray,
                                 vgdbmVariableArray,
@@ -1497,7 +1495,6 @@ Const
   VGK_Z      = $5A;   // with Ctrl: undo (Ctrl+Shift: redo)
 
 Type
-
 
 
   TvgVulkanVersion = record
@@ -1724,7 +1721,6 @@ implementation
         Exit(Minor > Other.Minor);
       Result := Patch >= Other.Patch;
     end;
-
 
 
 function GetPixelSizeInBytes(const aFormat: TVkFormat): Integer;
@@ -1982,40 +1978,6 @@ end;
       Result := Pointer(I);
     End;
   end;
-(*
-      Function GetVKBorderColor(Value: TvgBorderColor) : TVkBorderColor;
-      Begin
-        Case Value of
-            BC_FLOAT_TRANSPARENT_BLACK  : Result :=  VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
-            BC_INT_TRANSPARENT_BLACK    : Result :=  VK_BORDER_COLOR_INT_TRANSPARENT_BLACK;
-            BC_FLOAT_OPAQUE_BLACK       : Result :=  VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
-            BC_INT_OPAQUE_BLACK         : Result :=  VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-            BC_FLOAT_OPAQUE_WHITE       : Result :=  VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
-            BC_INT_OPAQUE_WHITE         : Result :=  VK_BORDER_COLOR_INT_OPAQUE_WHITE;
-            BC_FLOAT_CUSTOM_EXT         : Result :=  VK_BORDER_COLOR_FLOAT_CUSTOM_EXT;
-            BC_INT_CUSTOM_EXT           : Result :=  VK_BORDER_COLOR_INT_CUSTOM_EXT;
-         else
-            Result :=  VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
-        End;
-
-      End;
-
-      Function GetVGBorderColor(Value: TVkBorderColor) : TvgBorderColor;
-      Begin
-        Case Value of
-          VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK    : Result := BC_FLOAT_TRANSPARENT_BLACK ;
-          VK_BORDER_COLOR_INT_TRANSPARENT_BLACK      : Result := BC_INT_TRANSPARENT_BLACK ;
-          VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK         : Result := BC_FLOAT_OPAQUE_BLACK ;
-          VK_BORDER_COLOR_INT_OPAQUE_BLACK           : Result := BC_INT_OPAQUE_BLACK ;
-          VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE         : Result := BC_FLOAT_OPAQUE_WHITE ;
-          VK_BORDER_COLOR_INT_OPAQUE_WHITE           : Result := BC_INT_OPAQUE_WHITE ;
-          VK_BORDER_COLOR_FLOAT_CUSTOM_EXT           : Result := BC_FLOAT_CUSTOM_EXT ;
-          VK_BORDER_COLOR_INT_CUSTOM_EXT             : Result := BC_INT_CUSTOM_EXT ;
-         else
-            Result :=  BC_FLOAT_TRANSPARENT_BLACK;
-        End;
-      End;
-  *)
       Function GetVKSamplerReductionMode(Value: TvgSamplerReductionMode) : TVkSamplerReductionMode;
       Begin
         Case Value of
@@ -2443,16 +2405,6 @@ end;
         If TestValue(VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT)  then include(Result, SS_TESSELLATION_EVALUATION_BIT) ;
         If TestValue(VK_SHADER_STAGE_GEOMETRY_BIT)          then include(Result, SS_GEOMETRY_BIT) ;
         If TestValue(VK_SHADER_STAGE_FRAGMENT_BIT)          then include(Result, SS_FRAGMENT_BIT) ;
-        (*
-        If TestValue(VK_SHADER_STAGE_ALL_GRAPHICS)          then
-        Begin
-          include(Result, SS_VERTEX_BIT) ;
-          include(Result, SS_TESSELLATION_CONTROL_BIT) ;
-          include(Result, SS_TESSELLATION_EVALUATION_BIT) ;
-          include(Result, SS_GEOMETRY_BIT) ;
-          include(Result, SS_FRAGMENT_BIT) ;
-        end ;
-        *)
         If TestValue(VK_SHADER_STAGE_COMPUTE_BIT)           then include(Result, SS_COMPUTE_BIT) ;
         If TestValue(VK_SHADER_STAGE_TASK_BIT_NV)           then include(Result, SS_TASK_BIT_NV) ;
         If TestValue(VK_SHADER_STAGE_MESH_BIT_NV)           then include(Result, SS_MESH_BIT_NV) ;
@@ -2463,34 +2415,6 @@ end;
         If TestValue(VK_SHADER_STAGE_INTERSECTION_BIT_KHR)  then include(Result, SS_INTERSECTION_BIT_KHR) ;
         If TestValue(VK_SHADER_STAGE_CALLABLE_BIT_KHR)      then include(Result, SS_CALLABLE_BIT_KHR) ;
         If TestValue(VK_SHADER_STAGE_SUBPASS_SHADING_BIT_HUAWEI)  then include(Result, SS_SUBPASS_SHADING_BIT_HUAWEI) ;
-        (*
-        If TestValue(VK_SHADER_STAGE_ALL)                   then
-        Begin
-          include(Result, SS_VERTEX_BIT) ;
-          include(Result, SS_TESSELLATION_CONTROL_BIT) ;
-          include(Result, SS_TESSELLATION_EVALUATION_BIT) ;
-          include(Result, SS_GEOMETRY_BIT) ;
-          include(Result, SS_FRAGMENT_BIT) ;
-          include(Result, SS_COMPUTE_BIT) ;
-          include(Result, SS_TASK_BIT_NV) ;
-          include(Result, SS_MESH_BIT_NV) ;
-          include(Result, SS_RAYGEN_BIT_KHR) ;
-          include(Result, SS_ANY_HIT_BIT_KHR) ;
-          include(Result, SS_CLOSEST_HIT_BIT_KHR) ;
-          include(Result, SS_MISS_BIT_KHR) ;
-          include(Result, SS_INTERSECTION_BIT_KHR) ;
-          include(Result, SS_INTERSECTION_BIT_KHR) ;
-          include(Result, SS_CALLABLE_BIT_KHR) ;
-          include(Result, SS_SUBPASS_SHADING_BIT_HUAWEI) ;
-          include(Result, SS_ANY_HIT_BIT_NV) ;
-          include(Result, SS_CALLABLE_BIT_NV) ;
-          include(Result, SS_CLOSEST_HIT_BIT_NV) ;
-          include(Result, SS_INTERSECTION_BIT_NV) ;
-          include(Result, SS_INTERSECTION_BIT_NV) ;
-          include(Result, SS_MISS_BIT_NV) ;
-          include(Result, SS_RAYGEN_BIT_NV) ;
-        end;
-        *)
         If TestValue(VK_SHADER_STAGE_ANY_HIT_BIT_NV)        then include(Result, SS_ANY_HIT_BIT_NV) ;
         If TestValue(VK_SHADER_STAGE_CALLABLE_BIT_NV)       then include(Result, SS_CALLABLE_BIT_NV) ;
         If TestValue(VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV)    then include(Result, SS_CLOSEST_HIT_BIT_NV) ;
@@ -3811,7 +3735,6 @@ end;
       End;
 
 
-
       Function GetVKSharingMode(Value:TvgSharingMode):TVKSharingMode;
       Begin
         Case Value of
@@ -4531,7 +4454,6 @@ begin
     Hash := Hash xor Cardinal(AttachmentFormats[I]);
   Result := Hash;  // Use a better hash algo like MurmurHash for productionend;
 end;
-
 
 
 Initialization;

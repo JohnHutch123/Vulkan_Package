@@ -30,7 +30,10 @@ interface
 {$INCLUDE VulkanPackage.inc}
 
 uses
-  PasVulkan.Math.Double;
+  PasVulkan.Math.Double,
+  System.SysUtils,
+  System.Math,
+  Vulkan_Assert;
 
 type
   TvgAxisConvention = (acYUp, acZUp);
@@ -83,11 +86,6 @@ function vgWorldToYUpMatrix: TpvMatrix4x4D;
 
 implementation
 
-uses
-  System.SysUtils,
-  System.Math,
-  Vulkan_Assert;
-
 var
   gAxisConvention : TvgAxisConvention = {$IFDEF VG_WORLD_Z_UP}acZUp{$ELSE}acYUp{$ENDIF};
   gAxisUsers      : Integer = 0;
@@ -106,7 +104,7 @@ begin
   CustomAssert(Result,
     Format('vgSetAxisConvention: %d object(s) created under the current axis ' +
            'convention are still alive.  Set the convention at start-up, ' +
-           'before creating cameras or particle systems.', [gAxisUsers]));
+           'before creating cameras or other objects that follow it.', [gAxisUsers]));
   if Result then
     gAxisConvention := aValue;
 end;

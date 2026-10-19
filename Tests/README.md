@@ -25,10 +25,6 @@ To run a single test, build it the same way and run the exe, or just run
 `Tests\Win32\AABBTest.exe` after a full run.
 
 
-The tests for the PRO units (edit tools, particles, natural neighbour,
-springs, Delaunay display, glTF, the shader builder and the GPU tests) are in
-the Vulkan_Package_PRO repository.
-
 ## What is covered
 
 | Program | Unit under test | Covers |
@@ -82,7 +78,7 @@ visible:
 - `CullTest`: *moved object still drawn (bounds only grow)* - pins a real
   limitation rather than hiding it. See below.
 
-`CameraTest` (and `PrecisionTest`, in the PRO package) back the double-precision work
+`CameraTest` backs the double-precision work
 (`RunTime_Src/DOUBLE_PRECISION.md`), where the failure mode is geometry that
 is drawn but in slightly the wrong place, or picking that misses, and only far
 from the origin:
@@ -177,10 +173,9 @@ that put the far plane about 0.5% too far away. The camera now builds its
 matrices and planes in double, where the error is gone, and `FrustumTest`
 asserts the far plane to 0.001 for that range too.
 
-The float32 limits that remain are on the GPU side and are measured by
-`PrecisionTest` (PRO): vertex offsets within 16,384 of `TvgScene.WorldOrigin` keep
-three decimals, and a float32 `mat4` view-projection places them to about
-1 mm.
+The float32 limits that remain are on the GPU side: vertex offsets within
+16,384 of `TvgScene.WorldOrigin` keep three decimals, and a float32 `mat4`
+view-projection places them to about 1 mm.
 
 ## OBJLoaderTest
 
@@ -231,6 +226,16 @@ file leaving the scene as it was. The format half also builds with Free
 Pascal: `fpc -Mdelphi -Fu../RunTime_Src STLTest.dpr`. Included in
 RunTests.bat.
 
+## MeshBuilderTest
+
+`Vulkan_MeshBuilder` without a Vulkan device: triangle lists, strips (winding
+kept) and fans expanded, degenerate triangles dropped on request, line strips
+to segments; a mesh written into a shaded store and read back (positions,
+indices, made normals, default colour, zero UVs, given colours and UVs kept),
+bad indices and normal counts refused; a scene walk that skips hidden
+objects unless asked, filters by topology and gives world positions.
+Included in RunTests.bat.
+
 ## InstancingTest
 
 `Vulkan_Instancing` without a device. The placement matrix: pivot onto the
@@ -265,7 +270,7 @@ files to exist during scene/store configuration. Verifies all three pipeline
 stage filenames and that missing/empty shader files cannot enable a shader.
 Also covers the shader file lookup (`vgFindShaderFile`): `ShaderFolderPath`
 starts as this package's `VulkanShaders` (found from the exe, and from a
-sibling `Vulkan_Package` checkout as PRO has) and is the only folder searched -
+sibling `Vulkan_Package` checkout) and is the only folder searched -
 not the exe folder or TEMP; its subfolders after the folder itself; a cached
 hit re-checked when the file is deleted; a miss not cached;
 `AdditionalShaderFolders` after `ShaderFolderPath`; a new `ShaderFolderPath`

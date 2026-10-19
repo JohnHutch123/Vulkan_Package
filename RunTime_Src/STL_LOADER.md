@@ -1,6 +1,6 @@
 # STL loading and saving
 
-Two units, both in the Delphi 11, 12 and 13 core runtime packages:
+Two units, both in the Delphi 12 and 13 core runtime packages:
 
 - `Vulkan_STL.pas` is the file format on its own: a `TvgSTLMesh` record and
   routines to read binary or ASCII STL, write either, weld shared corners,
