@@ -364,10 +364,9 @@ begin
 ### Set it once, before creating anything
 
 The convention decides the **defaults** objects are created with: a camera's
-position and up vector, a force field's direction, an emitter's launch
-velocity. It never rotates anything that already exists. While a `TvgCamera`,
-`TvgForceField` or `TvgParticleEmitter` is alive, `vgSetAxisConvention`
-refuses a change: it returns `False` and raises `CustomAssert`.
+position and up vector, for example. It never rotates anything that already
+exists. While a `TvgCamera`, or any other object that follows the convention,
+is alive, `vgSetAxisConvention` refuses a change: it returns `False` and raises `CustomAssert`.
 
 What follows the convention:
 
@@ -376,8 +375,6 @@ What follows the convention:
 | `TvgCamera` default position / up | (0,0,5) / +Y | (0,-5,0) / +Z |
 | `TvgCamera.InitializeAsDefault` | (0,2,5) | (0,-5,2) |
 | `TvgToolManager.DragPlaneAxis` 0 / 1 / 2 | XZ / XY / YZ | XY / XZ / YZ |
-| `TvgForceField` default vector | (0,-1,0) | (0,0,-1) |
-| `TvgParticleEmitter` default velocity | up along Y | up along Z |
 
 `DragPlaneAxis` now means horizontal / front / side, whichever convention is
 active.
@@ -387,8 +384,8 @@ active.
 - **Values you set yourself.** `Cam.LookAt(..., TpvVector3.Create(0, 1, 0))`
   is still +Y. Use `vgWorldUp`, `vgWorldForward` and `vgWorldRight`, or write
   the value Y-up and pass it through `vgFromYUp`.
-- **Values stored in a DFM.** For example, particle emitter or force
-  properties saved while designing under the other convention.
+- **Values stored in a DFM.** For example, camera properties saved while
+  designing under the other convention.
 - **Assets.** glTF is Y-up by specification. Apply `vgYUpToWorldMatrix` at the
   root node when importing and `vgWorldToYUpMatrix` when exporting. Both are
   the identity under Y-up.

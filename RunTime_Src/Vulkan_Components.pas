@@ -97,7 +97,7 @@ Var
   VulkanDLLsLoaded     : Boolean = False;
   VulkanLoadStatus     : TvgInstanceResult = VC_UNKNOWN_STATUS;  //one load attempt per process, see CheckVulkanHardwareStatus
 
-  MaxFramesInFlight    : TvkUint32 = 3;   //IMPORTANT  Used Everywhere  Particle system needs at least three
+  MaxFramesInFlight    : TvkUint32 = 3;   //IMPORTANT  Used Everywhere  compute-driven stores need at least three
   FrameResMax          : TvkUint32 = 10;  //Used to restrict MAX resolution of Frames
 
   IgnorecsLoading      : Boolean = False;
@@ -3944,7 +3944,7 @@ TvgBaseComponent = class(TComponent)
 
     // Per-attachment blend setup.  Create adds one attachment, so
     // ColorAttachments[0] is the usual target for enabling alpha or additive
-    // blending on a pipeline - see TvgParticleStore.ConfigureGraphicPipeline.
+    // blending on a pipeline in a store's ConfigureGraphicPipeline.
     Property ColorAttachments : TvgColorBlendAttachmentCol Read fColorAttachments;
 
   Published
@@ -5568,8 +5568,7 @@ TvgBaseComponent = class(TComponent)
 
     // GLSL expression assigned to gl_PointSize when the topology is
     // POINT_LIST.  Descendants override it to size points from their own
-    // vertex data - see TvgObjectStore (uses its PointSize property) and
-    // TvgParticleStore (sizes each particle from mass and remaining life).
+    // vertex data - see TvgObjectStore (uses its PointSize property).
     function GetShaderPointSizeExpression: String; virtual;
 
     Property Active        : Boolean Read GetActive write SetActiveState Stored False;
@@ -5799,7 +5798,7 @@ TvgBaseComponent = class(TComponent)
     //the workers are launched after the write and joined before the next one
     //- so there is never a second frame's volume in flight to confuse it.
     //
-    //A per-slot array would also be wrong for TvgParticleStore, which
+    //A per-slot array would also be wrong for a compute-driven store, which
     //substitutes a different slot index into VulkanDraw to pick the buffer
     //its compute pass last finished; that substituted index says nothing
     //about which camera the frame is being drawn with.
@@ -5994,8 +5993,7 @@ TvgBaseComponent = class(TComponent)
   // module, descriptor set layout/pool/sets, pipeline layout, pipeline, and
   // the dispatch and barrier recording - lives in TvgComputeEngine in
   // Vulkan_Components_Compute, which cannot be declared here because it needs
-  // the runtime GLSL compiler.  TvgParticleCompute in
-  // Vulkan_Components_Particles is a worked descendant.
+  // the runtime GLSL compiler.
   TvgBaseComputeEngine  =  class(TvgBaseComponent)
   Private
 
@@ -25850,7 +25848,7 @@ begin
     If vgIsPackageShaderFolder(C) then
       Exit(IncludeTrailingPathDelimiter(C));
 
-    //a sibling checkout, e.g. from D:\Vulkan_Package_PRO\Tests\...
+    //a sibling checkout, e.g. from D:\MyApp\Tests\...
     C := TPath.Combine(TPath.Combine(D, 'Vulkan_Package'), 'VulkanShaders');
     If vgIsPackageShaderFolder(C) then
       Exit(IncludeTrailingPathDelimiter(C));

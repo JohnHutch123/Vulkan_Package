@@ -27,16 +27,16 @@
 { Scene loader registry.
 
   TvgSceneLoaderStorer is abstract: each file format has its own descendant
-  (the glTF one, TvgSceneLoaderStorer_GLTF, is in the PRO package).  A loader
+  (TvgSceneLoader_OBJ, TvgSceneLoaderStorer_STL).  A loader
   registers itself here once, so that a data module, the Object Inspector and
   the designer can offer "load this file with that loader" without knowing
   the loader's class:
 
       initialization
-        RegisterSceneLoader(TvgSceneLoaderStorer_GLTF, 'glTF',
-                            'glTF 2.0 scene', '.gltf;.glb', 'FileName');
+        RegisterSceneLoader(TvgSceneLoaderStorer_STL, 'STL',
+                            'STL mesh', '.stl', 'FileName');
       finalization
-        UnregisterSceneLoader(TvgSceneLoaderStorer_GLTF);
+        UnregisterSceneLoader(TvgSceneLoaderStorer_STL);
 
   aFileNameProp names the loader's published string property that takes the
   file to load; vgLoadSceneFile sets it through RTTI and calls LoadScene.
@@ -59,14 +59,14 @@ type
   TvgSceneLoaderStorerClass = class of TvgSceneLoaderStorer;
 
   TvgSceneLoaderInfo = record
-    Name         : string;                     //'glTF' - what SceneLoaderType holds
-    Description  : string;                     //'glTF 2.0 scene'
+    Name         : string;                     //'STL' - what SceneLoaderType holds
+    Description  : string;                     //'STL mesh'
     Extensions   : string;                     //'.gltf;.glb'
     FileNameProp : string;                     //published string property taking the file
     LoaderClass  : TvgSceneLoaderStorerClass;
 
     Function HandlesFile(const aFileName: string): Boolean;
-    Function DialogFilter: string;             //'glTF 2.0 scene (*.gltf;*.glb)|*.gltf;*.glb'
+    Function DialogFilter: string;             //'STL mesh (*.stl)|*.stl'
   end;
 
   EvgSceneLoaderError = class(Exception);
@@ -113,7 +113,7 @@ procedure vgLoadSceneFile(aScene: TvgScene; const aFileName: string;
   WorldOrigin) by the same loaders as vgLoadSceneFile, so any registered
   format works and no loader needs to know; its stores are then moved into
   aScene with AddDataStoreLive.  Only the geometry is added: the file's
-  lights (a warning says how many) and cameras are not, and nor is a glTF
+  lights (a warning says how many) and cameras are not, and nor is a
   layer/hierarchy model - vgLoadSceneFile builds none either.  A load that
   fails raises with aScene untouched.  A given aLoader must have no Scene:
   pointing a loader at another scene clears the one it had. }
@@ -133,7 +133,7 @@ resourcestring
   vgSLNoFile        = 'No scene file given.';
   vgSLFileMissing   = 'Scene file not found: %s';
   vgSLNoLoaderType  = 'No scene loader is registered with the name "%s".';
-  vgSLNoLoaderExt   = 'No scene loader is registered for "%s" files.  Install the package that provides one (glTF is in the PRO package).';
+  vgSLNoLoaderExt   = 'No scene loader is registered for "%s" files.  Install the package that provides one.';
   vgSLNoFileProp    = '%s has no published string property "%s" to take the file name.';
 
 implementation
@@ -166,7 +166,7 @@ end;
 function TvgSceneLoaderInfo.DialogFilter: string;
   Var Mask : string;
 begin
-  //'.gltf;.glb' -> '*.gltf;*.glb'
+  //'.stl;.stla' -> '*.stl;*.stla'
   Mask   := '*' + StringReplace(Extensions, ';', ';*', [rfReplaceAll]);
   Result := Format('%s (%s)|%s', [Description, Mask, Mask]);
 end;

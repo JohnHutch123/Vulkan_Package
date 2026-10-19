@@ -25,7 +25,7 @@ unit Vulkan_LOD;
  *                                                                            *
  *  Anchor: a group can follow an object.  Its centre, radius and distance   *
  *  thresholds are then in that object's own frame, and AnchorMoved - called *
- *  by whatever moves the object (PRO's Vulkan_SceneHierarchy bakes) - puts  *
+ *  by whatever moves the object (a scene hierarchy, say) - puts             *
  *  them in the world from the object's world transform, scale and all.      *
  *                                                                            *
  *  The groups of a scene are vgLodGroups(Scene): a TvgSceneExtension, owned *
@@ -176,7 +176,7 @@ function vgLodGroups(aScene: TvgScene; aCreate: Boolean = True): TvgLodGroups;
   of something level 0 has.  Exporters that cannot write levels skip it. }
 function vgIsLodProxy(aObject: TvgObject): Boolean;
 
-{ For whatever moves objects (PRO's hierarchy): aObject is now placed by
+{ For whatever moves objects (a scene hierarchy): aObject is now placed by
   aWorld - every group of its scene anchored to it follows. }
 procedure vgLodAnchorMoved(aObject: TvgObject; const aWorld: TpvMatrix4x4D);
 

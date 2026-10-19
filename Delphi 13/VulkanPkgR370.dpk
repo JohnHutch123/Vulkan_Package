@@ -69,7 +69,6 @@ contains
   Vulkan_Components_Camera in '..\RunTime_Src\Vulkan_Components_Camera.pas',
   Vulkan_HUD in '..\RunTime_Src\Vulkan_HUD.pas',
   Vulkan_Components_DataStore in '..\RunTime_Src\Vulkan_Components_DataStore.pas',
-  Vulkan_Components_Nodes in '..\RunTime_Src\Vulkan_Components_Nodes.pas',
   Vulkan_Components_PointerValidation in '..\RunTime_Src\Vulkan_Components_PointerValidation.pas',
   Vulkan_CriticalSection in '..\RunTime_Src\Vulkan_CriticalSection.pas',
   Vulkan_Components_ShaderCompiler in '..\RunTime_Src\Vulkan_Components_ShaderCompiler.pas',

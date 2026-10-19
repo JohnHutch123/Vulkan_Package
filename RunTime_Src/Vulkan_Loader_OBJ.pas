@@ -205,7 +205,7 @@ end;
 
 // Shading and Ambient are specialization constants, baked into the pipeline:
 // a store already drawing gets its own pipelines built again, every other
-// store's left alone (as TvgDelaunayDisplay does for a live PointSize).  One
+// store's left alone (as for a live PointSize change).  One
 // not yet drawing picks the values up when its pipelines are first built.
 procedure TvgOBJShadedStore.RebuildPipelines;
 var I: Integer;

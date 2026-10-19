@@ -779,7 +779,7 @@ begin
     Scene := vgVulkanDataModule1.vgScene1;
   If not assigned(Scene) then exit;
 
-  //every registered scene loader (OBJ, and glTF with the PRO package)
+  //every registered scene loader
   OpenDialog1.Title  := 'Load Scene File';
   OpenDialog1.Filter := SceneLoaderDialogFilter;
   If not OpenDialog1.Execute then exit;

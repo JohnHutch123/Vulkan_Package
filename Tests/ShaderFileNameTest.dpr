@@ -92,7 +92,7 @@ begin
   B := TPath.Combine(Root, 'B');
   Sub := TPath.Combine(B, 'nested');
   Sibling := TPath.Combine(TPath.Combine(Root, 'Vulkan_Package'), 'VulkanShaders');
-  Deep := TPath.Combine(Root, 'Vulkan_Package_PRO\Tests\TestVulkan\Win64\Debug');
+  Deep := TPath.Combine(Root, 'MyApp\Tests\Win64\Debug');
   ForceDirectories(A); ForceDirectories(Sub); ForceDirectories(Sibling); ForceDirectories(Deep);
   ForceDirectories(TPath.Combine(Root, 'Vulkan_Package\RunTime_Src'));
   TFile.WriteAllText(TPath.Combine(Root, 'Vulkan_Package\RunTime_Src\Vulkan_Components.pas'), '');
@@ -105,7 +105,7 @@ begin
     Folders := vgShaderSearchFolders;
     Check('the only folder searched', (Length(Folders) = 1) and SameText(IncludeTrailingPathDelimiter(Folders[0]), Repo));
     Check('OBJ_vert.spv found there', SameText(vgFindShaderFile('OBJ_vert.spv'), Repo + 'OBJ_vert.spv'));
-    Check('a sibling Vulkan_Package checkout is found (PRO)',
+    Check('a sibling Vulkan_Package checkout is found',
       SameText(vgLocatePackageShaderFolder(Deep), IncludeTrailingPathDelimiter(Sibling)));
     Check('nothing found where there is no package', vgLocatePackageShaderFolder(TPath.GetTempPath) = '');
 
