@@ -231,6 +231,16 @@ file leaving the scene as it was. The format half also builds with Free
 Pascal: `fpc -Mdelphi -Fu../RunTime_Src STLTest.dpr`. Included in
 RunTests.bat.
 
+## MeshBuilderTest
+
+`Vulkan_MeshBuilder` without a Vulkan device: triangle lists, strips (winding
+kept) and fans expanded, degenerate triangles dropped on request, line strips
+to segments; a mesh written into a shaded store and read back (positions,
+indices, made normals, default colour, zero UVs, given colours and UVs kept),
+bad indices and normal counts refused; a scene walk that skips hidden
+objects unless asked, filters by topology and gives world positions.
+Included in RunTests.bat.
+
 ## InstancingTest
 
 `Vulkan_Instancing` without a device. The placement matrix: pivot onto the
