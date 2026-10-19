@@ -3,6 +3,9 @@ unit Vulkan_Components_TextureInspector;
 interface
 
 uses
+  {$IFDEF MSWINDOWS}
+  Winapi.Windows, Winapi.ActiveX, Winapi.Wincodec,
+  {$ENDIF}
   System.Classes, System.SysUtils, System.Math;
 
 type
@@ -21,6 +24,29 @@ type
   end;
 
 function InspectTexture(AStream: TStream; out Info: TTextureInfo): Boolean;
+
+var
+  // Largest width or height a texture is uploaded at. A bigger image is
+  // shrunk (keeping its shape) before it reaches the GPU. 0 means no limit
+  // other than the device's own maxImageDimension2D. 32-bit builds default
+  // to 4096: an 8192 x 8192 texture needs about 450 MB to decode, which a
+  // 32-bit process usually cannot find in one piece.
+  vgMaxTextureSize: Integer = {$IF SizeOf(Pointer) = 4}4096{$ELSE}0{$IFEND};
+
+// Shrinks aWidth x aHeight, keeping the aspect ratio, so neither side is
+// over aMaxSize. Returns False, leaving both unchanged, when it already fits
+// or aMaxSize <= 0.
+function vgFitTextureSize(var aWidth, aHeight: Integer; aMaxSize: Integer): Boolean;
+
+{$IFDEF MSWINDOWS}
+// Decodes a BMP, PNG, JPEG, GIF, ICO, TIFF or WebP image with the Windows
+// Imaging Component and returns it as 32-bit RGBA, rows top down, shrunk so
+// neither side is over aMaxSize. WIC scales while it decodes, so the full
+// size image is never held in memory. Returns False when the image already
+// fits or WIC cannot read it; the caller then loads the stream as usual.
+function vgDecodeTextureScaled(aStream: TStream; aMaxSize: Integer;
+  out aWidth, aHeight: Integer; out aPixels: TBytes): Boolean;
+{$ENDIF}
 
 implementation
 
@@ -618,5 +644,92 @@ begin
   Info.FormatKind := tfUnknown;
   Result := True;
 end;
+
+function vgFitTextureSize(var aWidth, aHeight: Integer; aMaxSize: Integer): Boolean;
+var
+  Scale: Double;
+begin
+  Result := (aMaxSize > 0) and (aWidth > 0) and (aHeight > 0) and
+            ((aWidth > aMaxSize) or (aHeight > aMaxSize));
+  if not Result then Exit;
+  Scale   := aMaxSize / Max(aWidth, aHeight);
+  aWidth  := Max(1, Min(aMaxSize, Round(aWidth * Scale)));
+  aHeight := Max(1, Min(aMaxSize, Round(aHeight * Scale)));
+end;
+
+{$IFDEF MSWINDOWS}
+function vgDecodeTextureScaled(aStream: TStream; aMaxSize: Integer;
+  out aWidth, aHeight: Integer; out aPixels: TBytes): Boolean;
+const
+  // Spelled out so the unit does not depend on which GUIDs a given Delphi
+  // version's Winapi.Wincodec declares.
+  NoVendor: TGUID = '{00000000-0000-0000-0000-000000000000}';
+  PixelFormat32bppRGBA: TGUID = '{F5C7AD2D-6A8D-43DD-A7A8-A29935261AE9}';
+var
+  InitResult: HRESULT;
+  Factory: IWICImagingFactory;
+  Adapter: IStream;
+  Decoder: IWICBitmapDecoder;
+  Frame: IWICBitmapFrameDecode;
+  Scaler: IWICBitmapScaler;
+  Converter: IWICFormatConverter;
+  SrcWidth, SrcHeight, Stride: UINT;
+begin
+  Result  := False;
+  aWidth  := 0;
+  aHeight := 0;
+  aPixels := nil;
+  if (aMaxSize <= 0) or not Assigned(aStream) or (aStream.Size = 0) then Exit;
+
+  // WIC is COM. Any apartment will do, so a thread already in another
+  // apartment (RPC_E_CHANGED_MODE) carries on without its own CoInitialize.
+  InitResult := CoInitializeEx(nil, COINIT_APARTMENTTHREADED);
+  try
+    aStream.Position := 0;
+    if Failed(CoCreateInstance(CLSID_WICImagingFactory, nil, CLSCTX_INPROC_SERVER,
+                               IID_IWICImagingFactory, Factory)) then Exit;
+
+    Adapter := TStreamAdapter.Create(aStream, soReference);
+    if Failed(Factory.CreateDecoderFromStream(Adapter, NoVendor,
+                WICDecodeMetadataCacheOnDemand, Decoder)) then Exit;
+    if Failed(Decoder.GetFrame(0, Frame)) then Exit;
+    if Failed(Frame.GetSize(SrcWidth, SrcHeight)) then Exit;
+
+    aWidth  := Integer(SrcWidth);
+    aHeight := Integer(SrcHeight);
+    if not vgFitTextureSize(aWidth, aHeight, aMaxSize) then Exit;
+
+    if Failed(Factory.CreateBitmapScaler(Scaler)) then Exit;
+    if Failed(Scaler.Initialize(Frame, UINT(aWidth), UINT(aHeight),
+                                WICBitmapInterpolationModeFant)) then Exit;
+    if Failed(Factory.CreateFormatConverter(Converter)) then Exit;
+    if Failed(Converter.Initialize(Scaler, PixelFormat32bppRGBA,
+                WICBitmapDitherTypeNone, nil, 0, WICBitmapPaletteTypeCustom)) then Exit;
+
+    Stride := UINT(aWidth) * 4;
+    SetLength(aPixels, NativeInt(Stride) * aHeight);
+    if Failed(Converter.CopyPixels(nil, Stride, UINT(Length(aPixels)), @aPixels[0])) then
+    begin
+      aPixels := nil;
+      Exit;
+    end;
+    Result := True;
+  finally
+    if not Result then
+    begin
+      aWidth  := 0;
+      aHeight := 0;
+    end;
+    // Release every WIC object before CoUninitialize.
+    Converter := nil;
+    Scaler    := nil;
+    Frame     := nil;
+    Decoder   := nil;
+    Adapter   := nil;
+    Factory   := nil;
+    if Succeeded(InitResult) then CoUninitialize;
+  end;
+end;
+{$ENDIF}
 
 end.

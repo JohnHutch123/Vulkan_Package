@@ -323,6 +323,7 @@ Type
 
      fTextureSource   : TvgTextureSource;
 
+    function LoadScaledTexture(aDevice: TvgLogicalDevice): Boolean;
     Procedure SetDisabled ;  Override;
     Procedure SetEnabled ;   Override;
     function HasPayload: Boolean; override;
@@ -3481,6 +3482,53 @@ begin
 
 end;
 
+function TvgDescriptor_PerFrame_Texture.LoadScaledTexture(aDevice: TvgLogicalDevice): Boolean;
+  // Uploads the texture shrunk to fit vgMaxTextureSize and the device's
+  // maxImageDimension2D. Returns False when it already fits, or the format
+  // is one only PasVulkan reads (DDS, KTX, HDR, QOI, TGA ...), so the caller
+  // loads it at full size as before.
+  Var Limit, W, H : Integer;
+      Pixels      : TBytes;
+      Fmt         : TVkFormat;
+      MipMaps     : TpvInt32;
+begin
+  Result := False;
+{$IFDEF MSWINDOWS}
+  If not (fTextureSource.Info.FormatKind in [tfBMP, tfPNG, tfJPEG, tfGIF, tfICO, tfWebP]) then exit;
+
+  Limit := Integer(aDevice.VulkanDevice.PhysicalDevice.Properties.limits.maxImageDimension2D);
+  If (vgMaxTextureSize > 0) and ((Limit <= 0) or (vgMaxTextureSize < Limit)) then
+    Limit := vgMaxTextureSize;
+  If Limit <= 0 then exit;
+
+  // Size known from the header and already small enough: skip WIC.
+  W := fTextureSource.Info.Width;
+  H := fTextureSource.Info.Height;
+  If (W > 0) and (H > 0) and not vgFitTextureSize(W, H, Limit) then exit;
+
+  If not vgDecodeTextureScaled(fTextureSource.Stream, Limit, W, H, Pixels) then exit;
+
+  If fTextureSource.Info.IsSRGB then
+    Fmt := VK_FORMAT_R8G8B8A8_SRGB
+  else
+    Fmt := VK_FORMAT_R8G8B8A8_UNORM;
+
+  If fTextureSource.Info.HasMipMaps then MipMaps := -1 else MipMaps := 1;
+
+  // Same arguments PasVulkan's own image loaders pass for RGBA8 data.
+  fVulkanTexture.LoadFromMemory(Fmt,
+                                VK_SAMPLE_COUNT_1_BIT,
+                                W, H, 0, 0, 1,
+                                MipMaps,
+                                [TpvVulkanTextureUsageFlag.TransferDst,
+                                 TpvVulkanTextureUsageFlag.Sampled],
+                                @Pixels[0],
+                                Length(Pixels),
+                                False, False, 1, True);
+  Result := True;
+{$ENDIF}
+end;
+
 procedure TvgDescriptor_PerFrame_Texture.SetEnabled;
   Var Device :TvgLogicalDevice;
 
@@ -3496,9 +3544,10 @@ begin
   Begin
       fVulkanTexture := TpvVulkanTexture.Create(Device.VulkanDevice);
 
-      fVulkanTexture.LoadFromImage(fTextureSource.Stream,
-                                   fTextureSource.Info.HasMipMaps,//   True,
-                                   fTextureSource.Info.IsSRGB);   //   False,
+      If not LoadScaledTexture(Device) then
+        fVulkanTexture.LoadFromImage(fTextureSource.Stream,
+                                     fTextureSource.Info.HasMipMaps,//   True,
+                                     fTextureSource.Info.IsSRGB);   //   False,
 
       fUploadNeeded := True;
 
