@@ -40,7 +40,6 @@ uses
   Vulkan_Components,
   Vulkan_Components_Descriptors,
   Vulkan_Components_DataStore,
-  Vulkan_Components_Nodes,
   Vulkan_Components_Camera,
   Vulkan_Components_Light,
   Vulkan_WorldAxes,

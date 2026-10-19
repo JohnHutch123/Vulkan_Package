@@ -1,5 +1,4 @@
 TO DO
-	Remove Vulkan_Components_Nodes.pas
 	Design time module registered/installed and tested
 	add extra missing components to registration
 	Check the VulkanDataModule  How to use
