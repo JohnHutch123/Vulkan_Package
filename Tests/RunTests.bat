@@ -61,7 +61,7 @@ echo.
 
 if not exist "%OUT%" mkdir "%OUT%"
 
-set "UNITS=-U"%BDS%\lib\win32\release" -U"%PASVULKAN%\src" -U"%PASVULKAN%" -U"%PASVULKAN%\externals\pasmp\src" -U"%PASVULKAN%\externals\pucu\src" -U"%PASVULKAN%\externals\pasdblstrutils\src" -U"%PASVULKAN%\externals\pasjson\src" -U"%PASVULKAN%\externals\pasgltf\src" -U"%REPO%\RunTime_Src" -U"%REPO%\Samples\Renderers""
+set "UNITS=-U"%BDS%\lib\win32\release" -U"%PASVULKAN%\src" -U"%PASVULKAN%" -U"%PASVULKAN%\externals\pasmp\src" -U"%PASVULKAN%\externals\pucu\src" -U"%PASVULKAN%\externals\pasdblstrutils\src" -U"%PASVULKAN%\externals\pasjson\src" -U"%REPO%\RunTime_Src" -U"%REPO%\Samples\Renderers""
 
 set FAILED=0
 

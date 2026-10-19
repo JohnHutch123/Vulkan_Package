@@ -38,7 +38,6 @@ uses
   Vulkan_Components,
   Vulkan_Components_Descriptors,
   Vulkan_Renderer_Single,
-//  Vulkan_Renderer_CommThread,
   Vulkan_Assert,
   Vulkan_Components_DataStore,
   Vulkan_Components_Camera,

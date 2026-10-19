@@ -421,7 +421,6 @@ type
     // CreateVulkanDataBuffers.  Descendants that let a compute shader write
     // straight into the render buffers set this to
     // VK_BUFFER_USAGE_STORAGE_BUFFER_BIT before the buffers are created.
-    // See TvgParticleStore in Vulkan_Components_Particles.
     FExtraBufferUsage  : TVkBufferUsageFlags;
 
     FVertexBuffers     : TArray<TVulkanBufferInfo>;    // Per frame
@@ -3749,7 +3748,7 @@ var
 
 begin
   // Load_End / the first upload task can run while the store is still empty
-  // (TvgParticleStore is added to the scene before AllocateVertices).  The
+  // (a compute-driven store is added to the scene before AllocateVertices).  The
   // old latch set FBuffersCreated True with Length(FVertexBuffers)=0, so the
   // later real allocation was a silent no-op and VulkanDraw bound nothing.
   if fBuffersCreated then
@@ -3853,7 +3852,7 @@ var
   Short, Outgrown : Boolean;
 
   // A buffer that exists and is too small - as opposed to an array that had
-  // no data when the buffers were made, as a TvgParticleStore's has.
+  // no data when the buffers were made, as a compute-driven store's has.
   function Outgrew(const aBuffers: TArray<TVulkanBufferInfo>; aCount, aElementSize: Integer): Boolean;
   begin
     Result := (Length(aBuffers) > 0) and (aCount > 0) and (aElementSize > 0) and

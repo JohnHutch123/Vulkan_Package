@@ -15,7 +15,6 @@ uses
 //  Vulkan_Components,
 //  Vulkan_Components_Resources,
   Vulkan_Renderer_Single;
-//  Vulkan_Renderer_CommThread,
 //  Vulkan_Render_Tests;                //MUST STAY HERE
 
 

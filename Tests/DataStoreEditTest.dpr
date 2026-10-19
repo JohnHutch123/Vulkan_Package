@@ -223,7 +223,7 @@ begin
     CheckObjIntact(DS, 'B untouched by the reset', B, 2, 100);
     CheckInt('A''s old vertices are waste', DS.VertexWaste, 3);
 
-    // Refill it, as TvgDelaunayDisplay.UpdateIsolines does.
+    // Refill it, as a store showing live results does.
     DS.AddObjectVertex(A);
     DS.SetObjectVertexPosition(A, 0, 7, 7, 7);
     CheckVec('A refilled', DS.GetObjectVertexPosition(A, 0), V(7, 7, 7));

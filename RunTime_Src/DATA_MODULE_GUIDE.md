@@ -68,7 +68,7 @@ session is running.
 | `Renderer`, `Scene` | The primary linker's renderer and scene |
 | `ToolManager` | Camera, picking and selection for the primary window |
 | `SceneFileName` | File to load. In the IDE it has a file-open button |
-| `SceneLoaderType` | Registered loader name, e.g. `'glTF'`. Leave it blank to choose by file extension |
+| `SceneLoaderType` | Registered loader name, e.g. `'OBJ'`. Leave it blank to choose by file extension |
 | `SceneLoader` | Optional loader component with its own settings |
 | `LoadSceneOnEnable` | Loads `SceneFileName` each time the session is enabled, including at design time (default `False`) |
 | `ZoomAllOnLoad` | Frames the scene after each load (default `True`) |
@@ -155,8 +155,8 @@ property, or set the tool manager's `Linker` property.
 - Loaders register themselves in `Vulkan_SceneLoaders`, for example:
 
   ```pascal
-  RegisterSceneLoader(TvgSceneLoaderStorer_GLTF, 'glTF', 'glTF 2.0 scene',
-                      '.gltf;.glb', 'FileName');
+  RegisterSceneLoader(TvgSceneLoaderStorer_STL, 'STL', 'STL mesh',
+                      '.stl', 'FileName');
   ```
 
 If a load fails, `EvgSceneLoaderError` is raised. When the load runs from

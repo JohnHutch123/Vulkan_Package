@@ -1,6 +1,6 @@
 unit Vulkan_MeshUtils;
 
-{ Mesh building shared by the loaders (OBJ here; VRML, DXF in PRO):
+{ Mesh building shared by the scene loaders:
 
     vgPolygonNormal      - Newell's normal of a polygon, unnormalised, so
                            its length is twice the area: weights for smooth
