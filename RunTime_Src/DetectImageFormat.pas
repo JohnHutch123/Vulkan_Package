@@ -4,7 +4,7 @@ interface
 
 uses
   System.Classes, System.SysUtils, Vcl.Graphics, Vcl.Imaging.pngimage,
-  Vcl.Imaging.jpeg, Vcl.Imaging.GIFImg, Vcl.Imaging.ico, Vcl.Imaging.WIC; // include units you need
+  Vcl.Imaging.jpeg, Vcl.Imaging.GIFImg, Vcl.Imaging.ico, Vcl.Imaging.WIC, System.Math; // include units you need
 
 type
   TImageFormatKind = (ifUnknown, ifBMP, ifPNG, ifJPEG, ifGIF, ifICO, ifWebP,
@@ -14,9 +14,6 @@ function DetectImageFormat(AStream: TStream): TImageFormatKind;
 function StreamHasGraphic(AStream: TStream): Boolean;
 
 implementation
-
-uses
-  System.Math;
 
 function CompareBytes(const A: array of Byte; const B: array of Byte; Count: Integer): Boolean;
 begin
