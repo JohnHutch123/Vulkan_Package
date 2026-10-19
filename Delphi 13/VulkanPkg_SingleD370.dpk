@@ -1,6 +1,7 @@
-package VulkanPkg_SDL2R280;
+package VulkanPkg_SingleD370;
 
 {$R *.res}
+{$R 'VulkanPkg_RendererIcons.res'}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
 {$ALIGN 8}
 {$ASSERTIONS ON}
@@ -25,16 +26,17 @@ package VulkanPkg_SDL2R280;
 {$IMAGEBASE $400000}
 {$DEFINE RELEASE}
 {$ENDIF IMPLICITBUILDING}
-{$DESCRIPTION 'Datavis Vulkan SDL2 runtime package'}
-{$RUNONLY}
+{$DESCRIPTION 'Datavis Vulkan single-thread renderer design-time package'}
+{$DESIGNONLY}
 {$IMPLICITBUILD OFF}
 
 requires
   rtl,
-  VulkanPkgR280;
+  DesignIDE,
+  VulkanPkgR370,
+  VulkanPkg_SingleR370;
 
 contains
-  PasVulkan.SDL2,
-  Vulkan_WindowSDL2 in '..\RunTime_Src\Vulkan_WindowSDL2.pas';
+  SimpleTest_Design in '..\Samples\Renderers\SimpleTest_Design.pas';
 
 end.

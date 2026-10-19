@@ -1,7 +1,7 @@
 # OBJ and MTL loading
 
 `Vulkan_Loader_OBJ.pas` supplies `TvgSceneLoader_OBJ`, a load-only descendant
-of `TvgSceneLoaderStorer`. It is included in the Delphi 11, 12 and 13 core
+of `TvgSceneLoaderStorer`. It is included in the Delphi 12 and 13 core
 runtime packages and registers `.obj` with `Vulkan_SceneLoaders`. The existing
 scene and data-module **Load Scene File** actions can therefore select it.
 For an application compiled directly from source, include `Vulkan_Loader_OBJ`

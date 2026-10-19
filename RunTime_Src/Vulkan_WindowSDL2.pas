@@ -24,7 +24,7 @@
 
   Needs SDL 2.0.6 or later (Vulkan support).  Compile with
   PasVulkanUseSDL2, PasVulkanUseSDL2WithVulkanSupport and
-  PasVulkanUseSDL2WithStaticVulkanSupport defined, as VulkanPkg_SDL2R280
+  PasVulkanUseSDL2WithStaticVulkanSupport defined, as VulkanPkg_SDL2R290/R370
   does.  PasVulkan.SDL2 links SDL statically against 'sdl2.dll' (Win32) or
   'sdl264.dll' (Win64), so a Win64 application must ship SDL2.dll under the
   name sdl264.dll. }

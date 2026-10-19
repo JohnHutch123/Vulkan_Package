@@ -41,7 +41,7 @@
   aFileNameProp names the loader's published string property that takes the
   file to load; vgLoadSceneFile sets it through RTTI and calls LoadScene.
 
-  Core runtime unit (VulkanPkgR280): no VCL, no design-time units. }
+  Core runtime unit (VulkanPkgR290/R370): no VCL, no design-time units. }
 
 unit Vulkan_SceneLoaders;
 
