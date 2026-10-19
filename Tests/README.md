@@ -236,6 +236,16 @@ bad indices and normal counts refused; a scene walk that skips hidden
 objects unless asked, filters by topology and gives world positions.
 Included in RunTests.bat.
 
+## TextureScaleTest
+
+The texture size limit in `Vulkan_Components_TextureInspector`, without a
+device. `vgFitTextureSize` shrinks wide, tall and square sizes keeping their
+shape and leaves sizes that fit alone; `vgDecodeTextureScaled` decodes a
+3000 x 1000 BMP straight to 1000 x 333 RGBA with WIC (colours checked in
+RGBA order), skips an image that already fits and refuses data that is not
+an image. 32-bit builds check that `vgMaxTextureSize` defaults to 4096.
+Included in RunTests.bat.
+
 ## InstancingTest
 
 `Vulkan_Instancing` without a device. The placement matrix: pivot onto the
