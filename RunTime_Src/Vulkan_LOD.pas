@@ -49,7 +49,8 @@ uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   PasVulkan.Math, PasVulkan.Math.Double,
   Vulkan_Components, Vulkan_Components_Camera,
-  Vulkan_Components_DataStore, Vulkan_Components_Scene_Renderer;
+  Vulkan_Components_DataStore, Vulkan_Components_Scene_Renderer,
+  System.Math;
 
 type
   EvgLodError = class(Exception);
@@ -181,8 +182,6 @@ procedure vgLodAnchorMoved(aObject: TvgObject; const aWorld: TpvMatrix4x4D);
 
 implementation
 
-uses
-  System.Math;
 
 function SceneOf(aObject: TvgObject): TvgScene;
 begin

@@ -30,7 +30,10 @@ interface
 {$INCLUDE VulkanPackage.inc}
 
 uses
-  PasVulkan.Math.Double;
+  PasVulkan.Math.Double,
+  System.SysUtils,
+  System.Math,
+  Vulkan_Assert;
 
 type
   TvgAxisConvention = (acYUp, acZUp);
@@ -82,11 +85,6 @@ function vgYUpToWorldMatrix: TpvMatrix4x4D;
 function vgWorldToYUpMatrix: TpvMatrix4x4D;
 
 implementation
-
-uses
-  System.SysUtils,
-  System.Math,
-  Vulkan_Assert;
 
 var
   gAxisConvention : TvgAxisConvention = {$IFDEF VG_WORLD_Z_UP}acZUp{$ELSE}acYUp{$ENDIF};

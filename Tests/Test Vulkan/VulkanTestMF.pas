@@ -25,7 +25,8 @@ uses
   Vulkan_Components_DataStore,
   Vulkan_Components_Camera,
   Vulkan_SceneLoaders,
-  Vulkan_Loader_OBJ;
+  Vulkan_Loader_OBJ,
+  VulkanTestDM;
 
 type
   TTestVulkan = class(TForm)
@@ -109,9 +110,6 @@ var
 implementation
 
 {$R *.dfm}
-
-uses
-  VulkanTestDM;
 
 function IsRenderDocActive: Boolean;
 type
