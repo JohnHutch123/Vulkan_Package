@@ -322,7 +322,12 @@ var
   A, B: TRaceBoxSample;
 begin
   Writeln('CSV');
-  Dir := IncludeTrailingPathDelimiter(GetTempDir) + 'RaceBoxTest' + IntToStr(Random(1000000));
+{$IFDEF FPC}
+  Dir := IncludeTrailingPathDelimiter(GetTempDir);
+{$ELSE}
+  Dir := IncludeTrailingPathDelimiter(TPath.GetTempPath);
+{$ENDIF}
+  Dir := Dir + 'RaceBoxTest' + IntToStr(Random(1000000));
   ForceDirectories(Dir);
   L := RaceBoxDecodeDump(BuildDump, 300);
   try
