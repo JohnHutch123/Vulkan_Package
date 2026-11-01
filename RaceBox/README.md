@@ -96,6 +96,8 @@ cd RaceBox\Tests
 dcc32 -U..\Source RaceBoxProtocolTest.dpr && RaceBoxProtocolTest
 ```
 or with Free Pascal: `fpc -Mdelphi -Fu../Source RaceBoxProtocolTest.dpr`.
+`Tests\RunTests.bat` runs the tests and also builds the demo (which compiles
+`RaceBox.BLE`); the repo's Delphi CI workflow calls it.
 
 They check every example packet in the RaceBox protocol document, the stream
 parser (split and merged notifications, garbage, bad checksums), sample

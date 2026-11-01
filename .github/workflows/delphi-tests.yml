@@ -69,6 +69,9 @@ jobs:
         shell: cmd
         run: Tests\RunTests.bat
 
+      - name: Run RaceBox tests and build the RaceBox demo
+        shell: cmd
+        run: RaceBox\Tests\RunTests.bat
 
       # Stands in for actions/upload-artifact: dump the logs into the job
       # output instead, where they are just as readable for a failed build.
@@ -84,7 +87,7 @@ jobs:
         if: failure()
         shell: powershell -ExecutionPolicy Bypass -NoProfile -Command ". '{0}'"
         run: |
-          $logs = Get-ChildItem Tests\Win32\*.build.log -ErrorAction SilentlyContinue
+          $logs = @(Get-ChildItem Tests\Win32\*.build.log, RaceBox\Tests\Win32\*.build.log -ErrorAction SilentlyContinue)
           if (-not $logs) { Write-Host 'No build logs found.'; return }
           foreach ($log in $logs) {
             Write-Host "===== $($log.Name) ====="
