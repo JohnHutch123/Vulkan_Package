@@ -105,10 +105,9 @@ decoding, session splitting and the CSV round trip.
 
 ## What has and has not been tested
 
-- `RaceBox.Protocol` and `RaceBox.Session` were compiled and their tests pass under Free Pascal 3.2.
-- `RaceBox.BLE` and the demo have **not** been compiled in Delphi or run against a real RaceBox yet.
-  Expect small fixes on first build. If the scan finds nothing or connecting fails, the log at the
-  bottom of the demo window shows which step stopped.
+- `RaceBox.Protocol` and `RaceBox.Session`: tests pass under Free Pascal 3.2 and under Delphi (dcc32 37.0, the repo's CI runner).
+- `RaceBox.BLE` and the demo compile cleanly with dcc32 in CI, but have **not been run against a real RaceBox yet**.
+  If the scan finds nothing or connecting fails, the log at the bottom of the demo window shows which step stopped.
 - Stopping/starting recording and erasing memory are in `TRaceBoxClient` but not in the demo,
   because erasing cannot be undone.
 
