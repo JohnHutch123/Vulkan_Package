@@ -1,7 +1,7 @@
 # PasVulkan dependency
 
 This package is built on [PasVulkan](https://github.com/BeRo1985/pasvulkan), checked out next to this repo
-as `D:\Vulkan` (the `.dproj` search paths and `VulkanPkgR290`'s `contains` list point there).
+as a folder named `Vulkan` beside this repo (for example `D:\Vulkan` next to `D:\Vulkan_Package`). The `.dproj` search paths and `VulkanPkgR290`'s `contains` list use relative paths to it (`..\..\Vulkan\...`), so any drive or parent folder works.
 
 ## Version
 

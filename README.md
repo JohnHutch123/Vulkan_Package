@@ -148,7 +148,18 @@ It’s a **component-oriented architecture**:
 ### Build/test expectations
 - CI (`.github/workflows/delphi-tests.yml`) is designed for a **self-hosted Windows runner** with Delphi installed.
 - Tests are CPU-focused and compile/run real runtime units via `dcc32`.
-- Repo expects an external PasVulkan checkout (paths referenced from tests/packages).
+- Repo expects an external PasVulkan checkout in a folder named `Vulkan` beside this repo. Every project and
+  package uses relative paths, so the parent folder and drive do not matter:
+
+  ```
+  <parent>\Vulkan               PasVulkan (patched, see PASVULKAN.md)
+  <parent>\Vulkan_Package       this repo
+  <parent>\Vulkan_Package_PRO   optional, the PRO extras
+  ```
+
+  The same layout works as git submodules inside another repo (`external\Vulkan`, `external\Vulkan_Package` ...).
+  FastMM5 is optional (`{$DEFINE FASTMM5}` in `VulkanPackage.inc`); to use it, set a `FASTMM5` environment
+  variable (Tools > Options > IDE > Environment Variables) to its folder.
 
 ### Simple OBJ loading
 

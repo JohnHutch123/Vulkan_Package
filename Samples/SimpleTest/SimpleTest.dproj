@@ -71,7 +71,7 @@
         <UWP_DelphiLogo44>$(BDS)\bin\Artwork\Windows\UWP\delphi_UwpDefault_44.png</UWP_DelphiLogo44>
         <UWP_DelphiLogo150>$(BDS)\bin\Artwork\Windows\UWP\delphi_UwpDefault_150.png</UWP_DelphiLogo150>
         <SanitizedProjectName>SimpleTest</SanitizedProjectName>
-        <DCC_UnitSearchPath>D:\Vulkan\src;D:\Vulkan\externals\pasmp\src;D:\Vulkan\externals\pasjson\src;D:\Vulkan\externals\pucu\src;D:\Vulkan\externals\pasdblstrutils\src;D:\Vulkan_Package\RunTime_Src;D:\Vulkan_Package\Design_Src;D:\Vulkan_Package\Samples\SimpleTest;D:\Vulkan_Package\Samples\Renderers;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>..\..\..\Vulkan\src;..\..\..\Vulkan\externals\pasmp\src;..\..\..\Vulkan\externals\pasjson\src;..\..\..\Vulkan\externals\pucu\src;..\..\..\Vulkan\externals\pasdblstrutils\src;..\..\RunTime_Src;..\..\Design_Src;.;..\Renderers;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <VerInfo_Locale>3081</VerInfo_Locale>
         <VerInfo_Keys>CompanyName=;FileDescription=$(MSBuildProjectName);FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProgramID=com.embarcadero.$(MSBuildProjectName);ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
         <DCC_Define>PasVulkanUseSDL2WithVulkanSupport;PasVulkanUseSDL2;UNSTABLEMEM;$(DCC_Define)</DCC_Define>
@@ -133,7 +133,7 @@
             <Form>Form8</Form>
             <FormType>dfm</FormType>
         </DCCReference>
-        <DCCReference Include="D:\Vulkan\src\Vulkan.pas"/>
+        <DCCReference Include="..\..\..\Vulkan\src\Vulkan.pas"/>
         <DCCReference Include="..\..\RunTime_Src\Vulkan_Components_Scene_Renderer.pas"/>
         <DCCReference Include="..\..\RunTime_Src\Vulkan_Components_Lookups.pas"/>
         <DCCReference Include="..\..\RunTime_Src\Vulkan_Components_DataStore.pas"/>

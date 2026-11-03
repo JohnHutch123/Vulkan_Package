@@ -11,7 +11,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$PasVulkanRoot = 'D:\Vulkan',
+    [string]$PasVulkanRoot = (Join-Path $PSScriptRoot '..\..\Vulkan'),
     [switch]$Revert
 )
 

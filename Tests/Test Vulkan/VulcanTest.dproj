@@ -55,7 +55,7 @@
         <DCC_K>false</DCC_K>
         <VerInfo_Keys>CompanyName=;FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductVersion=1.0.0.0;Comments=;ProgramID=com.embarcadero.$(MSBuildProjectName);FileDescription=$(MSBuildProjectName);ProductName=$(MSBuildProjectName)</VerInfo_Keys>
         <DCC_DUPLICATE_CTOR_DTOR>false</DCC_DUPLICATE_CTOR_DTOR>
-        <DCC_UnitSearchPath>D:\Vulkan_Package\RunTime_Src;D:\Vulkan_Package\Design_Src;D:\Vulkan_Package\Samples\Renderers;D:\Vulkan\src;D:\Vulkan\externals\pasmp\src;D:\Vulkan\externals\pasjson\src;D:\Vulkan\externals\pucu\src;D:\Vulkan\externals\pasdblstrutils\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>..\..\RunTime_Src;..\..\Design_Src;..\..\Samples\Renderers;..\..\..\Vulkan\src;..\..\..\Vulkan\externals\pasmp\src;..\..\..\Vulkan\externals\pasjson\src;..\..\..\Vulkan\externals\pucu\src;..\..\..\Vulkan\externals\pasdblstrutils\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_DcpOutput>.\$(ProductVersion)\$(Platform)\$(Config)</DCC_DcpOutput>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win32)'!=''">
@@ -80,7 +80,7 @@
         <UWP_DelphiLogo44>$(BDS)\bin\Artwork\Windows\UWP\delphi_UwpDefault_44.png</UWP_DelphiLogo44>
         <DCC_DUPLICATE_CTOR_DTOR>false</DCC_DUPLICATE_CTOR_DTOR>
         <UWP_DelphiLogo150>$(BDS)\bin\Artwork\Windows\UWP\delphi_UwpDefault_150.png</UWP_DelphiLogo150>
-        <DCC_UnitSearchPath>D:\X1\Vulkan_Package\RunTime_Src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <AppDPIAwarenessMode>none</AppDPIAwarenessMode>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_1)'!=''">
@@ -102,7 +102,7 @@
     <PropertyGroup Condition="'$(Cfg_1_Win64)'!=''">
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_Locale>1033</VerInfo_Locale>
-        <DCC_UnitSearchPath>D:\X1\FastMM5;D:\X1\Vulkan;D:\X1\Vulkan\src;D:\X1\Vulkan\externals\pasmp\src;D:\X1\Vulkan\externals\pucu\src;D:\X1\Vulkan\externals\pasjson\src;D:\X1\Vulkan\externals\pasdblstrutils\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>$(FASTMM5);$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <BT_BuildType>Debug</BT_BuildType>
     </PropertyGroup>
     <ItemGroup>
@@ -1113,7 +1113,7 @@
                 <Platform value="Win64">True</Platform>
             </Platforms>
             <UnitTesting>
-                <TestProjectName>D:\X1\Vulkan_Package\Samples\TestVulkan\Test\VulcanGraphicsTests.dproj</TestProjectName>
+                <TestProjectName></TestProjectName>
             </UnitTesting>
             <ModelSupport>True</ModelSupport>
         </BorlandProject>
