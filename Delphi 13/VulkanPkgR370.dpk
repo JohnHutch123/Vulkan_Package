@@ -33,7 +33,7 @@ requires
   rtl;
 
 contains
-  //pasvulkan and its externals, found on the search path (D:\Vulkan\...).
+  //pasvulkan and its externals, found on the search path (the sibling PasVulkan checkout, ..\..\Vulkan\...).
   //Every unit the runtime uses is listed, so none is implicitly imported.
   Vulkan,
   PasVulkan.Types,

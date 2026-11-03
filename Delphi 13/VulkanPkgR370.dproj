@@ -71,7 +71,7 @@
         <DCC_COMPARISON_FALSE>false</DCC_COMPARISON_FALSE>
         <DCC_IMPLICIT_STRING_CAST_LOSS>false</DCC_IMPLICIT_STRING_CAST_LOSS>
         <DCC_IMPLICIT_STRING_CAST>false</DCC_IMPLICIT_STRING_CAST>
-        <DCC_UnitSearchPath>..\RunTime_Src;D:\Vulkan\src;D:\Vulkan\externals\pasmp\src;D:\Vulkan\externals\pasjson\src;D:\Vulkan\externals\pucu\src;D:\Vulkan\externals\pasdblstrutils\src;D:\Vulkan\externals\pasgltf\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>..\RunTime_Src;..\..\Vulkan\src;..\..\Vulkan\externals\pasmp\src;..\..\Vulkan\externals\pasjson\src;..\..\Vulkan\externals\pucu\src;..\..\Vulkan\externals\pasdblstrutils\src;..\..\Vulkan\externals\pasgltf\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win32)'!=''">
         <VerInfo_Keys>CompanyName=;FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductVersion=1.0.0.0;Comments=;ProgramID=com.embarcadero.$(MSBuildProjectName);FileDescription=$(MSBuildProjectName);ProductName=$(MSBuildProjectName)</VerInfo_Keys>
