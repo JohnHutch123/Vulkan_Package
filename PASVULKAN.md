@@ -59,6 +59,10 @@ The runtime units use only six PasVulkan units directly: `Vulkan`, `PasVulkan.Ty
    another unit. Find out why before adding it to `contains`: fix 3 was found this way.
    The one expected exception is `PasVulkan.Android` on Android64, which `PasVulkan.Framework` uses only there.
 3. Restore the project `.res` files the builds rewrite (`git checkout -- "Delphi */*.res"`).
+4. Run `Tools\VulkanEnumCheck` against the new `Vulkan.pas`. It lists Vulkan enum values that the short
+   published types in `Vulkan_Components_Lookups.pas` (`TvgBorderColor`, `TvgFormat`, ...) do not have yet,
+   and `VK_` names the unit uses that are gone. `-update` adds the new values to the types and to their
+   `GetVK`/`GetVG` functions. See [Tools/VulkanEnumCheck/README.md](Tools/VulkanEnumCheck/README.md).
 
 ## Android64
 

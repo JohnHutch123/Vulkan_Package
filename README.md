@@ -130,6 +130,10 @@ File: `RunTime_Src/Vulkan_WindowSDL2.pas`.
   The single-thread render engine `TvgRenderEngine_Single` and its packages.
 - `/home/runner/work/Vulkan_Package/Vulkan_Package/Tests`  
   Console `.dpr` tests (no external test framework), run by `RunTests.bat`.
+- `/home/runner/work/Vulkan_Package/Vulkan_Package/Tools/VulkanEnumCheck`  
+  Console tool run after a PasVulkan update: checks the short published enums in
+  `Vulkan_Components_Lookups.pas` against `Vulkan.pas` and can add new values
+  (see its [README](Tools/VulkanEnumCheck/README.md)).
 - `/home/runner/work/Vulkan_Package/Vulkan_Package/Delphi 12`, `Delphi 13`, `Delphi XE8`  
   Version-specific Delphi package/project files (`.dpk`, `.dproj`, `.groupproj`).
 
