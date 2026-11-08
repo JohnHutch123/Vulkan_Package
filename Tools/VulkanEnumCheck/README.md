@@ -17,8 +17,10 @@ Function GetVGBorderColor(Value: TVkBorderColor) : TvgBorderColor;
 ## Build
 
 Open `VulkanEnumCheck.dpr` in RAD Studio and build it (Delphi creates the
-`.dproj`). It uses only `SysUtils` and `Classes`, so it needs no PasVulkan
-search path. It also builds with Free Pascal (`fpc VulkanEnumCheck.dpr`).
+`.dproj`); tested with Delphi 12. It uses only `SysUtils` and `Classes`, so it
+needs no PasVulkan search path. It also builds with Free Pascal
+(`fpc VulkanEnumCheck.dpr`). Run from the IDE, it waits for Enter before
+closing.
 
 ## Run
 
