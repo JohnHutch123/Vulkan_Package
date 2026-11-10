@@ -300,8 +300,32 @@ object TestVulkan: TTestVulkan
       'Index Triangle')
     TabOrder = 26
   end
+  object SkyRB: TRadioGroup
+    Left = 160
+    Top = 423
+    Width = 129
+    Height = 99
+    Hint = 'The scene''s sky (Vulkan_SkyBox).  Auto follows the clock.'
+    Caption = 'Sky'
+    ItemIndex = 0
+    Items.Strings = (
+      'Off'
+      'Auto (clock)'
+      'Day'
+      'Night')
+    ParentShowHint = False
+    ShowHint = True
+    TabOrder = 27
+    OnClick = SkyRBClick
+  end
   object OpenDialog1: TOpenDialog
     Left = 336
+    Top = 160
+  end
+  object SkyTimer: TTimer
+    Interval = 60000
+    OnTimer = SkyTimerTimer
+    Left = 392
     Top = 160
   end
 end

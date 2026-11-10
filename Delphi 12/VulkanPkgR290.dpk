@@ -77,6 +77,7 @@ contains
   Vulkan_LoaderStorer_STL in '..\RunTime_Src\Vulkan_LoaderStorer_STL.pas',
   Vulkan_Instancing in '..\RunTime_Src\Vulkan_Instancing.pas',
   Vulkan_LOD in '..\RunTime_Src\Vulkan_LOD.pas',
+  Vulkan_SkyBox in '..\RunTime_Src\Vulkan_SkyBox.pas',
   Vulkan_MeshUtils in '..\RunTime_Src\Vulkan_MeshUtils.pas',
   Vulkan_MeshBuilder in '..\RunTime_Src\Vulkan_MeshBuilder.pas',
   Vulkan_SceneLoaders in '..\RunTime_Src\Vulkan_SceneLoaders.pas',

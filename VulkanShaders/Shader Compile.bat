@@ -36,6 +36,9 @@ call :Frag  TestTextureRect        TestTextureRect.frag
 call :VertInst OBJ                 OBJ.vert
 call :Frag  OBJ                    OBJ.frag
 call :Frag  OBJTexture             OBJ.frag                   -DOBJ_TEXTURE
+:: the sky is never picked: one fragment shader
+call :Vert  SkyBox                 SkyBox.vert
+call :Build "SkyBox.frag" "SkyBox_frag.spv"
 
 echo.
 if %FAILED%==0 (echo All shaders compiled.) else (echo %FAILED% shader^(s^) FAILED.)
