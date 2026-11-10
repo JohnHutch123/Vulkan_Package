@@ -1,0 +1,48 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{83718F57-4202-4C2D-BDF4-FC0E031A4FD4}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="VulcanTest.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="..\SkyBoxTest.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="VulcanTest">
+        <MSBuild Projects="VulcanTest.dproj"/>
+    </Target>
+    <Target Name="VulcanTest:Clean">
+        <MSBuild Projects="VulcanTest.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="VulcanTest:Make">
+        <MSBuild Projects="VulcanTest.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="SkyBoxTest">
+        <MSBuild Projects="..\SkyBoxTest.dproj"/>
+    </Target>
+    <Target Name="SkyBoxTest:Clean">
+        <MSBuild Projects="..\SkyBoxTest.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="SkyBoxTest:Make">
+        <MSBuild Projects="..\SkyBoxTest.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="VulcanTest;SkyBoxTest"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="VulcanTest:Clean;SkyBoxTest:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="VulcanTest:Make;SkyBoxTest:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

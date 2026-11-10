@@ -119,6 +119,7 @@
             <DesignClass>TvgVulkanDataModule</DesignClass>
         </DCCReference>
         <DCCReference Include="..\..\RunTime_Src\Vulkan_Loader_OBJ.pas"/>
+        <None Include="ModelSupport_VulcanTest\default.txaPackage"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
@@ -144,6 +145,12 @@
                 <DeployFile LocalName="23.0\Win32\Debug\VulcanTest.exe" Configuration="Debug" Class="ProjectOutput">
                     <Platform Name="Win32">
                         <RemoteName>VulcanTest.exe</RemoteName>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
+                <DeployFile LocalName="ModelSupport_VulcanTest\default.txaPackage" Configuration="Debug" Class="ProjectFile">
+                    <Platform Name="Win32">
+                        <RemoteDir>.\</RemoteDir>
                         <Overwrite>true</Overwrite>
                     </Platform>
                 </DeployFile>
