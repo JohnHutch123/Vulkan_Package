@@ -161,3 +161,16 @@ The public runtime includes a load-only OBJ loader. See [OBJ loader](RunTime_Src
 ### STL loading and saving
 
 STL files (binary or ASCII) load into a scene and a scene saves as STL. The file format unit also works on its own, without Vulkan. See [STL loading and saving](RunTime_Src/STL_LOADER.md).
+
+### Sky (`vgSkyBox`)
+
+`vgSkyBox(Scene).Visible := True` (`Vulkan_SkyBox`) draws a sky behind the scene: a day panorama with
+clouds and a night one with stars and the Milky Way, both generated, blended by the sun's height, with
+twilight, the sun and a moon with the right phase. `Mode` is `skmAuto` (follows the clock), `skmDay` or
+`skmNight`; the sun and moon are placed for `Latitude`/`Longitude` and the system time, or a `DateTime`
+of your own, or by hand with `SetSunPosition`. Call `Refresh` from a timer to keep up with the clock.
+
+The sky is at infinity rather than a box of some size, so it fits a scene of any extent and needs no
+resizing as the scene grows or shrinks. It works in both axis conventions, survives `ClearScene` and
+scene loads, and stays out of zoom-to-all and picking. An orthographic camera looks the same way at
+every pixel, so there it is the one colour of the sky in that direction. It needs a depth buffer. `DayTextureFile`/`NightTextureFile` take equirectangular images of your own.

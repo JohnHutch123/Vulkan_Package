@@ -26,6 +26,7 @@ uses
   Vulkan_Components_Camera,
   Vulkan_SceneLoaders,
   Vulkan_Loader_OBJ,
+  Vulkan_SkyBox,
   VulkanTestDM;
 
 type
@@ -55,6 +56,8 @@ type
     OpenDialog1: TOpenDialog;
     BitBtn3: TBitBtn;
     TestRead: TRadioGroup;
+    SkyRB: TRadioGroup;
+    SkyTimer: TTimer;
 
     procedure Button1Click(Sender: TObject);
     procedure Button2Click(Sender: TObject);
@@ -76,6 +79,8 @@ type
     procedure FormCreate(Sender: TObject);
     procedure BitBtn3Click(Sender: TObject);
     procedure Panel1MouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
+    procedure SkyRBClick(Sender: TObject);
+    procedure SkyTimerTimer(Sender: TObject);
   private
     { Private declarations }
     fInstance : TvgInstance;
@@ -584,6 +589,8 @@ begin
      fToolManager.Renderer := fRenderer;
      fToolManager.ActionMode := TAM_CAMERA_ORBIT;
 
+    SkyRBClick(nil);    // the sky already chosen, for the new scene
+
     MessagesTxt.Lines.add('Build Instance complete');
 end;
 
@@ -875,6 +882,35 @@ end;
 procedure TTestVulkan.Panel1MouseMove(Sender: TObject; Shift: TShiftState; X,  Y: Integer);
 begin
   //
+end;
+
+procedure TTestVulkan.SkyRBClick(Sender: TObject);
+  Var Sky : TvgSkyBox;
+begin
+  If not assigned(fScene) then exit;
+
+  // The sky is the scene's: it survives Load Scene and Clear Scene, and is
+  // behind whatever they leave.  It needs the depth buffer (Depth Buffer ON).
+  Sky := vgSkyBox(fScene);
+  Case SkyRB.ItemIndex of
+    1 : Sky.Mode := skmAuto;
+    2 : Sky.Mode := skmDay;
+    3 : Sky.Mode := skmNight;
+  End;
+  Sky.Visible := SkyRB.ItemIndex > 0;
+
+  If Sky.Visible then
+    MessagesTxt.Lines.Add(Format('Sky: sun azimuth %.1f elevation %.1f, day factor %.2f',
+                                 [Sky.SunAzimuth, Sky.SunElevation, Sky.DayFactor]));
+end;
+
+procedure TTestVulkan.SkyTimerTimer(Sender: TObject);
+  Var Sky : TvgSkyBox;
+begin
+  // Once a minute: the sun has moved a quarter of a degree.
+  Sky := vgSkyBox(fScene, False);
+  If assigned(Sky) and Sky.Visible then
+    Sky.Refresh;
 end;
 
 procedure TTestVulkan.vgWindowLink1RenderPassBuild(Sender: TvgRenderPass);

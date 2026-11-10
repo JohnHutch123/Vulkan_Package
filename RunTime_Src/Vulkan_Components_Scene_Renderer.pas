@@ -457,6 +457,10 @@ type
     procedure ObjectGone(aObject: TvgObject); virtual;
     // Every store has gone (ClearScene, so Load_Begin too).
     procedure SceneCleared; virtual;
+    // The scene is ready again after its stores were freed: a load has
+    // finished (Load_End), or ClearScene was called on its own.  Whatever the
+    // extension keeps in the scene can be put back, with AddDataStoreLive.
+    procedure SceneReady; virtual;
     // Every store of this scene is about to be moved into aTarget
     // (vgAppendSceneFile), before any of them leaves: carry over what goes
     // with them.  The objects then leave this scene (ObjectGone).
@@ -530,6 +534,7 @@ type
     fEditPointSize    : Single;
     fEditShaderPrefix : String;
     fDeferLiveActivation : Boolean;
+    fLoadBeginning       : Boolean;   // inside Load_Begin
 
     fPreviewStore     : TvgObjectStore;
     fPreviewObj       : TvgObject;
@@ -548,6 +553,7 @@ type
     // cannot be made now (scene state) or the scene is being destroyed.
     Function EnsurePreview: Boolean;
 
+    Procedure NotifySceneReady;
     Procedure RegisterObject(aObject: TvgObject);
     Procedure UnregisterObject(aObject: TvgObject);
     Procedure RegisterStoreObjects(aDataStore: TvgObjectStore);
@@ -697,6 +703,11 @@ type
    Function GetObjectStoreCount   : Integer; Override;
 
    Procedure ClearScene; Override;
+
+   // Load_End, and a ClearScene outside a load, end by telling every
+   // extension (TvgSceneExtension.SceneReady).
+   Function  Load_Begin: Boolean; Override;
+   Procedure Load_End; Override;
 
  //virtual abstract from BaseScene
    Procedure ConnectDataToRenderer(aRenderEngine : TvgBaseRenderEngine);Override;
@@ -3182,6 +3193,10 @@ procedure TvgSceneExtension.SceneCleared;
 begin
 end;
 
+procedure TvgSceneExtension.SceneReady;
+begin
+end;
+
 procedure TvgSceneExtension.MoveTo(aTarget: TvgScene);
 begin
 end;
@@ -3397,6 +3412,32 @@ begin
 
 end;
 
+Function TvgScene.Load_Begin: Boolean;
+begin
+  // Its ClearScene is the start of a load: the extensions hear SceneReady
+  // from Load_End instead.
+  fLoadBeginning := True;
+  try
+    Result := inherited;
+  finally
+    fLoadBeginning := False;
+  end;
+end;
+
+procedure TvgScene.Load_End;
+begin
+  inherited;
+  NotifySceneReady;
+end;
+
+Procedure TvgScene.NotifySceneReady;
+  Var I : Integer;
+begin
+  If not assigned(fExtensions) then exit;
+  For I := 0 to fExtensions.Count - 1 do
+    fExtensions[I].SceneReady;
+end;
+
 // CORRECTED ClearScene implementation
 
 procedure TvgScene.ClearScene;
@@ -3466,6 +3507,10 @@ begin
            R.TriggerWindowRepaint;
       End;
     end;
+
+  // Cleared on its own, not as the start of a load: ready again already.
+  If not fLoadBeginning then
+    NotifySceneReady;
 
 end;
 

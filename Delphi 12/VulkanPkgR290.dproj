@@ -244,6 +244,7 @@
         <DCCReference Include="..\RunTime_Src\Vulkan_LoaderStorer_STL.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_Instancing.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_LOD.pas"/>
+        <DCCReference Include="..\RunTime_Src\Vulkan_SkyBox.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_MeshUtils.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_MeshBuilder.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_SceneLoaders.pas"/>

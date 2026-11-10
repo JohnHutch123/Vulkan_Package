@@ -494,6 +494,7 @@ begin
   for Store in aScene.SceneData do
   begin
     if Store = aScene.PreviewStore then Continue;
+    if not Store.InDataBounds then Continue;     // helpers, not data
     if not (Store.Topology in aTopologies) then Continue;
     for I := 0 to Store.GetObjectCount - 1 do
     begin
