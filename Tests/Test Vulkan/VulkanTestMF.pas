@@ -31,34 +31,39 @@ uses
 
 type
   TTestVulkan = class(TForm)
+    StatusBar1: TStatusBar;
+    OpenDialog1: TOpenDialog;
+    SkyTimer: TTimer;
+    Button1: TButton;
     Button2: TButton;
     Button3: TButton;
-    StatusBar1: TStatusBar;
+    Button4: TButton;
+    Button5: TButton;
+    BitBtn1: TBitBtn;
     BitBtn2: TBitBtn;
     WType: TRadioGroup;
     ValidationCB: TCheckBox;
     Button6: TButton;
     Button7: TButton;
-    Button8: TButton;
     LoadFileBtn: TButton;
+    Button8: TButton;
     DeviceSel: TRadioGroup;
     TestRB: TRadioGroup;
     DBCB: TCheckBox;
     MSAACB: TCheckBox;
     SelectionCB: TCheckBox;
     ThreadC: TEdit;
-    MessagesTxt: TMemo;
     SceneResetCB: TCheckBox;
     RenderTargetRB: TRadioGroup;
     RenderPathRB: TRadioGroup;
     RotateCB: TCheckBox;
     Button10: TButton;
-    OpenDialog1: TOpenDialog;
     BitBtn3: TBitBtn;
     TestRead: TRadioGroup;
     SkyRB: TRadioGroup;
     SkyUpRB: TRadioGroup;
-    SkyTimer: TTimer;
+    MessagesTxt: TMemo;
+    Panel1: TPanel;
 
     procedure Button1Click(Sender: TObject);
     procedure Button2Click(Sender: TObject);
@@ -525,6 +530,7 @@ begin
           fVCLWin        := TvgWindowVCL.Create(self) ;
 
           fVCLWin.Parent := Self;
+          fVCLWin.Align :=alClient;
           fVCLWin.Top    := 40;
           fVCLWin.Left   := 500;
           fVCLWin.Width  := 600;
