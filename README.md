@@ -176,4 +176,5 @@ scene loads, and stays out of zoom-to-all and picking. An orthographic camera lo
 every pixel, so there it is the one colour of the sky in that direction. It needs a depth buffer. `DayTextureFile`/`NightTextureFile` take equirectangular images of your own.
 
 The sky's up is the package's axis convention; `UpAxis` (`skuWorld`, `skuYUp`, `skuZUp`) sets it by hand
-for a model whose own up axis is the other one.
+for a model whose own up axis is the other one. Follow it with `AlignCamera`, which turns the camera to
+the sky's up; on its own a turned sky is seen side-on.

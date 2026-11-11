@@ -815,6 +815,10 @@ begin
       Scene.Cameras.AddCamera('Main',Camera) ;
     End;
 
+    // A new camera has the package's up: the sky's, if that was chosen.
+    If assigned(Camera) and assigned(vgSkyBox(Scene, False)) then
+      vgSkyBox(Scene, False).AlignCamera(Camera);
+
     If assigned(Camera) and Scene.GetDataBounds(BMin, BMax) then
     Begin
       Aspect := 1;
@@ -899,13 +903,15 @@ begin
     3 : Sky.Mode := skmNight;
   End;
   // For a model whose up axis is not the package's: Z up turns the sky's
-  // ground to the XY plane.
+  // ground to the XY plane.  The camera is turned with it, or the turned sky
+  // would be seen side-on.
   Case SkyUpRB.ItemIndex of
     1 : Sky.UpAxis := skuYUp;
     2 : Sky.UpAxis := skuZUp;
   else
     Sky.UpAxis := skuWorld;
   End;
+  Sky.AlignCamera;
   Sky.Visible := SkyRB.ItemIndex > 0;
 
   If Sky.Visible then

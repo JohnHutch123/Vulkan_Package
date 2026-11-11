@@ -23,6 +23,7 @@ uses
   Vulkan_Components_DataStore,
   Vulkan_Components_Scene_Renderer,
   Vulkan_WorldAxes,
+  Vulkan_Components_Camera,
   Vulkan_SkyBox;
 
 var
@@ -244,6 +245,10 @@ var
   Obj       : TvgObject;
   MinP, MaxP: TpvVector3D;
   First     : TvgSkyStore;
+  Cam       : TvgCamera;
+  Dist      : Double;
+  Height    : Double;
+  Axis      : TvgSkyUpAxis;
 begin
   Writeln('--- scene ---');
   Scene := TvgScene.Create(nil);
@@ -291,6 +296,30 @@ begin
     Sky.SetSunPosition(0, 90);
     Check('Y up: overhead is +Y', Abs(Sky.SunDirection.y - 1) < 1e-9, True);
     Check('up axis: still three vertices', Sky.Store.GetObjectItem(0).VertexCount = 3, True);
+    // A camera turned to the sky's up: level again, as far and as high.
+    Cam := TvgCamera.Create;
+    Scene.Cameras.AddCamera('Main', Cam);
+    Cam.Target   := TpvVector3D.Create(10, 20, 30);
+    Cam.UpVector := vgWorldUp;
+    Cam.Position := TpvVector3D.Create(10 + 3, 20 - 4, 30 + 2);
+    Dist   := (Cam.Position - Cam.Target).Length;
+    Height := (Cam.Position - Cam.Target).Dot(Cam.UpVector);
+    Sky.UpAxis := skuWorld;
+    Check('align: nothing to do for the world''s up', Sky.AlignCamera, False);
+    for Axis in [skuYUp, skuZUp, skuYUp] do
+    begin
+      Sky.UpAxis := Axis;
+      Sky.AlignCamera;                                   // the scene's active camera
+      Check('align: camera up is the sky''s', (Cam.UpVector - Sky.UpVector).Length < 1e-9, True);
+      CheckNum('align: as far from the target', (Cam.Position - Cam.Target).Length, Dist, 1e-9);
+      CheckNum('align: as high above it', (Cam.Position - Cam.Target).Dot(Sky.UpVector), Height, 1e-9);
+      Check('align: again changes nothing', Sky.AlignCamera(Cam), False);
+    end;
+    // Upside down is half a turn.
+    Cam.UpVector := TpvVector3D.Create(-Sky.UpVector.x, -Sky.UpVector.y, -Sky.UpVector.z);
+    Check('align: from upside down', Sky.AlignCamera(Cam) and ((Cam.UpVector - Sky.UpVector).Length < 1e-9), True);
+    CheckNum('align: upside down keeps the distance', (Cam.Position - Cam.Target).Length, Dist, 1e-9);
+
     Sky.UpAxis := skuWorld;
     Sky.SunTracksTime := True;
 
