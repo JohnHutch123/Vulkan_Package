@@ -174,3 +174,6 @@ The sky is at infinity rather than a box of some size, so it fits a scene of any
 resizing as the scene grows or shrinks. It works in both axis conventions, survives `ClearScene` and
 scene loads, and stays out of zoom-to-all and picking. An orthographic camera looks the same way at
 every pixel, so there it is the one colour of the sky in that direction. It needs a depth buffer. `DayTextureFile`/`NightTextureFile` take equirectangular images of your own.
+
+The sky's up is the package's axis convention; `UpAxis` (`skuWorld`, `skuYUp`, `skuZUp`) sets it by hand
+for a model whose own up axis is the other one.
