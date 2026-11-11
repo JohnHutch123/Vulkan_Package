@@ -24,6 +24,17 @@ unit Vulkan_SkyBox;
                             mid-morning position while the real one is down
     skmNight  always night: the moon likewise
 
+  UpAxis - which way is up in the sky
+    skuWorld  the package's axis convention (Vulkan_WorldAxes); the default
+    skuYUp    +Y up: XZ is the ground, north along -Z
+    skuZUp    +Z up: XY is the ground, north along +Y
+  East is +X in all three.  The convention is one setting for the whole
+  program (VG_WORLD_Z_UP in VulkanPackage.inc, or vgSetAxisConvention) and
+  decides which way up a new camera is.  A model drawn with other axes - a
+  Y-up OBJ in a Z-up program, or the reverse - has its ground plane
+  somewhere else, and UpAxis turns the sky to match the model.  It turns the
+  sky only: the camera still orbits about the convention's up.
+
   The sun and moon come from the clock (UseSystemTime, the default) or from
   DateTime / UTCOffset, at Latitude / Longitude.  Longitude defaults to the
   middle of the machine's time zone, Latitude to 40 north: set them for a
@@ -82,6 +93,9 @@ const
 type
   TvgSkyMode = (skmAuto, skmDay, skmNight);
 
+  // Which world axis is up in the sky - see the note at the top.
+  TvgSkyUpAxis = (skuWorld, skuYUp, skuZUp);
+
   TvgSkyBox = class;
 
   { The sky's store.  Made and owned by TvgSkyBox - through its scene, like
@@ -104,6 +118,7 @@ type
 
     fVisible          : Boolean;
     fMode             : TvgSkyMode;
+    fUpAxis           : TvgSkyUpAxis;
     fUseSystemTime    : Boolean;
     fDateTime         : TDateTime;
     fUTCOffset        : Double;
@@ -133,6 +148,7 @@ type
 
     procedure SetVisible(const Value: Boolean);
     procedure SetMode(const Value: TvgSkyMode);
+    procedure SetUpAxis(const Value: TvgSkyUpAxis);
     procedure SetUseSystemTime(const Value: Boolean);
     procedure SetDateTime(const Value: TDateTime);
     procedure SetUTCOffset(const Value: Double);
@@ -181,13 +197,21 @@ type
     { The moment the sky shows, in UTC. }
     function  CurrentUTC: TDateTime;
 
-    { The directions drawn, in the world's axes (Vulkan_WorldAxes). }
+    { The directions drawn, as world vectors - in the axes UpAxis gives. }
     function  SunDirection: TpvVector3D;
     function  MoonDirection: TpvVector3D;
+
+    { True when the sky's up is +Z: UpAxis, or the package's convention for
+      skuWorld. }
+    function  IsZUp: Boolean;
 
     { On switches the sky on; it appears as soon as the scene is ready. }
     property Visible : Boolean read fVisible write SetVisible;
     property Mode    : TvgSkyMode read fMode write SetMode;
+
+    { Which world axis is up in the sky.  skuWorld, the package's axis
+      convention, unless a model with other axes needs the sky to match it. }
+    property UpAxis  : TvgSkyUpAxis read fUpAxis write SetUpAxis;
 
     { True (the default): the machine's clock.  False: DateTime, a local time
       UTCOffset hours ahead of UTC. }
@@ -252,8 +276,10 @@ function vgSkyDirection(aAzimuth, aElevation: Double): TpvVector3D;
 procedure vgSkyAngles(const aDirection: TpvVector3D; out aAzimuth, aElevation: Double);
 
 { An (east, up, north) direction in the world's axes: north is
-  vgWorldForward, east vgWorldRight, up vgWorldUp. }
-function vgSkyToWorld(const aDirection: TpvVector3D): TpvVector3D;
+  vgWorldForward, east vgWorldRight, up vgWorldUp.  The second form names
+  the axes itself: +Z up with north along +Y, or +Y up with north along -Z. }
+function vgSkyToWorld(const aDirection: TpvVector3D): TpvVector3D; overload;
+function vgSkyToWorld(const aDirection: TpvVector3D; aZUp: Boolean): TpvVector3D; overload;
 
 { The generated panoramas, written to aStream as a 24-bit BMP file, aWidth by
   aWidth / 2: equirectangular, north in the middle, the zenith along the top
@@ -422,16 +448,18 @@ begin
 end;
 
 function vgSkyToWorld(const aDirection: TpvVector3D): TpvVector3D;
-var
-  E, U, N : TpvVector3D;
 begin
-  E := vgWorldRight;
-  U := vgWorldUp;
-  N := vgWorldForward;
-  Result := TpvVector3D.Create(
-    E.x * aDirection.x + U.x * aDirection.y + N.x * aDirection.z,
-    E.y * aDirection.x + U.y * aDirection.y + N.y * aDirection.z,
-    E.z * aDirection.x + U.z * aDirection.y + N.z * aDirection.z);
+  Result := vgSkyToWorld(aDirection, vgAxisConvention = acZUp);
+end;
+
+// The same two mappings SkyBox.frag undoes, and the ones Vulkan_WorldAxes
+// gives for each convention.
+function vgSkyToWorld(const aDirection: TpvVector3D; aZUp: Boolean): TpvVector3D;
+begin
+  if aZUp then
+    Result := TpvVector3D.Create(aDirection.x, aDirection.z, aDirection.y)
+  else
+    Result := TpvVector3D.Create(aDirection.x, aDirection.y, -aDirection.z);
 end;
 
 { --- noise ------------------------------------------------------------------- }
@@ -1123,7 +1151,7 @@ var
 begin
   if not (Assigned(fStore) and Assigned(fObj)) then Exit;
 
-  if vgAxisConvention = acZUp then ZUp := 1 else ZUp := 0;
+  if IsZUp then ZUp := 1 else ZUp := 0;
 
   if fObj.VertexCount > 0 then
     fObj.Reset;
@@ -1306,12 +1334,22 @@ end;
 
 function TvgSkyBox.SunDirection: TpvVector3D;
 begin
-  Result := vgSkyToWorld(fSunDir);
+  Result := vgSkyToWorld(fSunDir, IsZUp);
 end;
 
 function TvgSkyBox.MoonDirection: TpvVector3D;
 begin
-  Result := vgSkyToWorld(fMoonDir);
+  Result := vgSkyToWorld(fMoonDir, IsZUp);
+end;
+
+function TvgSkyBox.IsZUp: Boolean;
+begin
+  case fUpAxis of
+    skuYUp : Result := False;
+    skuZUp : Result := True;
+  else
+    Result := vgAxisConvention = acZUp;
+  end;
 end;
 
 function TvgSkyBox.GetSunAzimuth: Double;
@@ -1350,6 +1388,13 @@ begin
     EnsureStore
   else
     RemoveStore;
+end;
+
+procedure TvgSkyBox.SetUpAxis(const Value: TvgSkyUpAxis);
+begin
+  if fUpAxis = Value then Exit;
+  fUpAxis := Value;
+  Refresh;
 end;
 
 procedure TvgSkyBox.SetMode(const Value: TvgSkyMode);

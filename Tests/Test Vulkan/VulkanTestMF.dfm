@@ -318,6 +318,23 @@ object TestVulkan: TTestVulkan
     TabOrder = 27
     OnClick = SkyRBClick
   end
+  object SkyUpRB: TRadioGroup
+    Left = 160
+    Top = 528
+    Width = 129
+    Height = 81
+    Hint = 'Which axis is up in the sky.  World is the package''s axis convention.'
+    Caption = 'Sky Up'
+    ItemIndex = 0
+    Items.Strings = (
+      'World'
+      'Y up'
+      'Z up')
+    ParentShowHint = False
+    ShowHint = True
+    TabOrder = 28
+    OnClick = SkyRBClick
+  end
   object OpenDialog1: TOpenDialog
     Left = 336
     Top = 160

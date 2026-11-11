@@ -57,6 +57,7 @@ type
     BitBtn3: TBitBtn;
     TestRead: TRadioGroup;
     SkyRB: TRadioGroup;
+    SkyUpRB: TRadioGroup;
     SkyTimer: TTimer;
 
     procedure Button1Click(Sender: TObject);
@@ -896,6 +897,14 @@ begin
     1 : Sky.Mode := skmAuto;
     2 : Sky.Mode := skmDay;
     3 : Sky.Mode := skmNight;
+  End;
+  // For a model whose up axis is not the package's: Z up turns the sky's
+  // ground to the XY plane.
+  Case SkyUpRB.ItemIndex of
+    1 : Sky.UpAxis := skuYUp;
+    2 : Sky.UpAxis := skuZUp;
+  else
+    Sky.UpAxis := skuWorld;
   End;
   Sky.Visible := SkyRB.ItemIndex > 0;
 

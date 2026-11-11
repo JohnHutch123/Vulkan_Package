@@ -273,6 +273,27 @@ begin
     Check('day: day factor 1', Sky.DayFactor = 1, True);
     Check('day: the sun is up', Sky.SunElevation >= 8, True);
 
+    // Up by choice, whatever the package's convention is.
+    Sky.Mode := skmAuto;
+    Sky.SetSunPosition(0, 90);                       // overhead
+    Check('up axis: the world''s by default', Sky.UpAxis = skuWorld, True);
+    Check('up axis: world follows the convention', Sky.IsZUp = (vgAxisConvention = acZUp), True);
+    Sky.UpAxis := skuZUp;
+    Check('Z up: overhead is +Z', Sky.IsZUp and (Abs(Sky.SunDirection.z - 1) < 1e-9), True);
+    Sky.SetSunPosition(0, 0);                        // on the northern horizon
+    Check('Z up: north is +Y', Abs(Sky.SunDirection.y - 1) < 1e-9, True);
+    Sky.SetSunPosition(90, 0);
+    Check('Z up: east is +X', Abs(Sky.SunDirection.x - 1) < 1e-9, True);
+    Sky.UpAxis := skuYUp;
+    Check('Y up: east is +X', Abs(Sky.SunDirection.x - 1) < 1e-9, True);
+    Sky.SetSunPosition(0, 0);
+    Check('Y up: north is -Z', (not Sky.IsZUp) and (Abs(Sky.SunDirection.z + 1) < 1e-9), True);
+    Sky.SetSunPosition(0, 90);
+    Check('Y up: overhead is +Y', Abs(Sky.SunDirection.y - 1) < 1e-9, True);
+    Check('up axis: still three vertices', Sky.Store.GetObjectItem(0).VertexCount = 3, True);
+    Sky.UpAxis := skuWorld;
+    Sky.SunTracksTime := True;
+
     // By hand.
     Sky.Mode := skmAuto;
     Sky.SetSunPosition(270, 30);
