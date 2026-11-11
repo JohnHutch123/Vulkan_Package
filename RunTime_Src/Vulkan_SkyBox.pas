@@ -33,7 +33,10 @@ unit Vulkan_SkyBox;
   decides which way up a new camera is.  A model drawn with other axes - a
   Y-up OBJ in a Z-up program, or the reverse - has its ground plane
   somewhere else, and UpAxis turns the sky to match the model.  It turns the
-  sky only: the camera still orbits about the convention's up.
+  sky only.  A camera keeps the up it was made with, so on its own a turned
+  sky is seen side-on or from underneath: follow a change of UpAxis with
+  AlignCamera, which turns the camera the same way about its target - its
+  up becomes the sky's, and it orbits about that from then on.
 
   The sun and moon come from the clock (UseSystemTime, the default) or from
   DateTime / UTCOffset, at Latitude / Longitude.  Longitude defaults to the
@@ -82,6 +85,7 @@ uses
   Vulkan_Components_Descriptors,
   Vulkan_Components_DataStore,
   Vulkan_Components_Scene_Renderer,
+  Vulkan_Components_Camera,
   Vulkan_WorldAxes;
 
 const
@@ -204,6 +208,16 @@ type
     { True when the sky's up is +Z: UpAxis, or the package's convention for
       skuWorld. }
     function  IsZUp: Boolean;
+
+    { The sky's up as a world vector: +Z or +Y. }
+    function  UpVector: TpvVector3D;
+
+    { Turns aCamera - the scene's active camera for nil - about its target
+      so that its up is the sky's: the horizon is level again, the eye is as
+      far from the target and as high above it as it was, and Orbit goes
+      round the sky's up.  For after a change of UpAxis.  False, changing
+      nothing, when there is no camera or its up is the sky's already. }
+    function  AlignCamera(aCamera: TvgCamera = nil): Boolean;
 
     { On switches the sky on; it appears as soon as the scene is ready. }
     property Visible : Boolean read fVisible write SetVisible;
@@ -1388,6 +1402,68 @@ begin
     EnsureStore
   else
     RemoveStore;
+end;
+
+function TvgSkyBox.UpVector: TpvVector3D;
+begin
+  Result := vgSkyToWorld(TpvVector3D.Create(0, 1, 0), IsZUp);
+end;
+
+function TvgSkyBox.AlignCamera(aCamera: TvgCamera): Boolean;
+var
+  OldUp, NewUp, Axis, V, KxV : TpvVector3D;
+  C, S, L, KdV               : Double;
+begin
+  Result := False;
+  if not Assigned(aCamera) and Assigned(Scene) and Assigned(Scene.Cameras) then
+    aCamera := Scene.Cameras.GetActiveCamera;
+  if not Assigned(aCamera) then Exit;
+
+  OldUp := Normalized(aCamera.UpVector);
+  NewUp := UpVector;
+  C := OldUp.x * NewUp.x + OldUp.y * NewUp.y + OldUp.z * NewUp.z;
+  if C > 1 - 1e-9 then Exit;
+
+  // The rotation that takes the old up to the new one, about the axis at
+  // right angles to both.
+  Axis := TpvVector3D.Create(OldUp.y * NewUp.z - OldUp.z * NewUp.y,
+                             OldUp.z * NewUp.x - OldUp.x * NewUp.z,
+                             OldUp.x * NewUp.y - OldUp.y * NewUp.x);
+  S := Sqrt(Axis.x * Axis.x + Axis.y * Axis.y + Axis.z * Axis.z);
+  if S < 1e-9 then
+  begin
+    // Upside down: half a turn about any axis across the old up.
+    if Abs(OldUp.x) < 0.9 then
+      Axis := TpvVector3D.Create(0, OldUp.z, -OldUp.y)        // (1,0,0) x OldUp
+    else
+      Axis := TpvVector3D.Create(-OldUp.z, 0, OldUp.x);       // (0,1,0) x OldUp
+    S := 0;
+    C := -1;
+  end;
+  Axis := Normalized(Axis);
+
+  // The eye, turned about the target (Rodrigues).
+  V   := TpvVector3D.Create(aCamera.Position.x - aCamera.Target.x,
+                            aCamera.Position.y - aCamera.Target.y,
+                            aCamera.Position.z - aCamera.Target.z);
+  KxV := TpvVector3D.Create(Axis.y * V.z - Axis.z * V.y,
+                            Axis.z * V.x - Axis.x * V.z,
+                            Axis.x * V.y - Axis.y * V.x);
+  KdV := Axis.x * V.x + Axis.y * V.y + Axis.z * V.z;
+  L   := KdV * (1 - C);
+  V   := TpvVector3D.Create(V.x * C + KxV.x * S + Axis.x * L,
+                            V.y * C + KxV.y * S + Axis.y * L,
+                            V.z * C + KxV.z * S + Axis.z * L);
+
+  aCamera.Position := TpvVector3D.Create(aCamera.Target.x + V.x,
+                                         aCamera.Target.y + V.y,
+                                         aCamera.Target.z + V.z);
+  aCamera.UpVector := NewUp;
+  Result := True;
+
+  // The view has changed: drawn again.
+  if Assigned(fStore) and Assigned(Scene) then
+    Scene.NotifyDataChanged(fStore);
 end;
 
 procedure TvgSkyBox.SetUpAxis(const Value: TvgSkyUpAxis);
