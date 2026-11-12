@@ -40,6 +40,11 @@ if not exist "%DCC%" (
 )
 
 rem -- Locate PasVulkan -------------------------------------------------------
+rem Where SetupDependencies.bat put it (Dependencies.local.props), else PASVULKAN_DIR.
+if not defined PASVULKAN if exist "%REPO%\Dependencies.local.props" (
+  for /f "tokens=3 delims=<>" %%V in ('findstr /c:"<PASVULKAN_DIR>" "%REPO%\Dependencies.local.props"') do set "PASVULKAN=%%V"
+)
+if not defined PASVULKAN if defined PASVULKAN_DIR set "PASVULKAN=%PASVULKAN_DIR%"
 if not defined PASVULKAN (
   for %%P in ("%REPO%\..\Vulkan" "D:\Vulkan" "C:\Vulkan") do (
     if not defined PASVULKAN (

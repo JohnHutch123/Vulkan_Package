@@ -1,4 +1,5 @@
 ﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <Import Project="..\Dependencies.props"/>
     <PropertyGroup>
         <ProjectGuid>{E953109D-9970-4291-814D-393975A5339F}</ProjectGuid>
         <MainSource>SkyBoxTest.dpr</MainSource>
@@ -75,7 +76,7 @@
         <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;$(DCC_Namespace)</DCC_Namespace>
         <Icon_MainIcon>$(BDS)\bin\delphi_PROJECTICON.ico</Icon_MainIcon>
         <Icns_MainIcns>$(BDS)\bin\delphi_PROJECTICNS.icns</Icns_MainIcns>
-        <DCC_UnitSearchPath>D:\Vulkan\src;D:\Vulkan_Package\RunTime_Src;D:\PasMP\src;D:\Vulkan\externals\pucu\src;D:\Vulkan\externals\pasjson\src;D:\Vulkan\externals\pasdblstrutils\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>$(PASVULKAN_DIR)\src;D:\Vulkan_Package\RunTime_Src;$(PASVULKAN_DIR)\externals\pasmp\src;$(PASVULKAN_DIR)\externals\pucu\src;$(PASVULKAN_DIR)\externals\pasjson\src;$(PASVULKAN_DIR)\externals\pasdblstrutils\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Android)'!=''">
         <VerInfo_Keys>package=com.embarcadero.$(MSBuildProjectName);label=$(MSBuildProjectName);versionCode=1;versionName=1.0.0;persistent=False;restoreAnyVersion=False;installLocation=auto;largeHeap=False;theme=TitleBar;hardwareAccelerated=true;apiKey=;minSdkVersion=23;targetSdkVersion=35</VerInfo_Keys>

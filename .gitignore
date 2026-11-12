@@ -113,3 +113,6 @@ LibrarySupport/
 
 # IDE debug event logs
 Debug Demp.txt
+
+# Written by Tools\Deps\Deps.ps1 for this machine
+Dependencies.local.props

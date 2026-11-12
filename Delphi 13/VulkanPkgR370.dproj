@@ -1,4 +1,5 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <Import Project="..\Dependencies.props"/>
     <PropertyGroup>
         <ProjectGuid>{413EE3C7-D5AD-406F-A0F1-572F3176852E}</ProjectGuid>
         <MainSource>VulkanPkgR370.dpk</MainSource>
@@ -71,7 +72,7 @@
         <DCC_COMPARISON_FALSE>false</DCC_COMPARISON_FALSE>
         <DCC_IMPLICIT_STRING_CAST_LOSS>false</DCC_IMPLICIT_STRING_CAST_LOSS>
         <DCC_IMPLICIT_STRING_CAST>false</DCC_IMPLICIT_STRING_CAST>
-        <DCC_UnitSearchPath>..\RunTime_Src;D:\Vulkan\src;D:\Vulkan\externals\pasmp\src;D:\Vulkan\externals\pasjson\src;D:\Vulkan\externals\pucu\src;D:\Vulkan\externals\pasdblstrutils\src;D:\Vulkan\externals\pasgltf\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>..\RunTime_Src;$(PASVULKAN_DIR)\src;$(PASVULKAN_DIR)\externals\pasmp\src;$(PASVULKAN_DIR)\externals\pasjson\src;$(PASVULKAN_DIR)\externals\pucu\src;$(PASVULKAN_DIR)\externals\pasdblstrutils\src;$(PASVULKAN_DIR)\externals\pasgltf\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win32)'!=''">
         <VerInfo_Keys>CompanyName=;FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductVersion=1.0.0.0;Comments=;ProgramID=com.embarcadero.$(MSBuildProjectName);FileDescription=$(MSBuildProjectName);ProductName=$(MSBuildProjectName)</VerInfo_Keys>

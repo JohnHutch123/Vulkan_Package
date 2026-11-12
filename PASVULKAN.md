@@ -1,7 +1,13 @@
 # PasVulkan dependency
 
 This package is built on [PasVulkan](https://github.com/BeRo1985/pasvulkan), checked out next to this repo
-as `D:\Vulkan` (the `.dproj` search paths and `VulkanPkgR290`'s `contains` list point there).
+as `D:\Vulkan` by default. The `.dproj` search paths use `$(PASVULKAN_DIR)` from `Dependencies.props`.
+
+**To get it, run `SetupDependencies.bat`.** It clones PasVulkan at the pinned commit with the five
+externals the packages compile, and applies the patches. It also checks for the Vulkan SDK and
+installs it if needed. The pin lives in `dependencies.json`; see
+[Tools/Deps/README.md](Tools/Deps/README.md). The history below explains how the pin and the
+patches came about.
 
 ## Version
 
