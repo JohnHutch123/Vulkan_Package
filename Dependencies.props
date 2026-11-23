@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Where this repository's dependencies are. Every .dproj imports this file and uses the
+  properties below in its search paths, e.g. $(PASVULKAN_DIR)\src.
+
+  Tools\Deps\Deps.ps1 (SetupDependencies.bat) writes Dependencies.local.props next to this
+  file with the locations on this machine. Without it, an environment variable of the same
+  name is used, and failing that the default below (PasVulkan next to this repository).
+-->
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildThisFileDirectory)Dependencies.local.props" Condition="Exists('$(MSBuildThisFileDirectory)Dependencies.local.props')"/>
+  <PropertyGroup>
+    <PASVULKAN_DIR Condition="'$(PASVULKAN_DIR)'==''">$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\Vulkan'))</PASVULKAN_DIR>
+  </PropertyGroup>
+</Project>

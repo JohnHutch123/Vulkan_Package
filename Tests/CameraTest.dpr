@@ -314,8 +314,82 @@ begin
   Writeln;
 end;
 
+// ---------------------------------------------------------------------------
+// First person: Look turns the view about the eye, Translate moves both.
+procedure TestLookAndTranslate;
+var
+  Cam     : TvgCamera;
+  P0, T0  : TpvVector3D;
+  Elev    : Double;
+  I       : Integer;
+  Base    : TpvVector3D;
+begin
+  Writeln('--- look / translate ---');
+
+  Cam := TvgCamera.Create;
+  try
+    // Z up, looking along +X from (0,0,2), target 10 ahead.
+    Cam.InitializeFromParameters(V(0, 0, 2), V(10, 0, 2), V(0, 0, 1));
+    P0 := Cam.Position;
+
+    Cam.Look(90, 0);
+    CheckVec('Look(90,0): eye stays put', Cam.Position, P0, 1e-12);
+    CheckVec('...turns left: +X becomes +Y', Cam.ForwardVector, V(0, 1, 0), 1e-12);
+    CheckNum('...target distance kept', Cam.Distance, 10, 1e-9);
+
+    Cam.Look(-90, 0);
+    CheckVec('Look(-90,0) undoes it', Cam.ForwardVector, V(1, 0, 0), 1e-12);
+
+    Cam.Look(0, 30);
+    CheckVec('Look(0,30): eye stays put', Cam.Position, P0, 1e-12);
+    CheckNum('...view raised 30 degrees',
+      RadToDeg(ArcSin(Cam.ForwardVector.z)), 30, 1e-9);
+    CheckVec('...screen up still leans to world up (no roll)',
+      V(0, Cam.ViewUpVector.y, 0), V(0, 0, 0), 1e-12);
+
+    // Pitch stops short of the pole whatever is asked.
+    for I := 1 to 10 do Cam.Look(0, 45);
+    Elev := RadToDeg(ArcSin(Cam.ForwardVector.z));
+    CheckNum('pitch clamps at 89 degrees', Elev, 89, 1e-9);
+    Check('...view direction still finite', not IsNan(Cam.ForwardVector.x), True);
+    for I := 1 to 10 do Cam.Look(0, -45);
+    CheckNum('...and at -89 going down', RadToDeg(ArcSin(Cam.ForwardVector.z)), -89, 1e-9);
+
+    // Yaw while pitched keeps the pitch.
+    Cam.Look(0, 89 - 20);       // back to -20
+    Cam.Look(37, 0);
+    CheckNum('yaw keeps the pitch', RadToDeg(ArcSin(Cam.ForwardVector.z)), -20, 1e-9);
+
+    // Translate moves both points, nothing else.
+    T0 := Cam.Target;
+    P0 := Cam.Position;
+    Cam.Translate(V(1, -2, 3));
+    CheckVec('Translate moves the eye', Cam.Position, P0 + V(1, -2, 3), 1e-12);
+    CheckVec('...and the target', Cam.Target, T0 + V(1, -2, 3), 1e-12);
+
+    // Survey-sized coordinates: double precision all the way.
+    Base := V(512345.678, 6123456.789, 102.5);
+    Cam.InitializeFromParameters(Base, Base + V(10, 0, 0), V(0, 0, 1));
+    Cam.Look(45, 10);
+    Cam.Look(-45, -10);
+    CheckVec('survey coords: look round and back, eye exact', Cam.Position, Base, 0);
+    CheckVec('...target back within 1e-6', Cam.Target, Base + V(10, 0, 0), 1e-6);
+    Cam.Translate(V(0.001, 0, 0));
+    CheckNum('...a 1 mm step survives', Cam.Position.x - Base.x, 0.001, 1e-7);
+
+    // Y-up convention works the same way.
+    Cam.InitializeFromParameters(V(0, 0, 0), V(0, 0, -5), V(0, 1, 0));
+    Cam.Look(90, 0);
+    CheckVec('Y up: Look(90,0) turns -Z to -X', Cam.ForwardVector, V(-1, 0, 0), 1e-12);
+  finally
+    Cam.Free;
+  end;
+  Writeln;
+end;
+
 begin
   try
+    TestLookAndTranslate;
     TestCachedViewProjection;
     TestScreenRays;
     TestOrientation;

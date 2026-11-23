@@ -62,6 +62,7 @@ type
     TestRead: TRadioGroup;
     SkyRB: TRadioGroup;
     SkyUpRB: TRadioGroup;
+    NavRB: TRadioGroup;
     MessagesTxt: TMemo;
     Panel1: TPanel;
 
@@ -87,6 +88,7 @@ type
     procedure Panel1MouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
     procedure SkyRBClick(Sender: TObject);
     procedure SkyTimerTimer(Sender: TObject);
+    procedure NavRBClick(Sender: TObject);
   private
     { Private declarations }
     fInstance : TvgInstance;
@@ -103,6 +105,9 @@ type
     fMSAASample : TvgSampleCountFlagBits;
 
     fEditShadersReady : Boolean;
+
+    // Fly mode: the eye's position and the speed, in the status bar.
+    procedure FlyMoved(Sender: TObject);
 
     // Pushes the Delaunay group's controls into fDelaunay: layer visibility
     // (a layer ticked for the first time is built), Z or W, and the interval.
@@ -595,8 +600,10 @@ begin
      fToolManager.Scene := fScene;
      fToolManager.Renderer := fRenderer;
      fToolManager.ActionMode := TAM_CAMERA_ORBIT;
+     fToolManager.FirstPerson.OnMoved := FlyMoved;
 
     SkyRBClick(nil);    // the sky already chosen, for the new scene
+    NavRBClick(nil);    // the navigation already chosen
 
     MessagesTxt.Lines.add('Build Instance complete');
 end;
@@ -923,6 +930,40 @@ begin
   If Sky.Visible then
     MessagesTxt.Lines.Add(Format('Sky: sun azimuth %.1f elevation %.1f, day factor %.2f',
                                  [Sky.SunAzimuth, Sky.SunElevation, Sky.DayFactor]));
+end;
+
+procedure TTestVulkan.NavRBClick(Sender: TObject);
+begin
+  If not assigned(fToolManager) then exit;
+
+  If NavRB.ItemIndex = 1 then
+  Begin
+    fToolManager.NavigationMode := nmFly;
+    // Keys reach the tool manager only while the 3D view has focus.
+    If assigned(fVCLWin) and fVCLWin.CanFocus then
+      fVCLWin.SetFocus;
+    MessagesTxt.Lines.Add('Fly: W A S D / arrows move, Q E down/up, Shift run, Ctrl slow,');
+    MessagesTxt.Lines.Add('     left drag looks, right drag moves, wheel sets speed.');
+    MessagesTxt.Lines.Add('     Click the 3D view first if the keys do nothing.');
+    FlyMoved(nil);
+  End
+  else
+  Begin
+    fToolManager.NavigationMode := nmOrbit;
+    StatusBar1.Panels[0].Text := '';
+  End;
+end;
+
+procedure TTestVulkan.FlyMoved(Sender: TObject);
+  Var Cam : TvgCamera;
+      P   : TpvVector3D;
+begin
+  If not assigned(fToolManager) then exit;
+  Cam := fToolManager.ActiveCamera;
+  If not assigned(Cam) then exit;
+  P := Cam.Position;
+  StatusBar1.Panels[0].Text := Format('Eye %.3f, %.3f, %.3f   speed %.3g /s',
+                                      [P.x, P.y, P.z, fToolManager.FirstPerson.EffectiveSpeed]);
 end;
 
 procedure TTestVulkan.SkyTimerTimer(Sender: TObject);

@@ -1,0 +1,82 @@
+{
+  "schema": 1,
+  "comment": "Dependencies of Vulkan_Package. Run SetupDependencies.bat (or Tools\\Deps\\Deps.ps1) to install, check or update them; see Tools\\Deps\\README.md.",
+  "depsRoot": "..",
+  "includes": [],
+  "dependencies": [
+    {
+      "name": "git",
+      "type": "detect",
+      "description": "Git, used to fetch PasVulkan",
+      "command": "git",
+      "versionArgs": [ "--version" ],
+      "minVersion": "2.25",
+      "winget": "Git.Git",
+      "hint": "install Git for Windows from https://git-scm.com or with 'winget install Git.Git'"
+    },
+    {
+      "name": "pasvulkan",
+      "type": "git",
+      "description": "PasVulkan (BeRo1985/pasvulkan) and the externals the packages compile",
+      "url": "https://github.com/BeRo1985/pasvulkan.git",
+      "ref": "5686db2d97798c119d090378eeb457ba0bce7751",
+      "path": "{DepsRoot}\\Vulkan",
+      "partialClone": true,
+      "submodules": [
+        { "path": "externals/pasmp", "ref": "d58e2e661fef5e37d7e8f1ea8df536f6f34bda1f" },
+        { "path": "externals/pasjson", "ref": "3339a83ea0dea1647b227f8368b1482ea644ade3" },
+        { "path": "externals/pucu", "ref": "60ca8230e47e12438a29fc53806936aa2b627dc5" },
+        { "path": "externals/pasdblstrutils", "ref": "e191fc062c95a9d1a3f13b9e4190a4432b1a12a1" },
+        { "path": "externals/pasgltf", "ref": "f7b9cd0bf44b41ae3ebdd365774a17afd9025c70" }
+      ],
+      "patches": {
+        "dir": "{ManifestDir}\\Patches",
+        "files": [
+          "0004-pasvulkan-fixed-size-32bit-ints.patch",
+          "0005-pasvulkan-crashreport-delphi-libdl.patch",
+          "0006-pasmp-delphi-arm64.patch",
+          "0007-pasdblstrutils-delphi-llvm-fpu.patch",
+          "0008-pasvulkan-load-vulkan-library-once.patch"
+        ]
+      },
+      "exports": { "PASVULKAN_DIR": "{path}" }
+    },
+    {
+      "name": "vulkan-runtime",
+      "type": "detect",
+      "description": "Vulkan loader, installed by the GPU driver",
+      "file": "{env:SystemRoot}\\System32\\vulkan-1.dll",
+      "hint": "install or update the graphics driver from your GPU vendor"
+    },
+    {
+      "name": "vulkan-sdk",
+      "type": "installer",
+      "description": "LunarG Vulkan SDK (glslangValidator, validation layers)",
+      "version": "1.4.335.0",
+      "minVersion": "1.4.335.0",
+      "versionUrl": "https://vulkan.lunarg.com/sdk/latest/windows.json",
+      "versionKey": "windows",
+      "url": "https://sdk.lunarg.com/sdk/download/{version}/windows/vulkan_sdk.exe",
+      "sha256": "15096bafc1488177b094fe5f5c8070e8cb5331d665f6905ebbaa44a75cfa316c",
+      "shaUrl": "https://sdk.lunarg.com/sdk/sha/{version}/windows/vulkan_sdk.exe.json",
+      "signer": "LunarG",
+      "installDir": "C:\\VulkanSDK\\{version}",
+      "args": [ "--root", "{installDir}", "--accept-licenses", "--default-answer", "--confirm-command", "install" ],
+      "elevate": true,
+      "restart": true,
+      "license": { "name": "Vulkan SDK licence terms", "url": "https://vulkan.lunarg.com/license/" },
+      "detect": { "env": "VULKAN_SDK", "file": "Bin\\glslangValidator.exe" }
+    },
+    {
+      "name": "delphi",
+      "type": "detect",
+      "description": "Delphi 12 or 13",
+      "optional": true,
+      "registry": [
+        "HKCU:\\Software\\Embarcadero\\BDS\\23.0",
+        "HKCU:\\Software\\Embarcadero\\BDS\\37.0"
+      ],
+      "hint": "the packages build with Delphi 12 (23.0) or Delphi 13 (37.0)"
+    }
+  ]
+}

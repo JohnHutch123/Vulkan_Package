@@ -44,7 +44,8 @@ uses
   Vulkan_Components_Light,
   Vulkan_WorldAxes,
   Vulkan_Components_PointerValidation,
-  Vulkan_PixelInfo;
+  Vulkan_PixelInfo,
+  Vulkan_FirstPerson;
 
 const
   // How far from TvgScene.WorldOrigin a vertex can be while float32 still
@@ -53,7 +54,14 @@ const
   // back wrong.  TvgObject.SetVertexWorldPosition asserts it.
   VG_LOCAL_COORD_LIMIT = 16384.0;
 
+  // TvgToolManager.NavigationMode values - declared in Vulkan_FirstPerson,
+  // repeated here (with the type below) so code using this unit needs no other.
+  nmOrbit = Vulkan_FirstPerson.nmOrbit;
+  nmFly   = Vulkan_FirstPerson.nmFly;
+
 type
+  TvgNavigationMode = Vulkan_FirstPerson.TvgNavigationMode;
+
   EvgSceneEditException = class(Exception);
 
   // What an edit layer holds - see TvgScene.GetEditStore.
@@ -1013,8 +1021,10 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
   //  SceneCleared when the scene's data goes.
   // -----------------------------------------------------------------------
 
-  TvgToolManager = class(TvgBaseToolManager)
+  TvgToolManager = class(TvgBaseToolManager, IvgFirstPersonHost)
   private
+    procedure SetNavigationMode(const Value: TvgNavigationMode);
+    procedure SetFirstPerson(const Value: TvgFirstPersonController);
     procedure SetScene(const Value: TvgScene);
     procedure SetActionMode(const Value: TvgToolActionMode);
     procedure SetOrbitButton(const Value: TvgMouseButton);
@@ -1040,6 +1050,10 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
     fDollySensitivity : Single;        // Default: 1.0
 
     fMouseState    : TvgMouseState;
+
+    // First-person navigation (Vulkan_FirstPerson)
+    fNavigationMode : TvgNavigationMode;
+    fFirstPerson    : TvgFirstPersonController;
 
     // Object editing state
     fSelectedObject   : TvgObject;
@@ -1070,6 +1084,18 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
     // code with them - Undo, Redo, DeleteSelection.
     procedure BeginInput; Override;
     procedure EndInput;   Override;
+
+    // IvgFirstPersonHost
+    function  FirstPersonCamera: TvgCamera;
+    function  FirstPersonSceneSize: Double;
+    procedure FirstPersonMoved;
+
+    // Keys and focus for first-person movement; nothing in nmOrbit.
+    function  DoNavigationKey(var Key: Word; Shift: TShiftState; aDown: Boolean): Boolean; Override;
+    procedure DoFocusLost; Override;
+    // A drag in nmFly: the orbit button looks, the dolly button moves.
+    procedure DispatchFlyGesture(Shift: TShiftState; aDeltaX, aDeltaY: Single);
+
     // Ends an input bracket's scene update early - the scene is changing.
     procedure ReleaseInputScene;
 
@@ -1274,6 +1300,17 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
     property OrbitButton   : TvgMouseButton     read fOrbitButton  write SetOrbitButton  default vgmbLeft;
     property PanButton     : TvgMouseButton     read fPanButton    write SetPanButton    default vgmbMiddle;
     property DollyButton   : TvgMouseButton     read fDollyButton  write SetDollyButton  default vgmbRight;
+
+    { nmOrbit: the orbit/pan/dolly gestures above.  nmFly: first person -
+      W A S D / arrows move, Q E / Page Up Down go down and up, Shift runs,
+      Ctrl slows; the orbit button drag looks about the eye, the dolly
+      button drag moves forward, the wheel changes speed.  Keys reach the
+      tool manager while the render window has focus (click it).  Switching
+      keeps the camera where it is: orbit then turns about the point the
+      fly view was looking at. }
+    property NavigationMode : TvgNavigationMode read fNavigationMode write SetNavigationMode default nmOrbit;
+    // Speeds and look settings for nmFly.
+    property FirstPerson    : TvgFirstPersonController read fFirstPerson write SetFirstPerson;
     // Dolly-button drag speed, relative to the distance to the camera target
     // so it feels the same whatever the model size.  At 1.0 (and the default
     // MouseSensitivity) about 175 pixels of drag halves or doubles that
@@ -4111,10 +4148,14 @@ begin
   fSelection      := TList<TvgObject>.Create;
   fPickRadius     := 6;
   fProjections    := TObjectDictionary<TvgObject, TvgObjectProjection>.Create([doOwnsValues]);
+  fNavigationMode := nmOrbit;
+  fFirstPerson    := TvgFirstPersonController.Create(Self);
 end;
 
 destructor TvgToolManager.Destroy;
 begin
+  // First: its tick thread must not call back into a half-destroyed self.
+  FreeAndNil(fFirstPerson);
   fSelectedObject := nil;   // not owned
   FreeAndNil(fSelection);
   FreeAndNil(fProjections);
@@ -4267,6 +4308,89 @@ begin
   inherited;
   Result := True;
   ClearSelection;
+  If Assigned(fFirstPerson) then
+    fFirstPerson.ReleaseAll;
+end;
+
+// ---------------------------------------------------------------------------
+//  First-person navigation
+// ---------------------------------------------------------------------------
+
+procedure TvgToolManager.SetNavigationMode(const Value: TvgNavigationMode);
+begin
+  If fNavigationMode = Value then exit;
+  If Assigned(fFirstPerson) then
+    fFirstPerson.ReleaseAll;
+  fNavigationMode := Value;
+end;
+
+procedure TvgToolManager.SetFirstPerson(const Value: TvgFirstPersonController);
+begin
+  If Assigned(Value) and Assigned(fFirstPerson) then
+    fFirstPerson.Assign(Value);
+end;
+
+function TvgToolManager.FirstPersonCamera: TvgCamera;
+begin
+  Result := GetActiveCamera;
+end;
+
+function TvgToolManager.FirstPersonSceneSize: Double;
+  Var BMin, BMax : TpvVector3D;
+begin
+  Result := 0;
+  If Assigned(fScene) and fScene.GetDataBounds(BMin, BMax) then
+    Result := (BMax - BMin).Length;
+end;
+
+procedure TvgToolManager.FirstPersonMoved;
+begin
+  ViewChanged;
+  // Rendering is on demand: a key-driven move has no mouse event to redraw it.
+  If Assigned(fLinker) then
+    fLinker.TriggerDraw;
+end;
+
+function TvgToolManager.DoNavigationKey(var Key: Word; Shift: TShiftState; aDown: Boolean): Boolean;
+begin
+  Result := False;
+  If (fNavigationMode <> nmFly) or not Assigned(fFirstPerson) then exit;
+  // Alt combinations belong to the form (menus).
+  If ssAlt in Shift then exit;
+
+  If aDown then
+    Result := fFirstPerson.KeyDown(Key, Shift)
+  else
+    Result := fFirstPerson.KeyUp(Key, Shift);
+end;
+
+procedure TvgToolManager.DoFocusLost;
+begin
+  If Assigned(fFirstPerson) then
+    fFirstPerson.ReleaseAll;
+end;
+
+procedure TvgToolManager.DispatchFlyGesture(Shift: TShiftState; aDeltaX, aDeltaY: Single);
+begin
+  If not Assigned(fFirstPerson) then exit;
+
+  // The pan button pans, as in orbit mode.
+  If fPanButton in fMouseButtons then
+  Begin
+    DoCameraPan(aDeltaX, aDeltaY);
+    exit;
+  End;
+
+  // Dolly button: forward/back.  aDeltaY is (scaled) pixels, dragging up
+  // negative; a pixel moves a hundredth of a second's travel.
+  If fDollyButton in fMouseButtons then
+  Begin
+    fFirstPerson.MoveForward(-aDeltaY * 0.01 * fFirstPerson.EffectiveSpeed);
+    exit;
+  End;
+
+  If fOrbitButton in fMouseButtons then
+    fFirstPerson.Look(aDeltaX, aDeltaY);
 end;
 
 // ---------------------------------------------------------------------------
@@ -5126,6 +5250,12 @@ end;
 procedure TvgToolManager.DispatchCameraGesture(Shift: TShiftState;
                                                 aDeltaX, aDeltaY: Single);
 begin
+  If fNavigationMode = nmFly then
+  Begin
+    DispatchFlyGesture(Shift, aDeltaX, aDeltaY);
+    exit;
+  End;
+
   // Shift+button or middle button ? pan
   If (fPanButton in fMouseButtons) or
      ((fOrbitButton in fMouseButtons) and (ssShift in Shift)) then
@@ -5454,6 +5584,14 @@ begin
   // it); otherwise the wheel zooms, whatever the mode.
   If ToolMouseWheel(Shift, WheelDelta) then
     exit;
+
+  // Flying, the wheel sets the speed: zooming towards a target means
+  // nothing when the view turns about the eye.
+  If (fNavigationMode = nmFly) and Assigned(fFirstPerson) then
+  Begin
+    fFirstPerson.Wheel(WheelDelta);
+    exit;
+  End;
 
   DoCameraZoom(WheelDelta);
   ViewChanged;

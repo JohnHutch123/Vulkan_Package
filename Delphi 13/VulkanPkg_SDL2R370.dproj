@@ -1,4 +1,5 @@
 ﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <Import Project="..\Dependencies.props"/>
     <PropertyGroup>
         <ProjectGuid>{695D3182-6ED5-4C25-AAC6-7D8F17F334E3}</ProjectGuid>
         <MainSource>VulkanPkg_SDL2R370.dpk</MainSource>
@@ -52,7 +53,7 @@
         <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
         <DCC_DcpOutput>$(BDSCOMMONDIR)\Dcp</DCC_DcpOutput>
         <DCC_BplOutput>$(BDSCOMMONDIR)\Bpl</DCC_BplOutput>
-        <DCC_UnitSearchPath>.\$(Platform)\$(Config);.\$(Platform)\Release;D:\Vulkan\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>.\$(Platform)\$(Config);.\$(Platform)\Release;$(PASVULKAN_DIR)\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <RuntimeOnlyPackage>true</RuntimeOnlyPackage>
         <GenDll>true</GenDll>
         <DCC_OutputNeverBuildDcps>true</DCC_OutputNeverBuildDcps>

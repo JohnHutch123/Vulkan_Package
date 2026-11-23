@@ -1564,6 +1564,20 @@ Const
   VGK_ESCAPE = $1B;
   VGK_SPACE  = $20;
   VGK_DELETE = $2E;
+  VGK_SHIFT  = $10;
+  VGK_CONTROL= $11;
+  VGK_PRIOR  = $21;   // Page Up
+  VGK_NEXT   = $22;   // Page Down
+  VGK_LEFT   = $25;
+  VGK_UP     = $26;
+  VGK_RIGHT  = $27;
+  VGK_DOWN   = $28;
+  VGK_A      = $41;
+  VGK_D      = $44;
+  VGK_E      = $45;
+  VGK_Q      = $51;
+  VGK_S      = $53;
+  VGK_W      = $57;
   VGK_Y      = $59;   // with Ctrl: redo
   VGK_Z      = $5A;   // with Ctrl: undo (Ctrl+Shift: redo)
 

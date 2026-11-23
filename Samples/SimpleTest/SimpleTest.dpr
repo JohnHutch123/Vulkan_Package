@@ -3,7 +3,7 @@ program SimpleTest;
 uses
   Vcl.Forms,
   SimpletestMF in 'SimpletestMF.pas' {Form8},
-  Vulkan in 'D:\Vulkan\src\Vulkan.pas',
+  Vulkan,
   Vulkan_Components_Scene_Renderer in '..\..\RunTime_Src\Vulkan_Components_Scene_Renderer.pas',
   Vulkan_Components_Lookups in '..\..\RunTime_Src\Vulkan_Components_Lookups.pas',
   Vulkan_Components_DataStore in '..\..\RunTime_Src\Vulkan_Components_DataStore.pas',

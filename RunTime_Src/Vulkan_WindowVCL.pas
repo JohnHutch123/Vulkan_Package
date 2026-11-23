@@ -161,6 +161,11 @@ Type
     // and Enter come here rather than to the form's cancel/default button.
     procedure WMGetDlgCode(var Message: TWMGetDlgCode); message WM_GETDLGCODE;
     procedure KeyDown(var Key: Word; Shift: TShiftState); override;
+    // Releases too, so a held key (first-person movement) knows to stop.
+    procedure KeyUp(var Key: Word; Shift: TShiftState); override;
+    // Losing focus - another control, another application - means the key
+    // releases go elsewhere: the tool manager drops its held keys.
+    procedure WMKillFocusVG(var Message: TWMKillFocus); message WM_KILLFOCUS;
 
    procedure Notification(AComponent: TComponent; Operation: TOperation); override;
 
@@ -254,6 +259,21 @@ begin
     Key := 0;    // used: the form does not see it
 
   inherited KeyDown(Key, Shift);
+end;
+
+procedure TvgWindowVCL.KeyUp(var Key: Word; Shift: TShiftState);
+begin
+  If assigned(fLinker) and fLinker.KeyUp(Key, Shift) then
+    Key := 0;
+
+  inherited KeyUp(Key, Shift);
+end;
+
+procedure TvgWindowVCL.WMKillFocusVG(var Message: TWMKillFocus);
+begin
+  inherited;
+  If assigned(fLinker) then
+    fLinker.FocusLost;
 end;
 
 procedure TvgWindowVCL.CreateHandle;

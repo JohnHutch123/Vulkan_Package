@@ -40,6 +40,11 @@ if not exist "%DCC%" (
 )
 
 rem -- Locate PasVulkan -------------------------------------------------------
+rem Where SetupDependencies.bat put it (Dependencies.local.props), else PASVULKAN_DIR.
+if not defined PASVULKAN if exist "%REPO%\Dependencies.local.props" (
+  for /f "tokens=3 delims=<>" %%V in ('findstr /c:"<PASVULKAN_DIR>" "%REPO%\Dependencies.local.props"') do set "PASVULKAN=%%V"
+)
+if not defined PASVULKAN if defined PASVULKAN_DIR set "PASVULKAN=%PASVULKAN_DIR%"
 if not defined PASVULKAN (
   for %%P in ("%REPO%\..\Vulkan" "D:\Vulkan" "C:\Vulkan") do (
     if not defined PASVULKAN (
@@ -65,7 +70,7 @@ set "UNITS=-U"%BDS%\lib\win32\release" -U"%PASVULKAN%\src" -U"%PASVULKAN%" -U"%P
 
 set FAILED=0
 
-for %%T in (FrustumTest AABBTest BoundsTest DataStoreEditTest SceneEditTest CullTest AxisConventionTest CameraTest ZoomAllTest DynamicRenderingTest SceneLinkTest DataModuleWindowTest OBJLoaderTest OBJMaterialTest STLTest InstancingTest AppendSceneTest ShaderFileNameTest LodTest MeshBuilderTest TextureScaleTest SkyBoxTest) do (
+for %%T in (FrustumTest AABBTest BoundsTest DataStoreEditTest SceneEditTest CullTest AxisConventionTest CameraTest ZoomAllTest DynamicRenderingTest SceneLinkTest DataModuleWindowTest OBJLoaderTest OBJMaterialTest STLTest InstancingTest AppendSceneTest ShaderFileNameTest LodTest MeshBuilderTest TextureScaleTest SkyBoxTest FirstPersonTest) do (
   echo === %%T ===
 
   "%DCC%" -Q -B --no-config -NSSystem;System.Win;Winapi;Vcl;Vcl.Imaging;Data;Xml ^

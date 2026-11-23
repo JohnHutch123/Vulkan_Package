@@ -296,6 +296,18 @@ type
     { Dolly: Move forward/backward in camera direction }
     procedure Dolly(aDistance: Double);
 
+    { Look: turn the view about the EYE - the first-person counterpart of
+      Orbit, which turns the eye about the target.  The target swings round
+      the position at its current distance.  aYaw turns about UpVector
+      (positive: anticlockwise seen from above, so to the left); aPitch
+      raises (positive) or lowers the view direction, stopping 1 degree short
+      of straight up or down for the same reason Orbit does. }
+    procedure Look(aYaw, aPitch: Double);
+
+    { Translate: move position and target together by aDelta (world units),
+      keeping the view direction and distance. }
+    procedure Translate(const aDelta: TpvVector3D);
+
     { Look At: Set camera to look at target from position }
     procedure LookAt(const aPosition, aTarget, aUpVector: TpvVector3D);
 
@@ -1388,6 +1400,68 @@ begin
   FCriticalSection.Enter;
   try
     FPosition := FPosition + ForwardVector * aDistance;
+    InvalidateMatrices([cfViewDirty, cfFrustumDirty]);
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+procedure TvgCamera.Look(aYaw, aPitch: Double);
+const
+  // As Orbit: at 90 the view direction lines up with FUpVector and the view
+  // matrix's cross products collapse.
+  MAX_ELEVATION = 89.0;
+var
+  direction : TpvVector3D;
+  distance  : Double;
+  elevation : Double;
+  right, up : TpvVector3D;
+  newDir    : TpvVector3D;
+  cosYaw, sinYaw, cosPitch, sinPitch: Double;
+begin
+  FCriticalSection.Enter;
+  try
+    distance := (FTarget - FPosition).Length;
+    if distance < 1e-9 then exit;   // no direction to turn
+
+    // Orbit's maths with the roles swapped: the direction runs from the eye
+    // to the target, and it is the target that moves.
+    direction := (FTarget - FPosition) * (1.0 / distance);
+
+    right := direction.Cross(FUpVector);
+    if right.Length < 1e-12 then exit;   // looking straight along up
+    right := right.Normalize;
+    up    := right.Cross(direction).Normalize;
+
+    // up leans towards FUpVector, so positive pitch raises the view.
+    elevation := RadToDeg(ArcSin(EnsureRange(direction.Dot(FUpVector), -1.0, 1.0)));
+    aPitch    := EnsureRange(elevation + aPitch, -MAX_ELEVATION, MAX_ELEVATION) - elevation;
+
+    cosPitch := Cos(DegToRad(aPitch));
+    sinPitch := Sin(DegToRad(aPitch));
+    newDir   := direction * cosPitch + up * sinPitch;
+
+    // Yaw about world up (Rodrigues); the last term keeps the up component,
+    // so yawing never tilts the view.
+    cosYaw := Cos(DegToRad(aYaw));
+    sinYaw := Sin(DegToRad(aYaw));
+    direction := newDir * cosYaw +
+                 FUpVector.Cross(newDir) * sinYaw +
+                 FUpVector * (FUpVector.Dot(newDir) * (1.0 - cosYaw));
+
+    FTarget := FPosition + direction.Normalize * distance;
+    InvalidateMatrices([cfViewDirty, cfFrustumDirty]);
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+procedure TvgCamera.Translate(const aDelta: TpvVector3D);
+begin
+  FCriticalSection.Enter;
+  try
+    FPosition := FPosition + aDelta;
+    FTarget   := FTarget   + aDelta;
     InvalidateMatrices([cfViewDirty, cfFrustumDirty]);
   finally
     FCriticalSection.Leave;

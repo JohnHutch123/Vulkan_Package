@@ -23,7 +23,7 @@ object TestVulkan: TTestVulkan
     Panels = <
       item
         Text = 'test'
-        Width = 50
+        Width = 600
       end>
   end
   object Panel1: TPanel
@@ -334,6 +334,24 @@ object TestVulkan: TTestVulkan
       ShowHint = True
       TabOrder = 27
       OnClick = SkyRBClick
+    end
+    object NavRB: TRadioGroup
+      Left = 16
+      Top = 560
+      Width = 129
+      Height = 57
+      Hint =
+        'Fly: click the 3D view, then W A S D / arrows to move, Q E down/' +
+        'up, Shift run, Ctrl slow; left drag looks, wheel sets speed.'
+      Caption = 'Navigation'
+      ItemIndex = 0
+      Items.Strings = (
+        'Orbit'
+        'Fly (first person)')
+      ParentShowHint = False
+      ShowHint = True
+      TabOrder = 29
+      OnClick = NavRBClick
     end
     object MessagesTxt: TMemo
       Left = 1

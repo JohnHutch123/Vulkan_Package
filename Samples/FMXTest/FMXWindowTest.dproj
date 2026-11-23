@@ -1,4 +1,5 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <Import Project="..\..\Dependencies.props"/>
     <PropertyGroup>
         <ProjectGuid>{6B1F3D2E-8C4A-4E7B-9F21-3A5D7C9E0B14}</ProjectGuid>
         <ProjectVersion>19.5</ProjectVersion>
@@ -48,7 +49,7 @@
         <DCC_F>false</DCC_F>
         <DCC_K>false</DCC_K>
         <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;$(DCC_Namespace)</DCC_Namespace>
-        <DCC_UnitSearchPath>..\..\RunTime_Src;..\Renderers;D:\Vulkan\src;D:\Vulkan;D:\Vulkan\externals\pasmp\src;D:\Vulkan\externals\pasjson\src;D:\Vulkan\externals\pucu\src;D:\Vulkan\externals\pasdblstrutils\src;D:\Vulkan\externals\pasgltf\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>..\..\RunTime_Src;..\Renderers;$(PASVULKAN_DIR)\src;$(PASVULKAN_DIR);$(PASVULKAN_DIR)\externals\pasmp\src;$(PASVULKAN_DIR)\externals\pasjson\src;$(PASVULKAN_DIR)\externals\pucu\src;$(PASVULKAN_DIR)\externals\pasdblstrutils\src;$(PASVULKAN_DIR)\externals\pasgltf\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_IncludePath>..\..\RunTime_Src;$(DCC_IncludePath)</DCC_IncludePath>
         <VerInfo_Locale>1033</VerInfo_Locale>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
