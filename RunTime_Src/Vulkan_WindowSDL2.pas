@@ -200,6 +200,10 @@ begin
     SDLK_UP        : Result := $26;
     SDLK_RIGHT     : Result := $27;
     SDLK_DOWN      : Result := $28;
+    SDLK_LSHIFT,
+    SDLK_RSHIFT    : Result := VGK_SHIFT;
+    SDLK_LCTRL,
+    SDLK_RCTRL     : Result := VGK_CONTROL;
   else
     if (aSym >= SDLK_a) and (aSym <= SDLK_z) then
       Result := Word(Ord('A') + (aSym - SDLK_a))
@@ -359,7 +363,7 @@ begin
     case E.type_ of
       SDL_WINDOWEVENT,
       SDL_MOUSEMOTION, SDL_MOUSEBUTTONDOWN, SDL_MOUSEBUTTONUP, SDL_MOUSEWHEEL,
-      SDL_KEYDOWN:
+      SDL_KEYDOWN, SDL_KEYUP:
         begin
           W := FindWindow(vgEventWindowID(E));
           if Assigned(W) then
@@ -424,6 +428,11 @@ begin
         SDL_WINDOWEVENT_EXPOSED:
           vgWindowInvalidate(True);
 
+        SDL_WINDOWEVENT_FOCUS_LOST:
+          //the key releases go elsewhere: drop every held key
+          if Assigned(fLinker) then
+            fLinker.FocusLost;
+
         SDL_WINDOWEVENT_CLOSE:
           begin
             CanClose := True;
@@ -483,6 +492,14 @@ begin
         Key := vgKeyFromSDL(aEvent.key.keysym.sym);
         if Key <> 0 then
           fLinker.KeyDown(Key, ShiftState(0));
+      end;
+
+    SDL_KEYUP:
+      if Assigned(fLinker) then
+      begin
+        Key := vgKeyFromSDL(aEvent.key.keysym.sym);
+        if Key <> 0 then
+          fLinker.KeyUp(Key, ShiftState(0));
       end;
   end;
 end;

@@ -4926,8 +4926,14 @@ TvgBaseComponent = class(TComponent)
     // A key press for the tool manager (VGK_* codes).  True if it used it;
     // a window then drops the key rather than pass it to its form.
     function  KeyDown(var Key: Word; Shift: TShiftState): Boolean;
+    // A key release, the same way.  Windows forward both, so held keys
+    // (first-person movement) know when to stop.
+    function  KeyUp(var Key: Word; Shift: TShiftState): Boolean;
+    // The window lost keyboard focus: its key releases will not arrive, so
+    // the tool manager forgets every held key.
+    procedure FocusLost;
 
-    Property WindowIntf      : IvgVulkanWindow read GetWindowIntf write SetWindowIntf;
+    Property WindowIntf     : IvgVulkanWindow read GetWindowIntf write SetWindowIntf;
     Property WindowReady     : Boolean read fWindowReady Write SetWindowReady;   //handle OK
     Property NeedSurfaceRebuild  : Boolean read fNeedSurfaceRebuild write SetNeedSurfaceRebuild;
 
@@ -5229,6 +5235,14 @@ TvgBaseComponent = class(TComponent)
     // A key while the render window has focus.  True if it was used, which
     // stops the window passing it on.  The base uses none.
     function  DoKeyDown(var Key: Word; Shift: TShiftState): Boolean; Virtual;
+    // A key released.  The base uses none.
+    function  DoKeyUp(var Key: Word; Shift: TShiftState): Boolean; Virtual;
+    { Offered every key, down (aDown) and up, BEFORE DoKeyDown / DoKeyUp -
+      for navigation that must work whatever a descendant's DoKeyDown does
+      (TvgToolManager's first-person keys).  True if used. }
+    function  DoNavigationKey(var Key: Word; Shift: TShiftState; aDown: Boolean): Boolean; Virtual;
+    // The render window lost keyboard focus: forget held keys.
+    procedure DoFocusLost; Virtual;
 
     // --- Virtual mouse handlers — override in descendants ---
     procedure DoMouseDown (aButton: TvgMouseButton; Shift: TShiftState; X, Y: Integer); Virtual;  Abstract;
@@ -5254,6 +5268,10 @@ TvgBaseComponent = class(TComponent)
 
     // A key press (VGK_* codes).  True if something used it.
     function  HandleKeyDown(var Key: Word; Shift: TShiftState): Boolean;
+    // A key release (VGK_* codes).  True if something used it.
+    function  HandleKeyUp(var Key: Word; Shift: TShiftState): Boolean;
+    // The render window lost keyboard focus.
+    procedure HandleFocusLost;
 
     // Returns current viewport pixel size through the linked surface, or
     // the fallback size when there is no surface.
@@ -23368,6 +23386,24 @@ begin
     Result := fToolManager.HandleKeyDown(Key, Shift);
 end;
 
+function TvgLinker.KeyUp(var Key: Word; Shift: TShiftState): Boolean;
+begin
+  Result := False;
+  // Not while inactive: the tool manager drops its held keys when it is
+  // disabled, and may be mid-teardown.
+  If not (fState = vgcsActive) then exit;
+
+  If Assigned(fToolManager) then
+    Result := fToolManager.HandleKeyUp(Key, Shift);
+end;
+
+procedure TvgLinker.FocusLost;
+begin
+  // Not gated on fState: a held key must be dropped whatever the state.
+  If Assigned(fToolManager) then
+    fToolManager.HandleFocusLost;
+end;
+
 procedure TvgLinker.MouseUp(aButton: TvgMouseButton; Shift: TShiftState; X, Y: Integer);
 begin
   If not (fState =vgcsActive) then exit;
@@ -32568,15 +32604,48 @@ function TvgBaseToolManager.HandleKeyDown(var Key: Word; Shift: TShiftState): Bo
 begin
   BeginInput;
   try
-    Result := DoKeyDown(Key, Shift);
+    Result := DoNavigationKey(Key, Shift, True);
+    If not Result then
+      Result := DoKeyDown(Key, Shift);
   finally
     EndInput;
   end;
 end;
 
+function TvgBaseToolManager.HandleKeyUp(var Key: Word; Shift: TShiftState): Boolean;
+begin
+  BeginInput;
+  try
+    Result := DoNavigationKey(Key, Shift, False);
+    If not Result then
+      Result := DoKeyUp(Key, Shift);
+  finally
+    EndInput;
+  end;
+end;
+
+procedure TvgBaseToolManager.HandleFocusLost;
+begin
+  DoFocusLost;
+end;
+
 function TvgBaseToolManager.DoKeyDown(var Key: Word; Shift: TShiftState): Boolean;
 begin
   Result := False;
+end;
+
+function TvgBaseToolManager.DoKeyUp(var Key: Word; Shift: TShiftState): Boolean;
+begin
+  Result := False;
+end;
+
+function TvgBaseToolManager.DoNavigationKey(var Key: Word; Shift: TShiftState; aDown: Boolean): Boolean;
+begin
+  Result := False;
+end;
+
+procedure TvgBaseToolManager.DoFocusLost;
+begin
 end;
 
 procedure TvgBaseToolManager.HandleMouseDown(aButton: TvgMouseButton;  Shift: TShiftState; X, Y: Integer);

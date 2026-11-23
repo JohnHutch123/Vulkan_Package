@@ -1,6 +1,9 @@
 # Stereo (side-by-side) view and first-person walk — plan
 
-Status: plan only, nothing implemented (2026-11-23).
+Status (2026-11-23): **F0–F2 implemented** (uncommitted): `TvgCamera.Look` /
+`Translate`, key-up and focus-loss plumbing, `Vulkan_FirstPerson.pas`
+(`TvgFirstPersonController`), `TvgToolManager.NavigationMode = nmFly`. The
+rest is still plan.
 Scope: core Vulkan_Package. PRO adds real VR (OpenXR) and a Delaunay ground
 provider later, through interfaces defined here.
 
@@ -162,7 +165,8 @@ source composes body pose (the first-person camera, Part B) × head pose
 - `slAnaglyph`: red/cyan in one image. Optional, but useful for testing
   without glasses. Needs a small full-screen composite shader instead of a blit.
 
-Phase 1 composites with two `vkCmdBlitImage` regions (layer 0 → left rect,
+This section is the `sdPlain` composite. The headset-viewer composite is in
+A9. The plain path composites with two `vkCmdBlitImage` regions (layer 0 → left rect,
 layer 1 → right rect). `SwapEyes` swaps the destination rects.
 
 The HUD is drawn after the composite. In stereo it is drawn **once per half**
@@ -175,13 +179,55 @@ HUD straddles the split.
 that half, and the ray comes from that eye's matrices. Picking/pixel read-back
 reads the matching layer. Orbit/pan/dolly deltas need no change.
 
-### A9. Lens distortion (later, optional)
+### A9. Display type: video glasses or headset viewer (selectable)
 
-Phone-in-headset viewers need barrel distortion and chromatic-aberration
-correction per eye. That is a full-screen pass with k1/k2 coefficients in
-place of the blit (A7), driven by a lens profile. It is not needed for video
-glasses or 3D TVs. Keep it out of phase 1, but give the composite a slot so it
-fits later.
+Both kinds are supported. A linker property chooses between them at run time
+(changing it rebuilds the frames, like a resize):
+
+```pascal
+TvgStereoDisplay = (sdPlain,          // video glasses, 3D TV/projector, free viewing
+                    sdHeadsetViewer); // phone-in-headset lenses (Cardboard style)
+```
+
+| | `sdPlain` | `sdHeadsetViewer` |
+|---|---|---|
+| Layouts allowed | all of A7 | `slSideBySideFull` only |
+| Eye FOV | camera `FieldOfView` + off-axis shift (A2) | from the viewer profile: per-eye asymmetric angles (outer/inner/top/bottom) |
+| Eye separation | `EyeSeparation` | the profile's inter-lens distance (the camera value can still override it) |
+| Composite | blit (A7) | full-screen **distortion pass** per eye |
+| Offscreen size | (W/2) × H × FrameResolution | larger by `ViewerProfile.RenderScale` (about 1.3–1.5). Barrel distortion stretches the centre, so this keeps it sharp. |
+
+**`TvgViewerProfile`** (TPersistent, published, with built-in presets plus "Custom"):
+`ScreenToLensDistance`, `InterLensDistance`, `LensVerticalOffset` (or
+tray-to-lens-centre), `DistortionK1`, `DistortionK2`, `ChromaticRed`,
+`ChromaticBlue` (per-channel radial scale), `FovOuter/Inner/Top/Bottom` (degrees),
+`RenderScale`. It also needs the physical screen size in mm, from DPI with a
+manual override, because the lens centres sit at fixed millimetre positions
+and not at the centre of each half. Importing a Cardboard viewer QR profile is
+a possible later addition, since it carries the same fields.
+
+**Distortion pass:** one full-screen triangle per eye, with a scissor to that
+half. The fragment shader maps each screen pixel to lens-centred
+coordinates, applies `r' = r(1 + k1 r² + k2 r⁴)` (with a separate scale for R
+and B to correct chromatic aberration), and samples layer 0 or 1 of the
+2-layer frame image (`sampler2DArray`). Pixels outside the lens circle are
+black. It reads the same multiview image as the blit path, so **S2–S3 are
+shared by both display types**. Only the composite differs.
+
+The HUD sits at zero parallax in both modes. In headset mode it is drawn
+**before** distortion, into the eye layers, so it looks flat through the lens.
+In plain mode it is drawn per half after the blit (A7).
+
+**Where the phone comes in.** A headset viewer holds a phone, so the app has
+to run on the phone. That depends on the Android work. R280 compiles for
+Android, but there is **no Android window yet**, and that is a prerequisite
+for using `sdHeadsetViewer` for real. Until then, `sdHeadsetViewer` can be
+developed and checked on the desktop. Show it full-screen on a monitor, or
+mirror the desktop to the phone and view the result through the viewer.
+Head tracking from the phone's gyroscope is also needed for real use. That
+naturally belongs in the PRO VR layer, as another `IvgStereoViewSource` (head
+pose from device sensors, A3). Until then, `sdHeadsetViewer` is a stereo
+viewer you look around in with first-person controls.
 
 ### Stereo phases
 
@@ -193,10 +239,14 @@ fits later.
 | S3 | `VG_STEREO` shader variants + lookup, sky box | medium |
 | S4 | Composite layouts, HUD per half | low |
 | S5 | Per-half picking / pixel read-back | low |
-| S6 | Anaglyph, lens distortion (optional) | low |
+| S6 | `TvgStereoDisplay` switch, `TvgViewerProfile` + presets, profile-driven eye FOV/IPD, `RenderScale` | low |
+| S7 | Distortion composite shader (barrel + chromatic), HUD-before-distortion | medium |
+| S8 | Anaglyph (optional) | low |
+| — | Real phone use: Android window (separate work), gyro head pose (PRO) | — |
 
 S0–S1 can ship on their own: they change no output. S2–S4 must land together
-before anything visible works.
+before anything visible works, and they give the plain (video glasses) display.
+S6–S7 add the headset viewer on the same render path.
 
 ---
 
@@ -231,6 +281,10 @@ Needs:
 - `DoKeyUp` on `TvgBaseToolManager`, with `TvgLinker.KeyUp` and the window
   classes (VCL/FMX/SDL2) forwarding it, since there is only `KeyDown` today. The
   controller keeps a held-keys set.
+  *As built:* the movement keys go through a separate virtual,
+  `DoNavigationKey`, which is called **before** `DoKeyDown`/`DoKeyUp`. PRO's
+  `TvgEditToolManager.DoKeyDown` does not call `inherited`, so fly keys hooked
+  into `DoKeyDown` would never reach the base class there.
 - A **tick**. While any movement key is held, a timer at about 60 Hz advances
   by `Speed × dt` and calls `TriggerDraw`. Rendering is on demand (a drag
   needs an explicit `TriggerDraw`), so movement does not come for free. The tick
@@ -314,9 +368,9 @@ Then F3, then S2–S4 as one block, then the rest.
 
 ## Open questions
 
-1. **Which "VR glasses"?** Video glasses (full side-by-side over DP/USB-C, no
-   distortion) or a phone-in-headset viewer (needs lens distortion, A9)? This
-   decides whether A9 is phase 1.
+1. ~~Which "VR glasses"?~~ **Answered 2026-11-23: both, selectable** — see A9.
+   Still open: which headset-viewer presets to ship, and the Android window
+   timing.
 2. Stereo + orthographic: disallow or ignore (A2)?
 3. One scene-level up axis for walk + sky box (B4)?
 4. Is `EyeSeparation` in scene units acceptable, or add `UnitsPerMetre` on the

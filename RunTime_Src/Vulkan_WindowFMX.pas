@@ -811,7 +811,28 @@ begin
           Result := SendMessage(W, aMsg, aWParam, aLParam);
       end;
 
-    WM_KEYUP, WM_CHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_SYSCHAR:
+    WM_KEYUP:
+      begin
+        //releases end held keys (first-person movement)
+        Key := Word(aWParam);
+        if Assigned(fLinker) and fLinker.KeyUp(Key, vgKeyShift) then
+          exit;
+        W := FormWnd;
+        if W <> 0 then
+          Result := SendMessage(W, aMsg, aWParam, aLParam)
+        else
+          Result := DefWindowProc(fWnd, aMsg, aWParam, aLParam);
+      end;
+
+    WM_KILLFOCUS:
+      begin
+        //the releases will go elsewhere: drop every held key
+        if Assigned(fLinker) then
+          fLinker.FocusLost;
+        Result := DefWindowProc(fWnd, aMsg, aWParam, aLParam);
+      end;
+
+    WM_CHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_SYSCHAR:
       begin
         //the form's shortcuts and focused-control keys still work
         W := FormWnd;
