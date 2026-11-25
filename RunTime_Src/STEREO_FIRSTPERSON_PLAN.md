@@ -1,9 +1,22 @@
 # Stereo (side-by-side) view and first-person walk — plan
 
-Status (2026-11-23): **F0–F2 implemented** (uncommitted): `TvgCamera.Look` /
+Status (2026-11-23): **F0–F2 on main** (PR #49): `TvgCamera.Look` /
 `Translate`, key-up and focus-loss plumbing, `Vulkan_FirstPerson.pas`
-(`TvgFirstPersonController`), `TvgToolManager.NavigationMode = nmFly`. The
-rest is still plan.
+(`TvgFirstPersonController`), `TvgToolManager.NavigationMode = nmFly`, sample
+toggle. **F3 implemented** on branch `feature/first-person-walk`: `nmWalk`,
+`IvgGroundProvider`, `Vulkan_MeshGround.pas` (`TvgMeshGround`),
+`TvgToolManager.Ground` / `AutoGround` / `BuildSceneGround`, the Walk option
+in the sample. The rest is still plan.
+
+*F3 as built, where it differs from B4:* the slope test uses the surface
+**normal** at the new foot position, not rise over run. A stair (a rise
+within `StepHeight` onto a level tread) has a huge rise over a short run per
+tick, but it must be walkable. `EdgeBehaviour` is `ebStop` or `ebFloat` (keep
+the height until there is ground again). There is no "drop into fly mode" at
+an edge: an application can switch `NavigationMode` from `OnBlocked` if it
+wants that. Something higher than a step is refused whatever
+`EdgeBehaviour` says. The automatic walking speed is 0.8 × `EyeHeight` per
+second, not a share of the data size.
 Scope: core Vulkan_Package. PRO adds real VR (OpenXR) and a Delaunay ground
 provider later, through interfaces defined here.
 

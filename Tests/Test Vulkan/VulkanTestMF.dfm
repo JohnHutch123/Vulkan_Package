@@ -337,17 +337,19 @@ object TestVulkan: TTestVulkan
     end
     object NavRB: TRadioGroup
       Left = 16
-      Top = 560
+      Top = 555
       Width = 129
-      Height = 57
+      Height = 68
       Hint =
-        'Fly: click the 3D view, then W A S D / arrows to move, Q E down/' +
-        'up, Shift run, Ctrl slow; left drag looks, wheel sets speed.'
+        'Fly/Walk: click the 3D view, then W A S D / arrows to move, Q E' +
+        ' down/up (fly), Shift run, Ctrl slow; left drag looks, wheel set' +
+        's speed.  Walk follows the loaded surface.'
       Caption = 'Navigation'
       ItemIndex = 0
       Items.Strings = (
         'Orbit'
-        'Fly (first person)')
+        'Fly (first person)'
+        'Walk (follow surface)')
       ParentShowHint = False
       ShowHint = True
       TabOrder = 29
