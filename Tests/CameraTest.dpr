@@ -387,8 +387,241 @@ begin
   Writeln;
 end;
 
+// ---------------------------------------------------------------------------
+//  Stereo pair (TvgStereoSettings and the eye functions)
+// ---------------------------------------------------------------------------
+
+function SameMatrix(const A, B: TpvMatrix4x4D; Tol: Double): Boolean;
+var
+  I, J : Integer;
+begin
+  Result := True;
+  for I := 0 to 3 do
+    for J := 0 to 3 do
+      if Abs(A.RawComponents[I, J] - B.RawComponents[I, J]) > Tol then
+        Exit(False);
+end;
+
+function InsideTol(const F: TvgFrustrumPlanes; const P: TpvVector3D; Tol: Double): Boolean;
+var
+  I : Integer;
+begin
+  Result := True;
+  for I := 0 to 5 do
+    if F.Planes[I].x * P.x + F.Planes[I].y * P.y + F.Planes[I].z * P.z + F.Planes[I].w < -Tol then
+      Exit(False);
+end;
+
+// NDC (x, y, z) back to a local point through aVP.
+function FromNDC(const aInvVP: TpvMatrix4x4D; X, Y, Z: Double): TpvVector3D;
+var
+  C : TpvVector4D;
+begin
+  C      := aInvVP * TpvVector4D.Create(X, Y, Z, 1.0);
+  Result := V(C.x / C.w, C.y / C.w, C.z / C.w);
+end;
+
+procedure TestStereo;
+const
+  ASPECT = 0.9;            // one eye of a 16:10 window split in two
+  SEP    = 0.064;
+  CONV   = 10.0;
+var
+  Cam      : TvgCamera;
+  Origin   : TpvVector3D;
+  Fwd, Rt  : TpvVector3D;
+  Up       : TpvVector3D;
+  PosL     : TpvVector3D;
+  EL, ER   : TpvVector3D;
+  VPL, VPR : TpvMatrix4x4D;
+  VPM      : TpvMatrix4x4D;
+  InvL     : TpvMatrix4x4D;
+  InvR     : TpvMatrix4x4D;
+  NL, NR   : TpvVector3D;
+  P        : TpvVector3D;
+  F        : TvgFrustrumPlanes;
+  FM       : TvgFrustrumPlanes;
+  Rev      : UInt64;
+  I        : Integer;
+  Shift    : Double;
+  Ok, Hit  : Boolean;
+  Other    : TvgStereoSettings;
+  Seed     : Cardinal;
+
+  function Rnd: Double;
+  begin
+    Seed := Seed xor (Seed shl 13); Seed := Seed xor (Seed shr 17); Seed := Seed xor (Seed shl 5);
+    Result := Seed / 4294967296.0;
+  end;
+
+  // A point aAhead along the view from the camera, aRight / aUp across it,
+  // relative to Origin.
+  function Ahead(aAhead, aRight, aUp: Double): TpvVector3D;
+  begin
+    Result := PosL + Fwd * aAhead + Rt * aRight + Up * aUp;
+  end;
+
+begin
+  Writeln('--- stereo pair ---');
+  Seed := 2463534242;
+  Cam := TvgCamera.Create;
+  Other := TvgStereoSettings.Create;
+  try
+    Check('Stereo: off by default', Cam.Stereo.Enabled, False);
+    CheckNum('...EyeSeparation 0.064', Cam.Stereo.EyeSeparation, SEP, 0);
+    CheckNum('...Convergence 10', Cam.Stereo.Convergence, CONV, 0);
+
+    Rev := Cam.Revision;
+    Cam.Stereo.Enabled := True;
+    Check('changing a setting bumps Revision', Cam.Revision > Rev, True);
+    Rev := Cam.Revision;
+    Cam.Stereo.Enabled := True;
+    Check('...setting the same value does not', Cam.Revision = Rev, True);
+    Cam.Stereo.EyeSeparation := -1;
+    CheckNum('negative EyeSeparation becomes 0', Cam.Stereo.EyeSeparation, 0, 0);
+    Cam.Stereo.Convergence := 0;
+    CheckNum('Convergence 0 becomes the default', Cam.Stereo.Convergence, CONV, 0);
+    Other.EyeSeparation := 0.1;
+    Other.Convergence   := 3;
+    Other.SwapEyes      := True;
+    Cam.Stereo := Other;
+    Check('assigning Stereo copies it (not the same object)',
+          (Cam.Stereo <> Other) and SameValue(Cam.Stereo.EyeSeparation, 0.1) and
+          (Cam.Stereo.Convergence = 3) and Cam.Stereo.SwapEyes and not Cam.Stereo.Enabled, True);
+    Cam.Stereo.EyeSeparation := SEP;
+    Cam.Stereo.Convergence   := CONV;
+
+    // A survey-sized camera, looking obliquely and a little down.
+    Origin := V(512345.25, 6987654.75, 230.0);
+    Cam.InitializeFromParameters(Origin + V(3, -4, 1.7), Origin + V(13, 2, 0.5), V(0, 0, 1));
+    PosL := Cam.Position - Origin;
+    Fwd  := Cam.ForwardVector;
+    Rt   := Cam.RightVector;
+    Up   := Cam.ViewUpVector;
+
+    EL := Cam.EyePosition(eyLeft);
+    ER := Cam.EyePosition(eyRight);
+    CheckVec('the eyes are either side of Position', (EL + ER) * 0.5, Cam.Position, 1e-9);
+    CheckNum('...EyeSeparation apart', (ER - EL).Length, SEP, 1e-9);
+    CheckNum('...along RightVector (right eye on the right)', (ER - EL).Normalize.Dot(Rt), 1, 1e-12);
+
+    VPL := Cam.GetEyeViewProjectionMatrixForAspect(eyLeft,  ASPECT, Origin);
+    VPR := Cam.GetEyeViewProjectionMatrixForAspect(eyRight, ASPECT, Origin);
+    VPM := Cam.GetViewProjectionMatrixForAspect(ASPECT, Origin);
+    Check('eye VP = eye projection x eye view',
+          SameMatrix(VPL, Cam.GetEyeViewMatrixForOrigin(eyLeft, Origin) *
+                          Cam.GetEyeProjectionMatrixForAspect(eyLeft, ASPECT), 1e-12), True);
+
+    // Zero parallax on the whole convergence plane; no vertical parallax.
+    Ok := True; Hit := True;
+    for I := 1 to 50 do
+    begin
+      P  := Ahead(CONV, (Rnd - 0.5) * 6, (Rnd - 0.5) * 4);
+      NL := ToNDC(VPL, P);
+      NR := ToNDC(VPR, P);
+      if Abs(NL.x - NR.x) > 1e-9 then Ok := False;
+      if (Abs(NL.y - NR.y) > 1e-9) or (Abs(NL.y - ToNDC(VPM, P).y) > 1e-9) then Hit := False;
+    end;
+    Check('a point at Convergence: the same x in both eyes', Ok, True);
+    Check('...and the same y as mono (no vertical parallax)', Hit, True);
+    CheckNum('straight ahead at Convergence is the centre', ToNDC(VPL, Ahead(CONV, 0, 0)).x, 0, 1e-9);
+
+    // At infinity the eyes differ by twice the projection shift.
+    Shift := (SEP * 0.5) * (Cos(DegToRad(Cam.FieldOfView) / 2) / Sin(DegToRad(Cam.FieldOfView) / 2)) /
+             (ASPECT * CONV);
+    P := Ahead(1e9, 0, 0);
+    CheckNum('a point at infinity: right eye at +shift', ToNDC(VPR, P).x,  Shift, 1e-7);
+    CheckNum('...left eye at -shift', ToNDC(VPL, P).x, -Shift, 1e-7);
+    P := Ahead(2, 0, 0);
+    Check('nearer than Convergence: crossed (in front of the screen)',
+          ToNDC(VPR, P).x < ToNDC(VPL, P).x, True);
+    P := Ahead(40, 1, 0.5);
+    Check('further: uncrossed (behind the screen)', ToNDC(VPR, P).x > ToNDC(VPL, P).x, True);
+
+    // The eyes are symmetric about the mono view: their NDC x average is
+    // mono's for points at Convergence and at any depth the same pair...
+    P := Ahead(25, -2, 1);
+    CheckNum('the eyes average to mono', (ToNDC(VPL, P).x + ToNDC(VPR, P).x) * 0.5, ToNDC(VPM, P).x, 1e-9);
+    CheckNum('...and share mono''s depth', ToNDC(VPL, P).z, ToNDC(VPM, P).z, 1e-9);
+
+    // Survey precision: the local result does not depend on how far away
+    // the origin is - the same view with the origin at (0, 0, 0) and the
+    // camera near it gives the same matrix.
+    Cam.InitializeFromParameters(V(3, -4, 1.7), V(13, 2, 0.5), V(0, 0, 1));
+    Check('survey origin: eye VP matches the same view near (0,0,0)',
+          SameMatrix(VPL, Cam.GetEyeViewProjectionMatrixForAspect(eyLeft, ASPECT, V(0, 0, 0)), 1e-9), True);
+    Cam.InitializeFromParameters(Origin + V(3, -4, 1.7), Origin + V(13, 2, 0.5), V(0, 0, 1));
+
+    // Separation 0: two mono eyes.
+    Cam.Stereo.EyeSeparation := 0;
+    Check('EyeSeparation 0: each eye is the mono VP',
+          SameMatrix(Cam.GetEyeViewProjectionMatrixForAspect(eyRight, ASPECT, Origin), VPM, 1e-12), True);
+    Cam.Stereo.EyeSeparation := SEP;
+
+    // The cull volume holds both frusta (and mono's).
+    F    := Cam.GetStereoFrustumPlanesForAspect(ASPECT, Origin);
+    FM   := Cam.GetFrustumPlanesForAspect(ASPECT, Origin);
+    InvL := VPL.Inverse;
+    InvR := VPR.Inverse;
+    Ok := True;
+    for I := 1 to 2000 do
+    begin
+      // NDC depth 0.05..0.999 is inside for both depth conventions.
+      P := FromNDC(InvL, Rnd * 2 - 1, Rnd * 2 - 1, 0.05 + Rnd * 0.949);
+      if not InsideTol(F, P, 1e-6) then Ok := False;
+      P := FromNDC(InvR, Rnd * 2 - 1, Rnd * 2 - 1, 0.05 + Rnd * 0.949);
+      if not InsideTol(F, P, 1e-6) then Ok := False;
+      P := FromNDC(VPM.Inverse, Rnd * 2 - 1, Rnd * 2 - 1, 0.05 + Rnd * 0.949);
+      if not InsideTol(F, P, 1e-6) then Ok := False;
+    end;
+    Check('stereo cull volume holds both eyes'' frusta, and mono''s', Ok, True);
+    // ...the far corners of each (NDC depth 0.99999 is about 1800 away with
+    // the default near/far - far beyond Convergence).
+    Ok := True;
+    for I := 0 to 3 do
+    begin
+      P := FromNDC(InvL, 2 * (I and 1) - 1, 2 * (I shr 1) - 1, 0.99999);
+      if not InsideTol(F, P, 1e-6) then Ok := False;
+      P := FromNDC(InvR, 2 * (I and 1) - 1, 2 * (I shr 1) - 1, 0.99999);
+      if not InsideTol(F, P, 1e-6) then Ok := False;
+    end;
+    Check('...including the far corners of each', Ok, True);
+    // Not simply each eye's outer plane: just outside the right eye's left
+    // edge, beyond Convergence, is outside the left eye too - and outside
+    // the volume.
+    P := FromNDC(InvR, -1.05, 0, 0.9999);     // about 200 away
+    Check('beyond Convergence the right eye''s left edge is the outer one',
+          (ToNDC(VPL, P).x < -1) and not InsideTol(F, P, 0), True);
+    Check('...a point inside every eye is inside', InsideTol(F, Ahead(30, 0, 0), 0), True);
+    Check('...and the volume is no looser than mono on top/bottom/near/far',
+          (Abs(F.Planes[FRUSTUM_PLANE_TOP].w    - FM.Planes[FRUSTUM_PLANE_TOP].w)    < 1e-6) and
+          (Abs(F.Planes[FRUSTUM_PLANE_BOTTOM].w - FM.Planes[FRUSTUM_PLANE_BOTTOM].w) < 1e-6) and
+          (Abs(F.Planes[FRUSTUM_PLANE_NEAR].w   - FM.Planes[FRUSTUM_PLANE_NEAR].w)   < 1e-6) and
+          (Abs(F.Planes[FRUSTUM_PLANE_FAR].w    - FM.Planes[FRUSTUM_PLANE_FAR].w)    < 1e-6), True);
+
+    // Orthographic: no parallax, the mono results.
+    Cam.SetOrthographic(-5, 5, 4, -4, 0.1, 500);
+    VPM := Cam.GetViewProjectionMatrixForAspect(ASPECT, Origin);
+    Check('orthographic: each eye is the mono VP',
+          SameMatrix(Cam.GetEyeViewProjectionMatrixForAspect(eyLeft,  ASPECT, Origin), VPM, 0) and
+          SameMatrix(Cam.GetEyeViewProjectionMatrixForAspect(eyRight, ASPECT, Origin), VPM, 0), True);
+    CheckVec('...the eyes are at Position', Cam.EyePosition(eyRight), Cam.Position, 0);
+    FM := Cam.GetFrustumPlanesForAspect(ASPECT, Origin);
+    F  := Cam.GetStereoFrustumPlanesForAspect(ASPECT, Origin);
+    Ok := True;
+    for I := 0 to 5 do
+      if (F.Planes[I] - FM.Planes[I]).Length > 0 then Ok := False;
+    Check('...the cull volume is mono''s', Ok, True);
+  finally
+    Other.Free;
+    Cam.Free;
+  end;
+  Writeln;
+end;
+
 begin
   try
+    TestStereo;
     TestLookAndTranslate;
     TestCachedViewProjection;
     TestScreenRays;

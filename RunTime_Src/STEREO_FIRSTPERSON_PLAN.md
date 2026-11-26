@@ -5,11 +5,31 @@ Status (2026-11-23): **F0–F2 on main** (PR #49): `TvgCamera.Look` /
 (`TvgFirstPersonController`), `TvgToolManager.NavigationMode = nmFly`, sample
 toggle. **F3 on main** (PR #50): `nmWalk`, `IvgGroundProvider`,
 `Vulkan_MeshGround.pas` (`TvgMeshGround`), `TvgToolManager.Ground` /
-`AutoGround` / `BuildSceneGround`, the Walk option in the sample. **F4
-implemented** on branch `feature/first-person-sample`: the sample's "First
-person" box (speed, 0 = automatic; eye height; step height; float at edges)
-and a "blocked" readout. Setting `EyeHeight` while standing in walk mode now
-moves the eye at once. The rest is still plan.
+`AutoGround` / `BuildSceneGround`, the Walk option in the sample. **F4 on
+main** (PR #51): the sample's "First person" box (speed, 0 = automatic; eye
+height; step height; float at edges) and a "blocked" readout. Setting
+`EyeHeight` while standing in walk mode moves the eye at once. **F5** is PRO
+PR #76: `Vulkan_DelaunayGround.pas` (`TvgDelaunayGround`, with an `Origin`
+for the triangulation's local coordinates and `CreateForScene`).
+**S0 implemented** on branch `feature/stereo-s0`: `TvgStereoSettings`
+(`TvgCamera.Stereo`), `TvgEye`, `EyePosition`,
+`GetEyeViewMatrixForOrigin`, `GetEyeProjectionMatrixForAspect`,
+`GetEyeViewProjectionMatrixForAspect`, `GetStereoFrustumPlanesForAspect`, and
+the stereo tests in `CameraTest`. The rest is still plan.
+
+*S0 as built, where it differs from A2:* the stereo cull volume is **not** "left
+plane from the left eye, right plane from the right eye". The two eyes' left
+planes cross at `Convergence`, and beyond it the right eye's is the outer one,
+so that rule would cull things the right eye sees. The left plane is the right
+eye's left plane moved to pass through the left eye (and the mirror for the
+right), which is outside both frusta at every distance. Orthographic +
+stereo (open question 2): the eye functions return the mono matrices (no
+parallax), so nothing breaks; whether S1 also reports stereo inactive for an
+orthographic camera is still open. `SwapEyes` only swaps where the images go
+(A7); the eye maths ignore it. F5 left out the `InterpolateZ` option of B4:
+that call interpolates a point from its own neighbours and cannot evaluate an
+arbitrary XY, and the walker's `HeightSmoothing` already smooths a coarse
+surface.
 
 *F3 as built, where it differs from B4:* the slope test uses the surface
 **normal** at the new foot position, not rise over run. A stair (a rise
@@ -96,9 +116,12 @@ New camera functions, all double precision, like the existing ones:
   the same Y FOV and zero-to-one depth convention as `BuildProjectionForAspect`.
 - `GetEyeViewProjectionForAspect(aEye, aAspect, aOrigin)`.
 - `GetStereoFrustumPlanesForAspect(aAspect, aOrigin)`: one cull volume that
-  holds both eyes. Take the left plane from the left eye, the right plane from
-  the right eye, and top/bottom/near/far from either eye. This is conservative,
-  so nothing gets culled that either eye can see.
+  holds both eyes. Top/bottom/near/far come from either eye (they are the same
+  planes). *Corrected in S0:* the left plane is the **right** eye's left plane
+  moved to pass through the left eye, and the right plane the mirror of that.
+  The eyes' left planes cross at `Convergence`, so neither eye's own plane is
+  outside the other's at every distance. This is conservative, so nothing gets
+  culled that either eye can see.
 
 Orthographic + stereo: either disallow it or skip the eye offset (orthographic
 views have no parallax). Decide during A2. Disallowing is simpler.

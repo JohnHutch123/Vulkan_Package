@@ -35,6 +35,7 @@ interface
 
 uses
   System.SysUtils,
+  System.Classes,
   System.Math,
   System.SyncObjs,
   System.Generics.Collections,
@@ -55,6 +56,11 @@ const
   // before the far plane is derived from it, so a degenerate dataset cannot
   // ask for a near of zero and get a far of 0.1 back.
   CAMERA_MIN_NEAR        = 0.0001;
+
+  // TvgStereoSettings defaults: an average adult's eye separation, in metres
+  // (scene units - see EyeSeparation), and the zero-parallax distance.
+  STEREO_DEFAULT_SEPARATION  = 0.064;
+  STEREO_DEFAULT_CONVERGENCE = 10.0;
 
   // Default empty space left around the data by the ZoomAll family: 1.0
   // touches the data to the edge of the viewport, 1.05 leaves 5%.
@@ -178,6 +184,63 @@ type
     function  Transform(const aMatrix: TpvMatrix4x4): TvgAABB;
   end;
 
+  // Which eye of a stereo pair.
+  TvgEye = (eyLeft, eyRight);
+
+  { Stereo pair settings, owned by a TvgCamera (TvgCamera.Stereo).
+
+    The eyes sit either side of the camera's Position along RightVector, with
+    PARALLEL view axes (not toed in: toe-in gives vertical parallax at the
+    sides and eye strain).  Each eye's projection is off-axis, shifted so the
+    two frusta share one window at Convergence: things at that distance have
+    no parallax (they appear at the screen), nearer ones come out of it,
+    further ones go behind it.
+
+    The camera's eye functions (EyePosition, GetEyeViewMatrixForOrigin, ...)
+    always use these values; Enabled only says whether the renderer should
+    draw a stereo pair.  An orthographic camera has no parallax: its eye
+    functions return the mono matrices. }
+  TvgStereoSettings = class(TPersistent)
+  private
+    fEnabled       : Boolean;
+    fEyeSeparation : Double;
+    fConvergence   : Double;
+    fSwapEyes      : Boolean;
+    fOnChange      : TNotifyEvent;
+    procedure SetEnabled(const Value: Boolean);
+    procedure SetEyeSeparation(const Value: Double);
+    procedure SetConvergence(const Value: Double);
+    procedure SetSwapEyes(const Value: Boolean);
+    function  IsSeparationStored: Boolean;
+    function  IsConvergenceStored: Boolean;
+  protected
+    procedure Changed; virtual;
+  public
+    constructor Create;
+    procedure Assign(Source: TPersistent); override;
+    // -1 for the left eye, +1 for the right: the eye's offset along
+    // RightVector in units of EyeSeparation / 2.
+    class function EyeSign(aEye: TvgEye): Double; static;
+    // After any property changes.  TvgCamera uses it to bump its Revision.
+    property OnChange: TNotifyEvent read fOnChange write fOnChange;
+  published
+    // Draw a stereo pair.  The eye maths work whatever this says.
+    property Enabled       : Boolean read fEnabled       write SetEnabled default False;
+    { Distance between the eyes in SCENE units (0.064 = 64 mm for a scene in
+      metres).  0 gives two identical eyes.  Negative values are made 0. }
+    property EyeSeparation : Double  read fEyeSeparation write SetEyeSeparation
+                                     stored IsSeparationStored;
+    { Zero-parallax distance from the eyes, in scene units, along the view.
+      Values at or below the near plane are allowed but uncomfortable; 0 or
+      less is made the default. }
+    property Convergence   : Double  read fConvergence   write SetConvergence
+                                     stored IsConvergenceStored;
+    { Show the right eye's image on the left: for cross-eyed free viewing or
+      a device that is wired the other way.  Only where the images go - the
+      eye maths do not change. }
+    property SwapEyes      : Boolean read fSwapEyes      write SetSwapEyes default False;
+  end;
+
   { TvgCamera: Main camera class }
   TvgCamera = class
   private
@@ -213,7 +276,11 @@ type
     FRevision: UInt64;
     FName: string;
 
+    FStereo : TvgStereoSettings;
+
     function GetRevision: UInt64;
+    procedure SetStereo(const Value: TvgStereoSettings);
+    procedure StereoChanged(Sender: TObject);
 
     // --- Setters with dirty marking ---
     procedure SetPosition(const Value: TpvVector3D);
@@ -245,6 +312,15 @@ type
       (0,0,0): the same rotation, translated by the eye's offset from aOrigin.
       CALLER MUST HOLD FCriticalSection, with the view matrix current. }
     function  BuildViewForOrigin(const aOrigin: TpvVector3D): TpvMatrix4x4D;
+
+    { One eye's view and projection, as BuildViewForOrigin /
+      BuildProjectionForAspect but for aEye of the stereo pair.  The view
+      only adds the eye's offset to the translation, in double, after the
+      origin is subtracted; the projection adds the off-axis shift.
+      Orthographic: the mono matrices.
+      CALLER MUST HOLD FCriticalSection, with the view matrix current. }
+    function  BuildEyeViewForOrigin(aEye: TvgEye; const aOrigin: TpvVector3D): TpvMatrix4x4D;
+    function  BuildEyeProjectionForAspect(aEye: TvgEye; aAspect: Double): TpvMatrix4x4D;
 
     { Places the eye so the box aMin..aMax fills a viewport of aAspect, looking
       along aDirection with aUp as the screen's up.  Shared by every ZoomAll
@@ -425,6 +501,38 @@ type
       that the result survives narrowing to a float32 mat4. }
     function GetViewProjectionMatrixForAspect(aAspect: Double; const aOrigin: TpvVector3D): TpvMatrix4x4D; overload;
 
+    // --- Stereo (see TvgStereoSettings) ------------------------------------
+    // Thread-safe like the mono getters, and none mutates cached state.
+    // aAspect is ONE EYE's viewport aspect (half the window's for full
+    // side-by-side).  An orthographic camera returns the mono results.
+
+    { Where aEye is in the world: Position -/+ RightVector * EyeSeparation/2. }
+    function EyePosition(aEye: TvgEye): TpvVector3D;
+
+    { aEye's view for geometry relative to aOrigin: the mono view's axes
+      (parallel eyes), moved to the eye. }
+    function GetEyeViewMatrixForOrigin(aEye: TvgEye; const aOrigin: TpvVector3D): TpvMatrix4x4D;
+
+    { aEye's off-axis projection: the mono projection for aAspect with its
+      window shifted by -/+ (EyeSeparation/2) * Near / Convergence, so both
+      eyes see the same window at Convergence.  Same Y field of view, depth
+      range and Y flip as the mono projection. }
+    function GetEyeProjectionMatrixForAspect(aEye: TvgEye; aAspect: Double): TpvMatrix4x4D;
+
+    { Projection * View for aEye, local to aOrigin: what the renderer hands
+      the GPU for that eye (the stereo GetViewProjectionMatrixForAspect). }
+    function GetEyeViewProjectionMatrixForAspect(aEye: TvgEye; aAspect: Double;
+                                                 const aOrigin: TpvVector3D): TpvMatrix4x4D;
+
+    { One cull volume holding both eyes' frusta, local to aOrigin, so nothing
+      either eye sees is culled.  Top, bottom, near and far are shared by the
+      eyes.  The side planes are not simply each eye's outer plane: the two
+      left planes cross at Convergence, and beyond it the RIGHT eye's is the
+      outer one.  So the left plane is the right eye's, moved over to pass
+      through the left eye (and the right plane the mirror of that) - outside
+      both frusta at every distance. }
+    function GetStereoFrustumPlanesForAspect(aAspect: Double; const aOrigin: TpvVector3D): TvgFrustrumPlanes;
+
     // --- Properties ---
     property Position: TpvVector3D read FPosition write SetPosition;
     property Target: TpvVector3D read FTarget write SetTarget;
@@ -453,6 +561,10 @@ type
     property Revision: UInt64 read GetRevision;
 
     property Name: string read FName write FName;
+
+    { The stereo pair: eye separation, convergence, on/off.  Owned; assigning
+      copies.  Changing it bumps Revision. }
+    property Stereo: TvgStereoSettings read FStereo write SetStereo;
   end;
 
   { Helper: Camera manager for a scene }
@@ -806,6 +918,9 @@ begin
 
   FName           := 'Camera_' + IntToStr(Integer(Self));
 
+  FStereo          := TvgStereoSettings.Create;
+  FStereo.OnChange := StereoChanged;
+
   RecalculateViewMatrix;
   RecalculateProjectionMatrix;
   RecalculateViewProjectionMatrix;
@@ -813,6 +928,7 @@ end;
 
 destructor TvgCamera.Destroy;
 begin
+  FStereo.Free;
   FCriticalSection.Free;
   vgReleaseAxisConvention;
   inherited Destroy;
@@ -959,6 +1075,245 @@ procedure TvgCamera.InvalidateMatrices(aFlags: TCameraUpdateFlags);
 begin
   FUpdateFlags := FUpdateFlags + aFlags;
   Inc(FRevision);
+end;
+
+{ TvgStereoSettings }
+
+constructor TvgStereoSettings.Create;
+begin
+  inherited Create;
+  fEyeSeparation := STEREO_DEFAULT_SEPARATION;
+  fConvergence   := STEREO_DEFAULT_CONVERGENCE;
+end;
+
+procedure TvgStereoSettings.Assign(Source: TPersistent);
+var
+  S : TvgStereoSettings;
+begin
+  if Source is TvgStereoSettings then
+  begin
+    S := TvgStereoSettings(Source);
+    fEnabled       := S.fEnabled;
+    fEyeSeparation := S.fEyeSeparation;
+    fConvergence   := S.fConvergence;
+    fSwapEyes      := S.fSwapEyes;
+    Changed;
+  end
+  else
+    inherited Assign(Source);
+end;
+
+procedure TvgStereoSettings.Changed;
+begin
+  if Assigned(fOnChange) then
+    fOnChange(Self);
+end;
+
+class function TvgStereoSettings.EyeSign(aEye: TvgEye): Double;
+begin
+  if aEye = eyLeft then Result := -1.0 else Result := 1.0;
+end;
+
+procedure TvgStereoSettings.SetEnabled(const Value: Boolean);
+begin
+  if Value = fEnabled then exit;
+  fEnabled := Value;
+  Changed;
+end;
+
+procedure TvgStereoSettings.SetEyeSeparation(const Value: Double);
+var
+  V : Double;
+begin
+  V := Max(0.0, Value);
+  if V = fEyeSeparation then exit;
+  fEyeSeparation := V;
+  Changed;
+end;
+
+procedure TvgStereoSettings.SetConvergence(const Value: Double);
+var
+  V : Double;
+begin
+  // 0 or less would divide by zero (or put the window behind the eyes).
+  if Value > 0 then V := Value else V := STEREO_DEFAULT_CONVERGENCE;
+  if V = fConvergence then exit;
+  fConvergence := V;
+  Changed;
+end;
+
+procedure TvgStereoSettings.SetSwapEyes(const Value: Boolean);
+begin
+  if Value = fSwapEyes then exit;
+  fSwapEyes := Value;
+  Changed;
+end;
+
+function TvgStereoSettings.IsSeparationStored: Boolean;
+begin
+  Result := fEyeSeparation <> STEREO_DEFAULT_SEPARATION;
+end;
+
+function TvgStereoSettings.IsConvergenceStored: Boolean;
+begin
+  Result := fConvergence <> STEREO_DEFAULT_CONVERGENCE;
+end;
+
+{ TvgCamera }
+
+procedure TvgCamera.SetStereo(const Value: TvgStereoSettings);
+begin
+  FStereo.Assign(Value);
+end;
+
+procedure TvgCamera.StereoChanged(Sender: TObject);
+begin
+  // Nothing cached depends on the stereo settings (the eye matrices are
+  // built on request), but anything watching Revision must redraw.
+  FCriticalSection.Enter;
+  try
+    InvalidateMatrices([]);
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+function TvgCamera.BuildEyeViewForOrigin(aEye: TvgEye; const aOrigin: TpvVector3D): TpvMatrix4x4D;
+begin
+  Result := BuildViewForOrigin(aOrigin);
+  if FProjectionType <> ptPerspective then exit;
+  // The eye is at Position + Sign * Sep/2 along the view's own X axis, so in
+  // view space everything is Sign * Sep/2 the other way: only the X
+  // translation changes, and the rotation stays the mono one (parallel axes).
+  Result.RawComponents[3, 0] := Result.RawComponents[3, 0] -
+                                TvgStereoSettings.EyeSign(aEye) * FStereo.EyeSeparation * 0.5;
+end;
+
+function TvgCamera.BuildEyeProjectionForAspect(aEye: TvgEye; aAspect: Double): TpvMatrix4x4D;
+var
+  f : Double;
+begin
+  Result := BuildProjectionForAspect(aAspect);
+  if FProjectionType <> ptPerspective then exit;
+  if aAspect <= 0 then aAspect := 1.0;    // as BuildProjectionForAspect
+  // Off-axis: the window at the near plane moves by
+  // -Sign * (Sep/2) * Near / Convergence, which in clip space is the z
+  // column's x term - (r + l) / (r - l) of a general frustum - with
+  // r - l = 2 * Near * aAspect / f.  A point Convergence ahead of the mono
+  // camera then lands at the same x in both eyes (zero parallax), and one at
+  // infinity at x = -that term.
+  f := Cos(DegToRad(FFieldOfView) / 2) / Sin(DegToRad(FFieldOfView) / 2);
+  Result.RawComponents[2, 0] := -TvgStereoSettings.EyeSign(aEye) *
+                                FStereo.EyeSeparation * 0.5 * f /
+                                (aAspect * FStereo.Convergence);
+end;
+
+function TvgCamera.EyePosition(aEye: TvgEye): TpvVector3D;
+begin
+  FCriticalSection.Enter;
+  try
+    if cfViewDirty in FUpdateFlags then
+      RecalculateViewMatrix;
+    Result := FPosition;
+    if FProjectionType = ptPerspective then
+      // Row 0 of the view rotation is the right axis - the one the eye
+      // offset in BuildEyeViewForOrigin is measured along.
+      Result := Result + TpvVector3D.Create(FViewMatrix.RawComponents[0, 0],
+                                            FViewMatrix.RawComponents[1, 0],
+                                            FViewMatrix.RawComponents[2, 0]) *
+                         (TvgStereoSettings.EyeSign(aEye) * FStereo.EyeSeparation * 0.5);
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+function TvgCamera.GetEyeViewMatrixForOrigin(aEye: TvgEye; const aOrigin: TpvVector3D): TpvMatrix4x4D;
+begin
+  FCriticalSection.Enter;
+  try
+    if cfViewDirty in FUpdateFlags then
+      RecalculateViewMatrix;
+    Result := BuildEyeViewForOrigin(aEye, aOrigin);
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+function TvgCamera.GetEyeProjectionMatrixForAspect(aEye: TvgEye; aAspect: Double): TpvMatrix4x4D;
+begin
+  FCriticalSection.Enter;
+  try
+    Result := BuildEyeProjectionForAspect(aEye, aAspect);
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+function TvgCamera.GetEyeViewProjectionMatrixForAspect(aEye: TvgEye; aAspect: Double;
+  const aOrigin: TpvVector3D): TpvMatrix4x4D;
+begin
+  FCriticalSection.Enter;
+  try
+    if cfViewDirty in FUpdateFlags then
+      RecalculateViewMatrix;
+    // Proj * View, spelled View * Proj - see RecalculateViewProjectionMatrix.
+    Result := BuildEyeViewForOrigin(aEye, aOrigin) * BuildEyeProjectionForAspect(aEye, aAspect);
+  finally
+    FCriticalSection.Leave;
+  end;
+end;
+
+function TvgCamera.GetStereoFrustumPlanesForAspect(aAspect: Double;
+  const aOrigin: TpvVector3D): TvgFrustrumPlanes;
+var
+  ProjL, ProjR : TpvMatrix4x4D;
+  VPL, VPR     : TpvMatrix4x4D;
+  EyeL, EyeR   : TpvVector3D;
+  Right        : TpvVector3D;
+  Half         : Double;
+  NearDist     : Double;
+  Persp        : Boolean;
+  PL, PR       : TvgFrustrumPlanes;
+  N            : TpvVector4D;
+begin
+  FCriticalSection.Enter;
+  try
+    if cfViewDirty in FUpdateFlags then
+      RecalculateViewMatrix;
+    ProjL    := BuildEyeProjectionForAspect(eyLeft,  aAspect);
+    ProjR    := BuildEyeProjectionForAspect(eyRight, aAspect);
+    VPL      := BuildEyeViewForOrigin(eyLeft,  aOrigin) * ProjL;
+    VPR      := BuildEyeViewForOrigin(eyRight, aOrigin) * ProjR;
+    NearDist := FNearPlane;
+    Persp    := FProjectionType = ptPerspective;
+    Right    := TpvVector3D.Create(FViewMatrix.RawComponents[0, 0],
+                                   FViewMatrix.RawComponents[1, 0],
+                                   FViewMatrix.RawComponents[2, 0]);
+    Half     := FStereo.EyeSeparation * 0.5;
+    // The eyes relative to aOrigin, subtracted first as everywhere else.
+    EyeL     := (FPosition - aOrigin) - Right * Half;
+    EyeR     := (FPosition - aOrigin) + Right * Half;
+  finally
+    FCriticalSection.Leave;
+  end;
+
+  // Outside the lock, like GetFrustumPlanesForAspect.
+  PL := vgExtractFrustumPlanes(VPL, vgProjectionIsZeroToOneDepth(ProjL, NearDist));
+  if not Persp then
+    exit(PL);    // orthographic: both eyes are the mono view
+  PR := vgExtractFrustumPlanes(VPR, vgProjectionIsZeroToOneDepth(ProjR, NearDist));
+
+  // Top, bottom, near and far: the same plane for both eyes (each contains
+  // the line through the eyes).  Sides: the steeper (outer-at-distance) of
+  // each pair, re-anchored on the outer eye.  A side plane passes through
+  // its eye, so D = -(normal . eye); the normals are unit (inward).
+  Result := PL;
+  N := PR.Planes[FRUSTUM_PLANE_LEFT];
+  N.w := -(N.x * EyeL.x + N.y * EyeL.y + N.z * EyeL.z);
+  Result.Planes[FRUSTUM_PLANE_LEFT] := N;
+  N := PL.Planes[FRUSTUM_PLANE_RIGHT];
+  N.w := -(N.x * EyeR.x + N.y * EyeR.y + N.z * EyeR.z);
+  Result.Planes[FRUSTUM_PLANE_RIGHT] := N;
 end;
 
 function TvgCamera.GetRevision: UInt64;
