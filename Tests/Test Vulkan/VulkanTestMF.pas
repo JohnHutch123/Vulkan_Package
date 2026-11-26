@@ -27,6 +27,7 @@ uses
   Vulkan_SceneLoaders,
   Vulkan_Loader_OBJ,
   Vulkan_SkyBox,
+  Vulkan_FirstPerson,
   VulkanTestDM;
 
 type
@@ -65,6 +66,14 @@ type
     NavRB: TRadioGroup;
     MessagesTxt: TMemo;
     Panel1: TPanel;
+    FPBox: TGroupBox;
+    SpeedLbl: TLabel;
+    EyeLbl: TLabel;
+    StepLbl: TLabel;
+    SpeedEd: TEdit;
+    EyeEd: TEdit;
+    StepEd: TEdit;
+    FloatCB: TCheckBox;
 
     procedure Button1Click(Sender: TObject);
     procedure Button2Click(Sender: TObject);
@@ -89,6 +98,7 @@ type
     procedure SkyRBClick(Sender: TObject);
     procedure SkyTimerTimer(Sender: TObject);
     procedure NavRBClick(Sender: TObject);
+    procedure FPSettingsChange(Sender: TObject);
   private
     { Private declarations }
     fInstance : TvgInstance;
@@ -108,6 +118,10 @@ type
 
     // Fly mode: the eye's position and the speed, in the status bar.
     procedure FlyMoved(Sender: TObject);
+    // Walk: a step was refused - shown after the position.
+    procedure FlyBlocked(Sender: TObject);
+    // The First person box from the controller, without firing its OnChange.
+    procedure ShowFPSettings;
 
     // Pushes the Delaunay group's controls into fDelaunay: layer visibility
     // (a layer ticked for the first time is built), Z or W, and the interval.
@@ -601,6 +615,8 @@ begin
      fToolManager.Renderer := fRenderer;
      fToolManager.ActionMode := TAM_CAMERA_ORBIT;
      fToolManager.FirstPerson.OnMoved := FlyMoved;
+     fToolManager.FirstPerson.OnBlocked := FlyBlocked;
+     ShowFPSettings;
 
     SkyRBClick(nil);    // the sky already chosen, for the new scene
     NavRBClick(nil);    // the navigation already chosen
@@ -959,6 +975,7 @@ begin
     MessagesTxt.Lines.Add('     W A S D / arrows move, Shift run, Ctrl slow,');
     MessagesTxt.Lines.Add('     left drag looks, right drag moves, wheel sets speed.');
     MessagesTxt.Lines.Add('     Click the 3D view first if the keys do nothing.');
+    MessagesTxt.Lines.Add('     Speed, eye and step height: the First person box.');
     FlyMoved(nil);
   End
   else
@@ -984,6 +1001,64 @@ begin
         Format('   on ground at %.3f', [fToolManager.FirstPerson.GroundHeight])
     else
       StatusBar1.Panels[0].Text := StatusBar1.Panels[0].Text + '   no ground (floating)';
+end;
+
+procedure TTestVulkan.FlyBlocked(Sender: TObject);
+  Const BLOCKED = '   blocked: too steep, too high or the edge';
+begin
+  // OnMoved does not fire for a refused step, so the readout still shows
+  // where the eye is; add why it did not move, once.
+  If Pos(BLOCKED, StatusBar1.Panels[0].Text) = 0 then
+    StatusBar1.Panels[0].Text := StatusBar1.Panels[0].Text + BLOCKED;
+end;
+
+procedure TTestVulkan.ShowFPSettings;
+  Var FP : TvgFirstPersonController;
+      Ev : TNotifyEvent;
+begin
+  If not assigned(fToolManager) then exit;
+  FP := fToolManager.FirstPerson;
+  Ev := SpeedEd.OnChange;
+  SpeedEd.OnChange := nil;
+  EyeEd.OnChange   := nil;
+  StepEd.OnChange  := nil;
+  FloatCB.OnClick  := nil;
+  try
+    SpeedEd.Text    := FloatToStr(FP.Speed);
+    EyeEd.Text      := FloatToStr(FP.EyeHeight);
+    StepEd.Text     := FloatToStr(FP.StepHeight);
+    FloatCB.Checked := FP.EdgeBehaviour = ebFloat;
+  finally
+    SpeedEd.OnChange := Ev;
+    EyeEd.OnChange   := Ev;
+    StepEd.OnChange  := Ev;
+    FloatCB.OnClick  := Ev;
+  end;
+end;
+
+procedure TTestVulkan.FPSettingsChange(Sender: TObject);
+  Var FP : TvgFirstPersonController;
+      V  : Double;
+begin
+  If not assigned(fToolManager) then exit;
+  FP := fToolManager.FirstPerson;
+  // A half-typed number (empty, '-', '1.') is skipped until it parses.
+  If (Sender = SpeedEd) and TryStrToFloat(SpeedEd.Text, V) and (V >= 0) then
+  Begin
+    FP.Speed      := V;
+    FP.SpeedScale := 1;   // the typed speed is the speed, not wheel-scaled
+  End
+  else If (Sender = EyeEd) and TryStrToFloat(EyeEd.Text, V) and (V > 0) then
+    FP.EyeHeight := V     // standing in walk mode, the eye moves now
+  else If (Sender = StepEd) and TryStrToFloat(StepEd.Text, V) and (V >= 0) then
+    FP.StepHeight := V
+  else If Sender = FloatCB then
+    If FloatCB.Checked then
+      FP.EdgeBehaviour := ebFloat
+    else
+      FP.EdgeBehaviour := ebStop;
+  If fToolManager.NavigationMode <> nmOrbit then
+    FlyMoved(nil);
 end;
 
 procedure TTestVulkan.SkyTimerTimer(Sender: TObject);

@@ -355,11 +355,85 @@ object TestVulkan: TTestVulkan
       TabOrder = 29
       OnClick = NavRBClick
     end
+    object FPBox: TGroupBox
+      Left = 8
+      Top = 626
+      Width = 330
+      Height = 50
+      Hint = 
+        'Fly/Walk settings, in scene units.  Speed 0 is automatic (the wh' +
+        'eel scales it); eye height and step height are used when walking.'
+      Caption = 'First person'
+      ParentShowHint = False
+      ShowHint = True
+      TabOrder = 30
+      object SpeedLbl: TLabel
+        Left = 8
+        Top = 22
+        Width = 32
+        Height = 15
+        Caption = 'Speed'
+      end
+      object EyeLbl: TLabel
+        Left = 92
+        Top = 22
+        Width = 18
+        Height = 15
+        Caption = 'Eye'
+      end
+      object StepLbl: TLabel
+        Left = 160
+        Top = 22
+        Width = 23
+        Height = 15
+        Caption = 'Step'
+      end
+      object SpeedEd: TEdit
+        Left = 44
+        Top = 19
+        Width = 42
+        Height = 23
+        Hint = 'Units per second; 0 = automatic'
+        TabOrder = 0
+        Text = '0'
+        OnChange = FPSettingsChange
+      end
+      object EyeEd: TEdit
+        Left = 114
+        Top = 19
+        Width = 40
+        Height = 23
+        Hint = 'Eye height above the surface (walk)'
+        TabOrder = 1
+        Text = '1.7'
+        OnChange = FPSettingsChange
+      end
+      object StepEd: TEdit
+        Left = 186
+        Top = 19
+        Width = 40
+        Height = 23
+        Hint = 'Highest step climbed (walk)'
+        TabOrder = 2
+        Text = '0.4'
+        OnChange = FPSettingsChange
+      end
+      object FloatCB: TCheckBox
+        Left = 234
+        Top = 22
+        Width = 92
+        Height = 17
+        Hint = 'Walk on at the same height past the edge of the surface'
+        Caption = 'Float at edges'
+        TabOrder = 3
+        OnClick = FPSettingsChange
+      end
+    end
     object MessagesTxt: TMemo
       Left = 1
-      Top = 625
+      Top = 679
       Width = 343
-      Height = 144
+      Height = 90
       Align = alBottom
       ScrollBars = ssBoth
       TabOrder = 28
