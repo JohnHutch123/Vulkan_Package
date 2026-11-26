@@ -164,6 +164,7 @@
         <DCCReference Include="..\RunTime_Src\Vulkan_LOD.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_SkyBox.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_FirstPerson.pas"/>
+        <DCCReference Include="..\RunTime_Src\Vulkan_MeshGround.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_MeshUtils.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_MeshBuilder.pas"/>
         <DCCReference Include="..\RunTime_Src\Vulkan_SceneLoaders.pas"/>

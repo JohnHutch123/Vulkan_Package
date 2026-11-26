@@ -936,13 +936,27 @@ procedure TTestVulkan.NavRBClick(Sender: TObject);
 begin
   If not assigned(fToolManager) then exit;
 
-  If NavRB.ItemIndex = 1 then
+  If NavRB.ItemIndex in [1, 2] then
   Begin
-    fToolManager.NavigationMode := nmFly;
+    If NavRB.ItemIndex = 2 then
+      fToolManager.NavigationMode := nmWalk
+    else
+      fToolManager.NavigationMode := nmFly;
     // Keys reach the tool manager only while the 3D view has focus.
     If assigned(fVCLWin) and fVCLWin.CanFocus then
       fVCLWin.SetFocus;
-    MessagesTxt.Lines.Add('Fly: W A S D / arrows move, Q E down/up, Shift run, Ctrl slow,');
+    If NavRB.ItemIndex = 2 then
+    Begin
+      MessagesTxt.Lines.Add(Format('Walk: eye %.2f over the surface, steps up to %.2f, slopes to %.0f deg.',
+                                   [fToolManager.FirstPerson.EyeHeight,
+                                    fToolManager.FirstPerson.StepHeight,
+                                    fToolManager.FirstPerson.MaxSlope]));
+      If not fToolManager.FirstPerson.Grounded then
+        MessagesTxt.Lines.Add('     No surface under the eye: walking keeps the height.');
+    End
+    else
+      MessagesTxt.Lines.Add('Fly: Q E down/up.');
+    MessagesTxt.Lines.Add('     W A S D / arrows move, Shift run, Ctrl slow,');
     MessagesTxt.Lines.Add('     left drag looks, right drag moves, wheel sets speed.');
     MessagesTxt.Lines.Add('     Click the 3D view first if the keys do nothing.');
     FlyMoved(nil);
@@ -964,6 +978,12 @@ begin
   P := Cam.Position;
   StatusBar1.Panels[0].Text := Format('Eye %.3f, %.3f, %.3f   speed %.3g /s',
                                       [P.x, P.y, P.z, fToolManager.FirstPerson.EffectiveSpeed]);
+  If fToolManager.NavigationMode = nmWalk then
+    If fToolManager.FirstPerson.Grounded then
+      StatusBar1.Panels[0].Text := StatusBar1.Panels[0].Text +
+        Format('   on ground at %.3f', [fToolManager.FirstPerson.GroundHeight])
+    else
+      StatusBar1.Panels[0].Text := StatusBar1.Panels[0].Text + '   no ground (floating)';
 end;
 
 procedure TTestVulkan.SkyTimerTimer(Sender: TObject);

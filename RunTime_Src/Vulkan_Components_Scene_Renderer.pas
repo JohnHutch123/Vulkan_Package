@@ -58,6 +58,7 @@ const
   // repeated here (with the type below) so code using this unit needs no other.
   nmOrbit = Vulkan_FirstPerson.nmOrbit;
   nmFly   = Vulkan_FirstPerson.nmFly;
+  nmWalk  = Vulkan_FirstPerson.nmWalk;
 
 type
   TvgNavigationMode = Vulkan_FirstPerson.TvgNavigationMode;
@@ -1054,6 +1055,10 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
     // First-person navigation (Vulkan_FirstPerson)
     fNavigationMode : TvgNavigationMode;
     fFirstPerson    : TvgFirstPersonController;
+    fGround         : IvgGroundProvider;   // set by the application
+    fSceneGround    : IvgGroundProvider;   // built from the scene (AutoGround)
+    fSceneGroundKey : UInt64;              // the scene data it was built from
+    fAutoGround     : Boolean;
 
     // Object editing state
     fSelectedObject   : TvgObject;
@@ -1088,7 +1093,11 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
     // IvgFirstPersonHost
     function  FirstPersonCamera: TvgCamera;
     function  FirstPersonSceneSize: Double;
+    function  FirstPersonGround: IvgGroundProvider;
     procedure FirstPersonMoved;
+    // A fingerprint of the stores and objects BuildSceneGround reads.
+    function  SceneGroundKey: UInt64;
+    procedure SetGround(const Value: IvgGroundProvider);
 
     // Keys and focus for first-person movement; nothing in nmOrbit.
     function  DoNavigationKey(var Key: Word; Shift: TShiftState; aDown: Boolean): Boolean; Override;
@@ -1255,6 +1264,17 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
     // The camera the tool manager works with: the scene's active one.
     property ActiveCamera : TvgCamera read GetActiveCamera;
 
+    { The surface nmWalk follows: a TvgMeshGround of the application's
+      choosing, a Delaunay surface (PRO), anything implementing
+      IvgGroundProvider.  nil (the default) with AutoGround uses the scene's
+      own triangles. }
+    property Ground : IvgGroundProvider read fGround write SetGround;
+
+    { A TvgMeshGround of every visible triangle object in the scene's data
+      stores (those in GetDataBounds), in world coordinates, with the package
+      up axis (vgWorldUp).  nil when there is none. }
+    function  BuildSceneGround: IvgGroundProvider;
+
     // --- Zoom to all data ----------------------------------------------
     // Moves the active camera so every object in the scene is on screen,
     // fitted to this tool manager's current viewport.  Not gestures - call
@@ -1308,9 +1328,16 @@ TvgSceneLoaderStorer = Class(TvgBaseComponent)
       tool manager while the render window has focus (click it).  Switching
       keeps the camera where it is: orbit then turns about the point the
       fly view was looking at. }
+    { nmWalk: the same controls on foot - the eye stays FirstPerson.EyeHeight
+      over the ground (see Ground / AutoGround), stairs up to StepHeight are
+      climbed, surfaces steeper than MaxSlope refused; Q E do nothing.
+      Switching to nmWalk drops the eye onto the ground below it. }
     property NavigationMode : TvgNavigationMode read fNavigationMode write SetNavigationMode default nmOrbit;
-    // Speeds and look settings for nmFly.
+    // Speeds, look and walking settings for nmFly / nmWalk.
     property FirstPerson    : TvgFirstPersonController read fFirstPerson write SetFirstPerson;
+    { True: with no Ground set, nmWalk walks on every visible triangle in the
+      scene's data (BuildSceneGround), rebuilt when that data changes. }
+    property AutoGround     : Boolean read fAutoGround write fAutoGround default True;
     // Dolly-button drag speed, relative to the distance to the camera target
     // so it feels the same whatever the model size.  At 1.0 (and the default
     // MouseSensitivity) about 175 pixels of drag halves or doubles that
@@ -1365,6 +1392,9 @@ function  vgFindRenderEngine(const aName: string): TvgRenderEngineClass;
 
 
 implementation
+
+uses
+  Vulkan_MeshGround;
 
 var
   gRenderEngines : TList<TvgRenderEngineInfo> = nil;
@@ -4149,6 +4179,7 @@ begin
   fPickRadius     := 6;
   fProjections    := TObjectDictionary<TvgObject, TvgObjectProjection>.Create([doOwnsValues]);
   fNavigationMode := nmOrbit;
+  fAutoGround     := True;
   fFirstPerson    := TvgFirstPersonController.Create(Self);
 end;
 
@@ -4156,6 +4187,8 @@ destructor TvgToolManager.Destroy;
 begin
   // First: its tick thread must not call back into a half-destroyed self.
   FreeAndNil(fFirstPerson);
+  fGround      := nil;
+  fSceneGround := nil;
   fSelectedObject := nil;   // not owned
   FreeAndNil(fSelection);
   FreeAndNil(fProjections);
@@ -4322,6 +4355,116 @@ begin
   If Assigned(fFirstPerson) then
     fFirstPerson.ReleaseAll;
   fNavigationMode := Value;
+
+  // Not while loading from the DFM: there is no camera or data yet, and the
+  // walk would start (BeginWalk) from wherever the camera happens to be.
+  If Assigned(fFirstPerson) and not (csLoading in ComponentState) then
+    Case Value of
+      nmFly  : fFirstPerson.Mode := nmFly;
+      nmWalk : Begin
+                 // Start from the scene as it is now, not a stale ground.
+                 fSceneGround := nil;
+                 // Re-entering walk from walk-via-fly must re-find the ground.
+                 If fFirstPerson.Mode = nmWalk then
+                   fFirstPerson.BeginWalk
+                 else
+                   fFirstPerson.Mode := nmWalk;
+               End;
+    End;
+end;
+
+procedure TvgToolManager.SetGround(const Value: IvgGroundProvider);
+begin
+  fGround := Value;
+  If (fNavigationMode = nmWalk) and Assigned(fFirstPerson) then
+    fFirstPerson.BeginWalk;
+end;
+
+function TvgToolManager.SceneGroundKey: UInt64;
+  Var I, J, Vis : Integer;
+      Store     : TvgObjectStore;
+      Obj       : TvgObject;
+
+  procedure Mix(aValue: UInt64);
+  Begin
+    // FNV-1a over the 8 bytes, enough to notice any change.
+    Result := (Result xor aValue) * UInt64(1099511628211);
+  End;
+
+begin
+  Result := UInt64(14695981039346656037);
+  If not Assigned(fScene) or not Assigned(fScene.SceneData) then exit;
+  For I := 0 to fScene.SceneData.Count - 1 do
+  Begin
+    Store := fScene.SceneData.Items[I];
+    If not Assigned(Store) or not Store.fInDataBounds then Continue;
+    Mix(UInt64(NativeUInt(Store)));
+    Mix(Store.ChangeStamp);
+    // Showing or hiding an object does not touch the data's stamp.
+    Vis := 0;
+    If Assigned(Store.fObjects) then
+      For J := 0 to Store.fObjects.Count - 1 do
+      Begin
+        Obj := Store.fObjects.Items[J];
+        If Assigned(Obj) and Obj.VisibleON then
+          Inc(Vis);
+      End;
+    Mix(UInt64(Vis));
+  End;
+end;
+
+function TvgToolManager.BuildSceneGround: IvgGroundProvider;
+  Var I, J    : Integer;
+      Store   : TvgObjectStore;
+      Obj     : TvgObject;
+      Prims   : TArray<Integer>;
+      Verts   : TArray<TpvVector3D>;
+      MG      : TvgMeshGround;
+begin
+  Result := nil;
+  If not Assigned(fScene) or not Assigned(fScene.SceneData) then exit;
+
+  MG := TvgMeshGround.Create(vgWorldUp);
+  Result := MG;    // the interface owns it from here
+  For I := 0 to fScene.SceneData.Count - 1 do
+  Begin
+    Store := fScene.SceneData.Items[I];
+    // The stores GetDataBounds counts: data, not helpers (the sky, previews).
+    If not Assigned(Store) or not Store.fInDataBounds then Continue;
+    If not Assigned(Store.fObjects) then Continue;
+    If not Store.IsVertexTypeSet(vdtPosition) then Continue;
+
+    For J := 0 to Store.fObjects.Count - 1 do
+    Begin
+      Obj := Store.fObjects.Items[J];
+      If not Assigned(Obj) or (Obj.fObjIndex < 0) or not Obj.VisibleON then Continue;
+      If Store.IsObjectDeleted(Obj.fObjIndex) then Continue;
+      If Store.GetObjectVertexCount(Obj.fObjIndex) = 0 then Continue;
+      // Triangles only: points and lines are not ground.
+      If Obj.GetPrimitives(Prims) <> 3 then Continue;
+      Verts := Obj.GetVertexWorldPositions;
+      MG.AddMesh(Verts, Prims);
+    End;
+  End;
+
+  If MG.TriangleCount = 0 then
+    Result := nil;
+end;
+
+function TvgToolManager.FirstPersonGround: IvgGroundProvider;
+  Var Key : UInt64;
+begin
+  Result := fGround;
+  If Assigned(Result) or not fAutoGround then exit;
+
+  // Rebuilt only when the scene's data has changed since.
+  Key := SceneGroundKey;
+  If not Assigned(fSceneGround) or (Key <> fSceneGroundKey) then
+  Begin
+    fSceneGround    := BuildSceneGround;
+    fSceneGroundKey := Key;
+  End;
+  Result := fSceneGround;
 end;
 
 procedure TvgToolManager.SetFirstPerson(const Value: TvgFirstPersonController);
@@ -4354,9 +4497,13 @@ end;
 function TvgToolManager.DoNavigationKey(var Key: Word; Shift: TShiftState; aDown: Boolean): Boolean;
 begin
   Result := False;
-  If (fNavigationMode <> nmFly) or not Assigned(fFirstPerson) then exit;
+  If not (fNavigationMode in [nmFly, nmWalk]) or not Assigned(fFirstPerson) then exit;
   // Alt combinations belong to the form (menus).
   If ssAlt in Shift then exit;
+
+  // A mode streamed in from a DFM skipped the controller (csLoading).
+  If fFirstPerson.Mode <> fNavigationMode then
+    fFirstPerson.Mode := fNavigationMode;
 
   If aDown then
     Result := fFirstPerson.KeyDown(Key, Shift)
@@ -4374,10 +4521,12 @@ procedure TvgToolManager.DispatchFlyGesture(Shift: TShiftState; aDeltaX, aDeltaY
 begin
   If not Assigned(fFirstPerson) then exit;
 
-  // The pan button pans, as in orbit mode.
+  // The pan button pans, as in orbit mode - flying only: a pan would lift
+  // a walker off the ground.
   If fPanButton in fMouseButtons then
   Begin
-    DoCameraPan(aDeltaX, aDeltaY);
+    If fNavigationMode = nmFly then
+      DoCameraPan(aDeltaX, aDeltaY);
     exit;
   End;
 
@@ -5250,7 +5399,7 @@ end;
 procedure TvgToolManager.DispatchCameraGesture(Shift: TShiftState;
                                                 aDeltaX, aDeltaY: Single);
 begin
-  If fNavigationMode = nmFly then
+  If fNavigationMode in [nmFly, nmWalk] then
   Begin
     DispatchFlyGesture(Shift, aDeltaX, aDeltaY);
     exit;
@@ -5585,9 +5734,9 @@ begin
   If ToolMouseWheel(Shift, WheelDelta) then
     exit;
 
-  // Flying, the wheel sets the speed: zooming towards a target means
-  // nothing when the view turns about the eye.
-  If (fNavigationMode = nmFly) and Assigned(fFirstPerson) then
+  // Flying or walking, the wheel sets the speed: zooming towards a target
+  // means nothing when the view turns about the eye.
+  If (fNavigationMode in [nmFly, nmWalk]) and Assigned(fFirstPerson) then
   Begin
     fFirstPerson.Wheel(WheelDelta);
     exit;
