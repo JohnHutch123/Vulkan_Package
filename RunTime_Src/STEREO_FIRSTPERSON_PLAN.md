@@ -3,10 +3,13 @@
 Status (2026-11-23): **F0–F2 on main** (PR #49): `TvgCamera.Look` /
 `Translate`, key-up and focus-loss plumbing, `Vulkan_FirstPerson.pas`
 (`TvgFirstPersonController`), `TvgToolManager.NavigationMode = nmFly`, sample
-toggle. **F3 implemented** on branch `feature/first-person-walk`: `nmWalk`,
-`IvgGroundProvider`, `Vulkan_MeshGround.pas` (`TvgMeshGround`),
-`TvgToolManager.Ground` / `AutoGround` / `BuildSceneGround`, the Walk option
-in the sample. The rest is still plan.
+toggle. **F3 on main** (PR #50): `nmWalk`, `IvgGroundProvider`,
+`Vulkan_MeshGround.pas` (`TvgMeshGround`), `TvgToolManager.Ground` /
+`AutoGround` / `BuildSceneGround`, the Walk option in the sample. **F4
+implemented** on branch `feature/first-person-sample`: the sample's "First
+person" box (speed, 0 = automatic; eye height; step height; float at edges)
+and a "blocked" readout. Setting `EyeHeight` while standing in walk mode now
+moves the eye at once. The rest is still plan.
 
 *F3 as built, where it differs from B4:* the slope test uses the surface
 **normal** at the new foot position, not rise over run. A stair (a rise

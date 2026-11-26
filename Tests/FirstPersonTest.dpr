@@ -604,6 +604,29 @@ begin
       FP.Free;
     end;
 
+    // EyeHeight changed while walking: standing, the eye moves at once;
+    // moving, the step takes it there.
+    G := NewGround;
+    AddRect(G, -50, -50, 50, 50, 0, 0);
+    FP := Walker(0, 10);
+    try
+      Host.Moves := 0;
+      FP.EyeHeight := 1.2;
+      CheckNum('EyeHeight standing: the eye drops to 1.2 at once', Host.Cam.Position.z, 1.2, 1e-12);
+      Check('...and tells the host', Host.Moves > 0, True);
+      FP.KeyDown(VGK_W, []);
+      FP.EyeHeight := 2.5;
+      CheckNum('...moving: not until the step', Host.Cam.Position.z, 1.2, 1e-12);
+      FP.Tick(0.2);
+      CheckNum('...the step puts it at 2.5', Host.Cam.Position.z, 2.5, 1e-12);
+      FP.ReleaseAll;
+      FP.Mode := nmFly;
+      FP.EyeHeight := 1.7;
+      CheckNum('...flying: EyeHeight does not move the eye', Host.Cam.Position.z, 2.5, 1e-12);
+    finally
+      FP.Free;
+    end;
+
     // No ground at all: walking keeps the height.
     Host.Ground := nil;
     FP := Walker(0, 10);

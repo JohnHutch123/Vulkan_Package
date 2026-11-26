@@ -171,6 +171,7 @@ type
     procedure Moved;
 
     procedure SetMode(const Value: TvgNavigationMode);
+    procedure SetEyeHeight(const Value: Double);
     // The ground's up, or the camera's when there is no ground.
     function  WalkUp(aCam: TvgCamera; const aGround: IvgGroundProvider): TpvVector3D;
     { One walking step: aMove (horizontal, world units) then onto the ground.
@@ -253,8 +254,9 @@ type
     property OnMoved         : TNotifyEvent read fOnMoved write fOnMoved;
 
     // --- Walking (nmWalk), in world units -------------------------------
-    // The eye above the ground.  1.7 suits a scene in metres.
-    property EyeHeight       : Double  read fEyeHeight       write fEyeHeight;
+    // The eye above the ground.  1.7 suits a scene in metres.  Changed while
+    // walking and standing still, the eye moves to the new height at once.
+    property EyeHeight       : Double  read fEyeHeight       write SetEyeHeight;
     // The highest rise taken in one step - a kerb, a stair.
     property StepHeight      : Double  read fStepHeight      write fStepHeight;
     // Degrees: steeper climbs are refused.  Going down is never refused.
@@ -682,6 +684,15 @@ begin
   fEyeH      := EyeH;
   fWalkValid := True;
   SettleWalk;
+end;
+
+procedure TvgFirstPersonController.SetEyeHeight(const Value: Double);
+begin
+  if Value = fEyeHeight then exit;
+  fEyeHeight := Value;
+  // Moving, the next step smooths towards it; standing, show it now.
+  if (fMode = nmWalk) and not DirectionHeld then
+    SettleWalk;
 end;
 
 procedure TvgFirstPersonController.SettleWalk;
